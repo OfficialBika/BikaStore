@@ -30,10 +30,10 @@
     }
 
     .box {
-      background: white;
+      background: red;
       padding: 30px;
       border-radius: 8px;
-      max-width: 500px;
+      max-width: 100px;
       margin: auto;
     }
 
@@ -93,7 +93,7 @@
       <h2>How it works</h2>
       <ol>
         <li>Choose a product</li>
-        <li>Enter in-game ID / phone (in checkout)</li>
+        <li>Enter in-game ID  (in checkout)</li>
         <li>Pay with secure gateway</li>
         <li>We deliver the top-up (manual or automatic)</li>
       </ol>
