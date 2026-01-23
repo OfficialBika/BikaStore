@@ -10,11 +10,13 @@
   <header class="site-header">
     <h1>Bika Store</h1>
     <p>Fast top-up for Mobile Legends, PUBG UC, CoC & more</p>
+    
   </header>
 
   <main class="container">
     <section id="products">
-      <h2>Products</h2>
+      
+  <h2>Products</h2>
       <ul class="product-list">
         <li class="product" data-id="mld_100">
 
