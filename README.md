@@ -14,9 +14,9 @@
   </header>
   <main class="container">
     <section id="products">
-
-  <head> 
-  <h2>Products</h2>
+<html>
+<head> 
+<h2>Products</h2>
       <ul class="product-list">
         <li class="product" data-id="mld_100">
 
@@ -63,7 +63,7 @@
   <img src="product1.jpg" alt="Game Top-Up">
   <h2>Game Top-Up</h2>
   <p>Price: 10,000 MMK</p>
-  <p>Fast delivery • Secure payment</p>
+  <p>Fast Reply • Secure payment</p>
 
   <a href="https://t.me/Official_Bika" class="btn">Order Now</a>
   <br><br>
