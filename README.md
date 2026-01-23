@@ -18,13 +18,13 @@
       <ul class="product-list">
         <li class="product" data-id="mld_100">
           <h3>Mobile Legends - 86 Diamonds</h3>
-          <p>Price: $1.99</p>
+          <p>Price: 4800mmk</p>
           <button onclick="buy('mld_100')">Buy</button>
         </li>
 
         <li class="product" data-id="pubg_uc_60">
           <h3>PUBG UC - 60 UC</h3>
-          <p>Price: $2.49</p>
+          <p>Price: 4500mmk</p>
           <button onclick="buy('pubg_uc_60')">Buy</button>
         </li>
 
