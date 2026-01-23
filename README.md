@@ -60,14 +60,14 @@
 <body>
 
 <div class="box">
-  <img src="product1.jpg" alt="Game Top-Up">
+  <img src="mlbb.jpg" alt="Mlbb Diamonds Prices">
   <h2>Game Top-Up</h2>
   <p>Price: 10,000 MMK</p>
   <p>Fast Reply • Secure payment</p>
 
   <a href="https://t.me/Official_Bika" class="btn">Order Now</a>
   <br><br>
-  <a href="Bika">⬅ Mlbb Dia Prices</a>
+  <a href="pubg.html">⬅ Pubg Uc Prices</a>
 </div>
 
 </body>
