@@ -20,7 +20,8 @@
 
 
 <html>
-  <title>Mlbb Dia Prices</title>
+<head>
+  <title>Game Items List</title>
   <style>
     body {
       font-family: Arial;
@@ -30,7 +31,7 @@
     }
 
     .box {
-      background: red;
+      background: white;
       padding: 30px;
       border-radius: 8px;
       max-width: 800px;
@@ -52,8 +53,8 @@
       border-radius: 5px;
     }
   </style>
+  
 </head>
-
 <body>
 
 <div class="box">
@@ -64,7 +65,7 @@
 
   <a href="https://t.me/Official_Bika" class="btn">Order Now</a>
   <br><br>
-  <a href="products.html">⬅ Back to Products</a>
+  <a href="Bika">⬅ Mlbb Dia Prices</a>
 </div>
 
 </body>
