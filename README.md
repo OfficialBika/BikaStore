@@ -17,6 +17,59 @@
       <h2>Products</h2>
       <ul class="product-list">
         <li class="product" data-id="mld_100">
+
+<html>
+<head>
+  <title>Mlbb Dia Prices</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f4f4f4;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .box {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      max-width: 500px;
+      margin: auto;
+    }
+
+    img {
+      width: 100%;
+      border-radius: 8px;
+    }
+
+    .btn {
+      display: inline-block;
+      margin-top: 15px;
+      background: #0d6efd;
+      color: white;
+      padding: 12px 20px;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="box">
+  <img src="product1.jpg" alt="Game Top-Up">
+  <h2>Game Top-Up</h2>
+  <p>Price: 10,000 MMK</p>
+  <p>Fast delivery • Secure payment</p>
+
+  <a href="https://t.me/Official_Bika" class="btn">Order Now</a>
+  <br><br>
+  <a href="products.html">⬅ Back to Products</a>
+</div>
+
+</body>
+</html>
+    
           <h3>Mobile Legends - 86 Diamonds</h3>
           <p>Price: 4800mmk</p>
           <button onclick="buy('mld_100')">Buy</button>
