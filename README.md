@@ -18,8 +18,8 @@
       <ul class="product-list">
         <li class="product" data-id="mld_100">
 
+
 <html>
-<head>
   <title>Mlbb Dia Prices</title>
   <style>
     body {
@@ -33,7 +33,7 @@
       background: red;
       padding: 30px;
       border-radius: 8px;
-      max-width: 100px;
+      max-width: 800px;
       margin: auto;
     }
 
