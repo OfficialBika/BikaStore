@@ -372,9 +372,15 @@ bot.onText(/\/broadcast (.+)/, (msg, match) => {
   bot.sendMessage(adminId, `✅ Broadcast sent to ${sent} users`);
 });
 
-// ===== WEB SERVICE =====
+// ===== WEB SERVER (Render keep alive) =====
+const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => res.send("Bika Store Bot Running"));
-app.listen(PORT, () => console.log("Server running on", PORT));
+app.get("/", (req, res) => {
+  res.send("Bot Running");
+});
+
+app.listen(PORT, () => {
+  console.log("Web server running on port", PORT);
+});
