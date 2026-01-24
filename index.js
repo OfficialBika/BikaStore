@@ -103,13 +103,14 @@ bot.on("callback_query", (query) => {
       });
     }
 
-    bot.sendMessage(
-      chatId,
-      "✅ *Order Confirmed!*\n\n" +
-        `🆔 Order ID: *${order.orderId}*\n` +
-        "⏳ Please wait, admin will contact you.",
-      { parse_mode: "Markdown" }
-    );
+   bot.sendMessage(
+  chatId,
+  "✅ *Order Confirmed!*\n\n" +
+    `🆔 Order ID: *${order.orderId}*\n\n` +
+    "💰 Payment ပြုလုပ်ပြီး\n" +
+    "📸 *Payment Screenshot ကို ဒီ chat ထဲ ပို့ပါ*",
+  { parse_mode: "Markdown" }
+);
 
     const adminMsg =
       "🚨 *New Confirmed Order*\n\n" +
@@ -169,6 +170,39 @@ bot.on("message", (msg) => {
     }
   );
 });
+
+bot.on("photo", (msg) => {
+  const chatId = msg.chat.id;
+
+  const order = pendingOrders[chatId];
+  if (!order) {
+    bot.sendMessage(chatId, "❌ Order မတွေ့ပါ။ /start မှ ပြန်စပါ");
+    return;
+  }
+
+  // Telegram photo sizes -> last one is highest quality
+  const photoId = msg.photo[msg.photo.length - 1].file_id;
+
+  const caption =
+    "💰 *Payment Received*\n\n" +
+    `🆔 Order ID: *${order.orderId}*\n` +
+    `👤 User: ${order.user}\n` +
+    `🆔 Chat ID: ${chatId}`;
+
+  // Send photo to admins
+  ADMIN_CHAT_IDS.forEach((adminId) => {
+    bot.sendPhoto(adminId.trim(), photoId, {
+      caption,
+      parse_mode: "Markdown"
+    });
+  });
+
+  bot.sendMessage(
+    chatId,
+    "✅ Payment screenshot ရပါပြီ\n⏳ Admin စစ်ဆေးပြီး မကြာခင် ဆက်သွယ်ပါမယ်"
+  );
+});
+
 
 // ===== Render Web Service keep-alive =====
 const express = require("express");
