@@ -103,8 +103,6 @@ bot.on("callback_query", (query) => {
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
 
-  // /start ကို skip
-  if (msg.text && msg.text.startsWith("/")) return;
 
   // Button click message မဟုတ်တဲ့ text ကိုသာ
   if (!msg.text) return;
