@@ -39,8 +39,6 @@ bot.onText(/\/start/, (msg) => {
   );
 });
 
-
-bot.on("callback_query", (query) => {
 bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
