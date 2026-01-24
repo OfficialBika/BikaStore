@@ -175,15 +175,15 @@ bot.on("photo", (msg) => {
   const chatId = msg.chat.id;
   const order = pendingOrders[chatId];
 
-  if (!order) {
-    bot.sendMessage(chatId, "❌ Order မတွေ့ပါ။ /start မှ ပြန်စပါ");
+  if (!order || order.status !== "WAITING_PAYMENT") {
+    bot.sendMessage(chatId, "❌ Confirm လုပ်ထားတဲ့ Order မတွေ့ပါ");
     return;
   }
 
   const photoId = msg.photo[msg.photo.length - 1].file_id;
 
   const caption =
-    "💰 *Payment Received*\n\n" +
+    "💰 *Payment Screenshot Received*\n\n" +
     `🆔 Order ID: *${order.orderId}*\n` +
     `👤 User: ${order.user}\n` +
     `🆔 Chat ID: ${chatId}`;
@@ -197,13 +197,12 @@ bot.on("photo", (msg) => {
 
   bot.sendMessage(
     chatId,
-    "✅ Payment screenshot ရပါပြီ\n⏳ Admin စစ်ဆေးပြီး မကြာခင် ဆက်သွယ်ပါမယ်"
+    "✅ Screenshot ရပါပြီ\n⏳ Admin စစ်ဆေးနေပါတယ်"
   );
 
-  // ✅ Screenshot ရောက်မှ order ဖျက်
+  // ✅ Photo ပို့ပြီးမှ ဖျက်
   delete pendingOrders[chatId];
 });
-
 // ===== Render Web Service keep-alive =====
 const express = require("express");
 const app = express();
