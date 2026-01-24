@@ -17,23 +17,23 @@ const ADMIN_CHAT_IDS = process.env.ADMIN_CHAT_IDS
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
 
+  const options = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
+        [{ text: "🎮 PUBG UC", callback_data: "PUBG" }],
+        [{ text: "⭐ Telegram Premium", callback_data: "TGPREMIUM" }],
+        [{ text: "🌟 Telegram Star", callback_data: "TGSTAR" }],
+        [{ text: "🏰 COC", callback_data: "COC" }],
+        [{ text: "✂️ CapCut Premium", callback_data: "CAPCUT" }]
+      ]
+    }
+  };
+
   bot.sendMessage(
     chatId,
-    " *Welcome to Bika Store* 🛍\n\nဝယ်ယူရရှိနိူင်သော Productများ👇",
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "💎 MLBB Diamonds", callback_data: "p_mlbb" }],
-          [{ text: "🔥 PUBG UC", callback_data: "p_pubg" }],
-          [{ text: "⭐ Telegram Premium", callback_data: "p_tg_premium" }],
-          [{ text: "🌟 Telegram Star", callback_data: "p_tg_star" }],
-          [{ text: "🏰 COC Gems", callback_data: "p_coc" }],
-          [{ text: "🎬 CapCut Premium", callback_data: "p_capcut" }],
-          [{ text: "🛒 Order Now", callback_data: "order_now" }]
-        ]
-      }
-    }
+    "🛒 *Bika Store Product Menu*\n\nကုန်ပစ္စည်းတစ်ခုကို ရွေးချယ်ပါ 👇",
+    { parse_mode: "Markdown", ...options }
   );
 });
 
