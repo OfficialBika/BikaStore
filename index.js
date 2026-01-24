@@ -173,14 +173,13 @@ bot.on("message", (msg) => {
 
 bot.on("photo", (msg) => {
   const chatId = msg.chat.id;
-
   const order = pendingOrders[chatId];
+
   if (!order) {
     bot.sendMessage(chatId, "❌ Order မတွေ့ပါ။ /start မှ ပြန်စပါ");
     return;
   }
 
-  // Telegram photo sizes -> last one is highest quality
   const photoId = msg.photo[msg.photo.length - 1].file_id;
 
   const caption =
@@ -189,7 +188,6 @@ bot.on("photo", (msg) => {
     `👤 User: ${order.user}\n` +
     `🆔 Chat ID: ${chatId}`;
 
-  // Send photo to admins
   ADMIN_CHAT_IDS.forEach((adminId) => {
     bot.sendPhoto(adminId.trim(), photoId, {
       caption,
@@ -201,8 +199,10 @@ bot.on("photo", (msg) => {
     chatId,
     "✅ Payment screenshot ရပါပြီ\n⏳ Admin စစ်ဆေးပြီး မကြာခင် ဆက်သွယ်ပါမယ်"
   );
-});
 
+  // ✅ Screenshot ရောက်မှ order ဖျက်
+  delete pendingOrders[chatId];
+});
 
 // ===== Render Web Service keep-alive =====
 const express = require("express");
