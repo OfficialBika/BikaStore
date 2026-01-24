@@ -41,9 +41,11 @@ bot.onText(/\/start/, (msg) => {
 
 
 bot.on("callback_query", (query) => {
+bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
 
+  // ===== PRODUCT DETAILS =====
   const products = {
     MLBB:
       "💎 *MLBB Diamonds*\n\n" +
@@ -87,30 +89,22 @@ bot.on("callback_query", (query) => {
       "`Email / Username`\n`Duration`"
   };
 
+  // ===== SHOW PRODUCT =====
   if (products[data]) {
-    bot.sendMessage(chatId, products[data], {
-      parse_mode: "Markdown"
-    });
+    bot.sendMessage(chatId, products[data], { parse_mode: "Markdown" });
+    return bot.answerCallbackQuery(query.id);
   }
-
-  bot.answerCallbackQuery(query.id);
-});
-  bot.on("callback_query", (query) => {
-  const chatId = query.message.chat.id;
-  const data = query.data;
 
   // ===== CONFIRM ORDER =====
   if (data === "CONFIRM_ORDER") {
     const order = pendingOrders[chatId];
     if (!order) {
-      bot.answerCallbackQuery(query.id, {
+      return bot.answerCallbackQuery(query.id, {
         text: "Order မတွေ့ပါ ❌",
         show_alert: true
       });
-      return;
     }
 
-    // User confirm message
     bot.sendMessage(
       chatId,
       "✅ *Order Confirmed!*\n\n" +
@@ -119,7 +113,6 @@ bot.on("callback_query", (query) => {
       { parse_mode: "Markdown" }
     );
 
-    // Admin notify
     const adminMsg =
       "🚨 *New Confirmed Order*\n\n" +
       `🆔 Order ID: *${order.orderId}*\n` +
@@ -128,24 +121,20 @@ bot.on("callback_query", (query) => {
       `📦 Order Details:\n${order.text}`;
 
     ADMIN_CHAT_IDS.forEach((adminId) => {
-      bot.sendMessage(adminId.trim(), adminMsg, {
-        parse_mode: "Markdown"
-      });
+      bot.sendMessage(adminId.trim(), adminMsg, { parse_mode: "Markdown" });
     });
 
     delete pendingOrders[chatId];
+    return bot.answerCallbackQuery(query.id);
   }
 
   // ===== CANCEL ORDER =====
   if (data === "CANCEL_ORDER") {
     delete pendingOrders[chatId];
-
     bot.sendMessage(chatId, "❌ Order ကို ပယ်ဖျက်လိုက်ပါပြီ");
-
-    bot.answerCallbackQuery(query.id);
+    return bot.answerCallbackQuery(query.id);
   }
 });
-
 
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
@@ -182,20 +171,7 @@ bot.on("message", (msg) => {
     }
   );
 });
-  // Admin notify
-  const adminMessage =
-    "🚨 *New Order*\n\n" +
-    `🆔 Order ID: *${orderId}*\n` +
-    `👤 User: ${msg.from.first_name}\n` +
-    `🆔 Chat ID: ${chatId}\n\n` +
-    `📦 Order Details:\n${msg.text}`;
 
-  ADMIN_CHAT_IDS.forEach((adminId) => {
-    bot.sendMessage(adminId.trim(), adminMessage, {
-      parse_mode: "Markdown"
-    });
-  });
-});
 // ===== Render Web Service keep-alive =====
 const express = require("express");
 const app = express();
