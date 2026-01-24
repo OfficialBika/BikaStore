@@ -9,7 +9,7 @@ bot.onText(/\/start/, (msg) => {
 
   bot.sendMessage(
     chatId,
-    "🛍 *Bika Store*\n\nDigital Products ကိုရွေးပါ 👇",
+    " *Welcome to Bika Store* 🛍\n\nဝယ်ယူရရှိနိူင်သော Productများ👇",
     {
       parse_mode: "Markdown",
       reply_markup: {
