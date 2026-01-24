@@ -4,6 +4,8 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
   polling: true
 });
 
+const pendingOrders = {}; 
+
 function generateOrderId() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const rand = Math.floor(1000 + Math.random() * 9000);
@@ -37,7 +39,7 @@ bot.onText(/\/start/, (msg) => {
   );
 });
 
-bot.on("callback_query", (query) => {
+
 bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -93,35 +95,93 @@ bot.on("callback_query", (query) => {
 
   bot.answerCallbackQuery(query.id);
 });
+  bot.on("callback_query", (query) => {
+  const chatId = query.message.chat.id;
+  const data = query.data;
+
+  // ===== CONFIRM ORDER =====
+  if (data === "CONFIRM_ORDER") {
+    const order = pendingOrders[chatId];
+    if (!order) {
+      bot.answerCallbackQuery(query.id, {
+        text: "Order မတွေ့ပါ ❌",
+        show_alert: true
+      });
+      return;
+    }
+
+    // User confirm message
+    bot.sendMessage(
+      chatId,
+      "✅ *Order Confirmed!*\n\n" +
+        `🆔 Order ID: *${order.orderId}*\n` +
+        "⏳ Please wait, admin will contact you.",
+      { parse_mode: "Markdown" }
+    );
+
+    // Admin notify
+    const adminMsg =
+      "🚨 *New Confirmed Order*\n\n" +
+      `🆔 Order ID: *${order.orderId}*\n` +
+      `👤 User: ${order.user}\n` +
+      `🆔 Chat ID: ${chatId}\n\n` +
+      `📦 Order Details:\n${order.text}`;
+
+    ADMIN_CHAT_IDS.forEach((adminId) => {
+      bot.sendMessage(adminId.trim(), adminMsg, {
+        parse_mode: "Markdown"
+      });
+    });
+
+    delete pendingOrders[chatId];
+  }
+
+  // ===== CANCEL ORDER =====
+  if (data === "CANCEL_ORDER") {
+    delete pendingOrders[chatId];
+
+    bot.sendMessage(chatId, "❌ Order ကို ပယ်ဖျက်လိုက်ပါပြီ");
+
+    bot.answerCallbackQuery(query.id);
+  }
+});
 
 
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
 
-  // 1️⃣ Command skip (/start)
+  // command skip
   if (msg.text && msg.text.startsWith("/")) return;
-
-  // 2️⃣ Button click message skip
-  if (msg.via_bot) return;
-
-  // 3️⃣ Text မဟုတ်ရင် skip
   if (!msg.text) return;
-
-  // 4️⃣ Menu safeguard
-  if (msg.text.includes("Bika Store")) return;
 
   const orderId = generateOrderId();
 
-  // User reply
+  // store pending order
+  pendingOrders[chatId] = {
+    orderId,
+    text: msg.text,
+    user: msg.from.first_name
+  };
+
   bot.sendMessage(
     chatId,
-    "🧾 *Order Received*\n\n" +
+    "🧾 *Order Preview*\n\n" +
       `🆔 Order ID: *${orderId}*\n\n` +
       `📦 Order Details:\n${msg.text}\n\n` +
-      "⏳ Please wait, we will contact you soon.",
-    { parse_mode: "Markdown" }
+      "အောက်ကခလုတ်နဲ့ Confirm / Cancel လုပ်ပါ 👇",
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "✅ Confirm Order", callback_data: "CONFIRM_ORDER" },
+            { text: "❌ Cancel", callback_data: "CANCEL_ORDER" }
+          ]
+        ]
+      }
+    }
   );
-
+});
   // Admin notify
   const adminMessage =
     "🚨 *New Order*\n\n" +
