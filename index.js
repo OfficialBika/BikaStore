@@ -100,26 +100,6 @@ bot.on("callback_query", (query) => {
   bot.answerCallbackQuery(query.id);
 });
 
-bot.on("message", (msg) => {
-  const chatId = msg.chat.id;
-
-
-  // Button click message မဟုတ်တဲ့ text ကိုသာ
-  if (!msg.text) return;
-
-  const orderId = generateOrderId();
-
-  const orderSummary =
-    "🧾 *Order Received*\n\n" +
-    `🆔 Order ID: *${orderId}*\n` +
-    `👤 Customer: ${msg.from.first_name}\n` +
-    `💬 Order Info:\n${msg.text}\n\n` +
-    "⏳ Please wait, we will contact you soon.";
-
-  bot.sendMessage(chatId, orderSummary, {
-    parse_mode: "Markdown"
-  });
-});
 
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
@@ -133,13 +113,12 @@ bot.on("message", (msg) => {
   // 3️⃣ Text မဟုတ်ရင် skip
   if (!msg.text) return;
 
-  // 4️⃣ Menu prompt စာကို skip (optional safeguard)
+  // 4️⃣ Menu safeguard
   if (msg.text.includes("Bika Store")) return;
 
-  // ✅ Now this is real order text
   const orderId = generateOrderId();
 
-  // User summary
+  // User reply
   bot.sendMessage(
     chatId,
     "🧾 *Order Received*\n\n" +
