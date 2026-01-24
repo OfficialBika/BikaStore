@@ -165,3 +165,16 @@ bot.on("message", (msg) => {
     });
   });
 });
+// ===== Render Web Service keep-alive =====
+const express = require("express");
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("BikaStore Bot is running");
+});
+
+app.listen(PORT, () => {
+  console.log("Web server listening on port", PORT);
+});
