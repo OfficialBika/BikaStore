@@ -181,7 +181,6 @@ bot.onText(/\/report/, async (msg) => {
 });
 
 // ===== WEB =====
-const app = express();
 app.get("/", (_,res)=>res.send("Bot Running"));
 app.listen(3000);function generateOrderId() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
