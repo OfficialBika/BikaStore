@@ -1,99 +1,74 @@
 const TelegramBot = require("node-telegram-bot-api");
+const express = require("express");
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  polling: true
-});
+// ===== BOT SETUP =====
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-const pendingOrders = {}; 
+// ===== DATA STORE =====
+const pendingOrders = {};
 
-function generateOrderId() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `BKS-${date}-${rand}`;
-  }
-
+// ===== ADMIN IDS =====
 const ADMIN_CHAT_IDS = process.env.ADMIN_CHAT_IDS
   ? process.env.ADMIN_CHAT_IDS.split(",")
   : [];
 
+// ===== ORDER ID =====
+function generateOrderId() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `BKS-${date}-${rand}`;
+}
+
+// ===== /start =====
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-
-  const options = {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
-        [{ text: "🎮 PUBG UC", callback_data: "PUBG" }],
-        [{ text: "⭐ Telegram Premium", callback_data: "TGPREMIUM" }],
-        [{ text: "🌟 Telegram Star", callback_data: "TGSTAR" }],
-        [{ text: "🏰 COC", callback_data: "COC" }],
-        [{ text: "✂️ CapCut Premium", callback_data: "CAPCUT" }]
-      ]
-    }
-  };
 
   bot.sendMessage(
     chatId,
     "🛒 *Bika Store Product Menu*\n\nကုန်ပစ္စည်းတစ်ခုကို ရွေးချယ်ပါ 👇",
-    { parse_mode: "Markdown", ...options }
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
+          [{ text: "🎮 PUBG UC", callback_data: "PUBG" }],
+          [{ text: "⭐ Telegram Premium", callback_data: "TGPREMIUM" }],
+          [{ text: "🌟 Telegram Star", callback_data: "TGSTAR" }],
+          [{ text: "🏰 COC", callback_data: "COC" }],
+          [{ text: "✂️ CapCut Premium", callback_data: "CAPCUT" }]
+        ]
+      }
+    }
   );
 });
 
+// ===== BUTTON HANDLER =====
 bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
 
-  // ===== PRODUCT DETAILS =====
   const products = {
     MLBB:
-      "💎 *MLBB Diamonds*\n\n" +
-      "• Diamonds Top-Up\n" +
-      "• Fast delivery\n\n" +
-      "📝 Order format:\n" +
-      "`Game ID + Server`\n`Amount`",
-
+      "💎 *MLBB Diamonds*\n\n📝 Order format:\n`Game ID + Server`\n`Amount`",
     PUBG:
-      "🔥 *PUBG UC*\n\n" +
-      "• UC Top-Up\n" +
-      "• Instant process\n\n" +
-      "📝 Order format:\n" +
-      "`Player ID`\n`UC Amount`",
-
+      "🔥 *PUBG UC*\n\n📝 Order format:\n`Player ID`\n`UC Amount`",
     TGPREMIUM:
-      "⭐ *Telegram Premium*\n\n" +
-      "• 1 / 3 / 6 / 12 Months\n" +
-      "• Official Premium\n\n" +
-      "📝 Order format:\n" +
-      "`Telegram Username`\n`Duration`",
-
+      "⭐ *Telegram Premium*\n\n📝 Order format:\n`Username`\n`Duration`",
     TGSTAR:
-      "🌟 *Telegram Star*\n\n" +
-      "• Star Recharge\n\n" +
-      "📝 Order format:\n" +
-      "`Telegram Username`\n`Star Amount`",
-
+      "🌟 *Telegram Star*\n\n📝 Order format:\n`Username`\n`Star Amount`",
     COC:
-      "🏰 *COC Gems*\n\n" +
-      "• Gems Top-Up\n" +
-      "• Safe & Fast\n\n" +
-      "📝 Order format:\n" +
-      "`Player Tag`\n`Gem Amount`",
-
+      "🏰 *COC Gems*\n\n📝 Order format:\n`Player Tag`\n`Gem Amount`",
     CAPCUT:
-      "✂️ *CapCut Premium*\n\n" +
-      "• Pro Account\n" +
-      "• No watermark\n\n" +
-      "📝 Order format:\n" +
-      "`Email / Username`\n`Duration`"
+      "✂️ *CapCut Premium*\n\n📝 Order format:\n`Email / Username`\n`Duration`"
   };
 
-  // ===== SHOW PRODUCT =====
+  // show product
   if (products[data]) {
     bot.sendMessage(chatId, products[data], { parse_mode: "Markdown" });
     return bot.answerCallbackQuery(query.id);
   }
 
-  // ===== CONFIRM ORDER =====
+  // confirm order
   if (data === "CONFIRM_ORDER") {
     const order = pendingOrders[chatId];
     if (!order) {
@@ -103,31 +78,33 @@ bot.on("callback_query", (query) => {
       });
     }
 
-   bot.sendMessage(
-  chatId,
-  "✅ *Order Confirmed!*\n\n" +
-    `🆔 Order ID: *${order.orderId}*\n\n` +
-    "💰 Payment ပြုလုပ်ပြီး\n" +
-    "📸 *Payment Screenshot ကို ဒီ chat ထဲ ပို့ပါ*",
-  { parse_mode: "Markdown" }
-);
+    order.status = "WAITING_PAYMENT";
 
-    const adminMsg =
-      "🚨 *New Confirmed Order*\n\n" +
-      `🆔 Order ID: *${order.orderId}*\n` +
-      `👤 User: ${order.user}\n` +
-      `🆔 Chat ID: ${chatId}\n\n` +
-      `📦 Order Details:\n${order.text}`;
+    bot.sendMessage(
+      chatId,
+      "✅ *Order Confirmed!*\n\n" +
+        `🆔 Order ID: *${order.orderId}*\n\n` +
+        "💰 Payment ပြုလုပ်ပြီး\n" +
+        "📸 *Payment Screenshot ကို ဒီ chat ထဲ ပို့ပါ*",
+      { parse_mode: "Markdown" }
+    );
 
     ADMIN_CHAT_IDS.forEach((adminId) => {
-      bot.sendMessage(adminId.trim(), adminMsg, { parse_mode: "Markdown" });
+      bot.sendMessage(
+        adminId.trim(),
+        "🚨 *New Order*\n\n" +
+          `🆔 Order ID: *${order.orderId}*\n` +
+          `👤 User: ${order.user}\n` +
+          `🆔 Chat ID: ${chatId}\n\n` +
+          `📦 Order Details:\n${order.text}`,
+        { parse_mode: "Markdown" }
+      );
     });
 
-    delete pendingOrders[chatId];
     return bot.answerCallbackQuery(query.id);
   }
 
-  // ===== CANCEL ORDER =====
+  // cancel
   if (data === "CANCEL_ORDER") {
     delete pendingOrders[chatId];
     bot.sendMessage(chatId, "❌ Order ကို ပယ်ဖျက်လိုက်ပါပြီ");
@@ -135,20 +112,20 @@ bot.on("callback_query", (query) => {
   }
 });
 
+// ===== TEXT MESSAGE (ORDER INPUT) =====
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
 
-  // command skip
-  if (msg.text && msg.text.startsWith("/")) return;
   if (!msg.text) return;
+  if (msg.text.startsWith("/")) return;
 
   const orderId = generateOrderId();
 
-  // store pending order
   pendingOrders[chatId] = {
     orderId,
     text: msg.text,
-    user: msg.from.first_name
+    user: msg.from.first_name,
+    status: "PREVIEW"
   };
 
   bot.sendMessage(
@@ -156,7 +133,7 @@ bot.on("message", (msg) => {
     "🧾 *Order Preview*\n\n" +
       `🆔 Order ID: *${orderId}*\n\n` +
       `📦 Order Details:\n${msg.text}\n\n` +
-      "အောက်ကခလုတ်နဲ့ Confirm / Cancel လုပ်ပါ 👇",
+      "Confirm / Cancel ကိုရွေးပါ 👇",
     {
       parse_mode: "Markdown",
       reply_markup: {
@@ -171,6 +148,7 @@ bot.on("message", (msg) => {
   );
 });
 
+// ===== PHOTO (PAYMENT) =====
 bot.on("photo", (msg) => {
   const chatId = msg.chat.id;
   const order = pendingOrders[chatId];
@@ -182,31 +160,24 @@ bot.on("photo", (msg) => {
 
   const photoId = msg.photo[msg.photo.length - 1].file_id;
 
-  const caption =
-    "💰 *Payment Screenshot Received*\n\n" +
-    `🆔 Order ID: *${order.orderId}*\n` +
-    `👤 User: ${order.user}\n` +
-    `🆔 Chat ID: ${chatId}`;
-
   ADMIN_CHAT_IDS.forEach((adminId) => {
     bot.sendPhoto(adminId.trim(), photoId, {
-      caption,
+      caption:
+        "💰 *Payment Screenshot*\n\n" +
+        `🆔 Order ID: *${order.orderId}*\n` +
+        `👤 User: ${order.user}\n` +
+        `🆔 Chat ID: ${chatId}`,
       parse_mode: "Markdown"
     });
   });
 
-  bot.sendMessage(
-    chatId,
-    "✅ Screenshot ရပါပြီ\n⏳ Admin စစ်ဆေးနေပါတယ်"
-  );
+  bot.sendMessage(chatId, "✅ Payment Screenshot ရပါပြီ\n⏳ Admin စစ်ဆေးနေပါတယ်");
 
-  // ✅ Photo ပို့ပြီးမှ ဖျက်
   delete pendingOrders[chatId];
 });
-// ===== Render Web Service keep-alive =====
-const express = require("express");
-const app = express();
 
+// ===== WEB SERVICE (RENDER FREE) =====
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
