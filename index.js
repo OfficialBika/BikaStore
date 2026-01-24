@@ -4,6 +4,16 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
   polling: true
 });
 
+function generateOrderId() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `BKS-${date}-${rand}`;
+  }
+
+const ADMIN_CHAT_IDS = process.env.ADMIN_CHAT_IDS
+  ? process.env.ADMIN_CHAT_IDS.split(",")
+  : [];
+
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
 
@@ -85,12 +95,6 @@ bot.on("callback_query", (query) => {
       chatId,
       "🛒 Order ပြုလုပ်ရန် အပေါ်က product တစ်ခုကိုရွေးပြီး format အတိုင်းပို့ပါ"
     );
-  }
-
-  function generateOrderId() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `BKS-${date}-${rand}`;
   }
 
   bot.answerCallbackQuery(query.id);
