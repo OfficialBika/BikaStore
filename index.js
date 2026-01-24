@@ -27,6 +27,12 @@ bot.onText(/\/start/, (msg) => {
   );
 });
 
+function generateOrderId() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `BKS-${date}-${rand}`;
+}
+
 bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -88,4 +94,27 @@ bot.on("callback_query", (query) => {
   }
 
   bot.answerCallbackQuery(query.id);
+});
+
+bot.on("message", (msg) => {
+  const chatId = msg.chat.id;
+
+  // /start ကို skip
+  if (msg.text && msg.text.startsWith("/")) return;
+
+  // Button click message မဟုတ်တဲ့ text ကိုသာ
+  if (!msg.text) return;
+
+  const orderId = generateOrderId();
+
+  const orderSummary =
+    "🧾 *Order Received*\n\n" +
+    `🆔 Order ID: *${orderId}*\n` +
+    `👤 Customer: ${msg.from.first_name}\n` +
+    `💬 Order Info:\n${msg.text}\n\n` +
+    "⏳ Please wait, we will contact you soon.";
+
+  bot.sendMessage(chatId, orderSummary, {
+    parse_mode: "Markdown"
+  });
 });
