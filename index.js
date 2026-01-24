@@ -122,3 +122,46 @@ bot.on("message", (msg) => {
     parse_mode: "Markdown"
   });
 });
+
+bot.on("message", (msg) => {
+  const chatId = msg.chat.id;
+
+  // 1️⃣ Command skip (/start)
+  if (msg.text && msg.text.startsWith("/")) return;
+
+  // 2️⃣ Button click message skip
+  if (msg.via_bot) return;
+
+  // 3️⃣ Text မဟုတ်ရင် skip
+  if (!msg.text) return;
+
+  // 4️⃣ Menu prompt စာကို skip (optional safeguard)
+  if (msg.text.includes("Bika Store")) return;
+
+  // ✅ Now this is real order text
+  const orderId = generateOrderId();
+
+  // User summary
+  bot.sendMessage(
+    chatId,
+    "🧾 *Order Received*\n\n" +
+      `🆔 Order ID: *${orderId}*\n\n` +
+      `📦 Order Details:\n${msg.text}\n\n` +
+      "⏳ Please wait, we will contact you soon.",
+    { parse_mode: "Markdown" }
+  );
+
+  // Admin notify
+  const adminMessage =
+    "🚨 *New Order*\n\n" +
+    `🆔 Order ID: *${orderId}*\n` +
+    `👤 User: ${msg.from.first_name}\n` +
+    `🆔 Chat ID: ${chatId}\n\n` +
+    `📦 Order Details:\n${msg.text}`;
+
+  ADMIN_CHAT_IDS.forEach((adminId) => {
+    bot.sendMessage(adminId.trim(), adminMessage, {
+      parse_mode: "Markdown"
+    });
+  });
+});
