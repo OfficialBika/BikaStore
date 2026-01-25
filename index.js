@@ -122,14 +122,6 @@ bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
   
-  // ✅ User ကို message
-  bot.sendMessage(
-    order.chatId,
-    status === "COMPLETED"
-      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
-  );
-
   // ===== ADMIN APPROVE / REJECT =====
 if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
   if (!isAdmin(chatId)) return;
@@ -145,6 +137,14 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
   if (!order) {
     return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
   }
+
+  // ✅ User ကို message
+  bot.sendMessage(
+    order.chatId,
+    status === "COMPLETED"
+      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+  );
 
   // ✅ Admin chat မှာ confirm message
   bot.sendMessage(
