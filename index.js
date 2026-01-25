@@ -179,7 +179,8 @@ Amount`,
       { parse_mode: "Markdown", reply_markup: { force_reply: true } }
     );
   }
-});
+}); 
+// callback quary end
 
 // ===== USER FORM INPUT =====
 bot.on("message", (msg) => {
@@ -199,15 +200,25 @@ bot.on("message", (msg) => {
 
   bot.sendMessage(chatId,
 `💳 Payment Method`,
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: PAYMENT_ACCOUNTS.KPay.name, callback_data: "PAY_KPAY" }],
-          [{ text: PAYMENT_ACCOUNTS.WavePay.name, callback_data: "PAY_WAVEPAY" }]
-        ]
-      }
+   bot.sendMessage(
+  chatId,
+`💳 *Payment Method ရွေးပါ*
+
+${PAYMENT_ACCOUNTS.KPay.name}
+Account: ${PAYMENT_ACCOUNTS.KPay.account}
+
+${PAYMENT_ACCOUNTS.WavePay.name}
+Account: ${PAYMENT_ACCOUNTS.WavePay.account}`,
+  {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: PAYMENT_ACCOUNTS.KPay.name, callback_data: "PAY_KPAY" }],
+        [{ text: PAYMENT_ACCOUNTS.WavePay.name, callback_data: "PAY_WAVEPAY" }]
+      ]
     }
-  );
+  }
+);
 });
 
 // ===== PAYMENT SCREENSHOT =====
