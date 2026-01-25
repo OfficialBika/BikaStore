@@ -56,8 +56,21 @@ const User = mongoose.model("User", new mongoose.Schema({
 // ===== DATA =====
 const PRICES = {
   MLBB: {
-    name: "💎 MLBB Diamonds",
-    prices: { "86": 1500, "172": 3000 }
+    name: "💎 Mobile Legends Diamonds",
+    prices: {
+      "86": 4800,
+      "172": 9800,
+      "257": 14500,
+      "343": 20000,
+      "429": 25000,
+      "514": 29900,
+      "600": 34500,
+      "706": 39900,
+      "792": 44500,
+      "878": 48500,
+      "963": 53000,
+      "1049": 59900
+    }
   }
 };
 
