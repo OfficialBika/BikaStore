@@ -132,6 +132,18 @@ if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
   const paymentMethod = d === "PAY_KPAY" ? "KPay" : "WavePay";
   const orderId = oid();
 
+  // ===== ADMIN APPROVE / REJECT =====
+if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
+  if (!isAdmin(chatId)) return;
+
+  const [action, orderId] = d.split("_");
+  const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
+
+  const order = await Order.findOneAndUpdate(
+    { orderId },
+    { status }
+  );
+
   // Order save to DB
   await Order.create({
     orderId,
@@ -168,17 +180,6 @@ if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
   );
 }
   
-  // ===== ADMIN APPROVE / REJECT =====
-if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
-  if (!isAdmin(chatId)) return;
-
-  const [action, orderId] = d.split("_");
-  const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
-
-  const order = await Order.findOneAndUpdate(
-    { orderId },
-    { status }
-  );
 
   if (!order) {
     return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
