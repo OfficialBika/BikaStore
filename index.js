@@ -197,6 +197,8 @@ bot.on("message", (msg) => {
   if (!price) return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
 
   Object.assign(t, { gameId, serverId, amount, price });
+  
+});
 
   bot.sendMessage(chatId,
 `💳 Payment Method`,
@@ -219,7 +221,7 @@ Account: ${PAYMENT_ACCOUNTS.WavePay.account}`,
     }
   }
 );
-});
+
 
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
