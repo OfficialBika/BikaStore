@@ -11,7 +11,7 @@ const PAYMENT_ACCOUNTS = {
   },
   WavePay: {
     name: "💙 WavePay",
-    account: "09264202647 (Shine Htet Aung"
+    account: "09264202647 (Shine Htet Aung)"
   }
 };
 
@@ -190,20 +190,23 @@ bot.on("message", (msg) => {
   const t = temp[chatId];
   if (!t) return;
 
-  const [idLine, amount] = msg.text.split("\n");
+  const [idLine, amount] = msg.text.trim().split("\n");
   const [gameId, serverId] = idLine.split(" ");
 
+  if (!gameId || !serverId) {
+    return bot.sendMessage(chatId, "❌ ID / Server ID မမှန်ပါ");
+  }
+
   const price = PRICES[t.productKey].prices[amount];
-  if (!price) return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
+  if (!price) {
+    return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
+  }
 
   Object.assign(t, { gameId, serverId, amount, price });
-  
-});
 
-  bot.sendMessage(chatId,
-`💳 Payment Method`,
-   bot.sendMessage(
-  chatId,
+  // ✅ Payment Method ကို ဒီနေရာမှာပဲ ပို့
+  return bot.sendMessage(
+    chatId,
 `💳 *Payment Method ရွေးပါ*
 
 ${PAYMENT_ACCOUNTS.KPay.name}
@@ -211,17 +214,17 @@ Account: ${PAYMENT_ACCOUNTS.KPay.account}
 
 ${PAYMENT_ACCOUNTS.WavePay.name}
 Account: ${PAYMENT_ACCOUNTS.WavePay.account}`,
-  {
-    parse_mode: "Markdown",
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: PAYMENT_ACCOUNTS.KPay.name, callback_data: "PAY_KPAY" }],
-        [{ text: PAYMENT_ACCOUNTS.WavePay.name, callback_data: "PAY_WAVEPAY" }]
-      ]
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: PAYMENT_ACCOUNTS.KPay.name, callback_data: "PAY_KPAY" }],
+          [{ text: PAYMENT_ACCOUNTS.WavePay.name, callback_data: "PAY_WAVEPAY" }]
+        ]
+      }
     }
-  }
-);
-
+  );
+});
 
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
