@@ -202,9 +202,6 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
 
 
 
-  if (!order) {
-    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
-  }
  
   if (PRICES[d]) {
   temp[chatId] = { productKey: d };
