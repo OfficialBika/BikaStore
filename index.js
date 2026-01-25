@@ -35,7 +35,8 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   approvedAt: Date, 
   createdAt: { type: Date, default: Date.now }
     })
-);
+ );
+
 // ===== PAYMENT ACCOUNTS =====
 const PAYMENT_ACCOUNTS = {
   KPay: {
@@ -45,8 +46,8 @@ const PAYMENT_ACCOUNTS = {
   WavePay: {
     name: "💙 WavePay",
     account: "09264202647 (Shine Htet Aung)"
-  }ø
-};
+   }ø
+  };
 
 
 const User = mongoose.model("User", new mongoose.Schema({
