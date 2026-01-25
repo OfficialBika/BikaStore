@@ -4,7 +4,11 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 // Admin Telegram ID
-const ADMIN_ID = 123456789; 
+const ADMIN_ID = process.env.ADMIN_ID;
+
+const isAdmin = (chatId) => {
+  return chatId.toString() === ADMIN_ID;
+};
 
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -84,7 +88,62 @@ bot.onText(/\/start/, async (msg) => {
     }
   );
 });
+// Broadcast Message
+bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
 
+  if (!isAdmin(chatId)) {
+    return bot.sendMessage(chatId, "⛔ Admin only command");
+  }
+
+  const text = match[1];
+
+  // DB ထဲက user chatId အားလုံးယူ
+  const users = await Order.distinct("chatId");
+
+  let success = 0;
+  let failed = 0;
+
+  for (const uid of users) {
+    try {
+      await bot.sendMessage(
+        uid,
+        `📢 *Announcement*\n\n${text}`,
+        { parse_mode: "Markdown" }
+      );
+      success++;
+    } catch (err) {
+      failed++;
+    }
+  }
+
+  // ✅ Admin ကို report ပြန်
+  bot.sendMessage(
+    chatId,
+    `✅ *Broadcast Finished*\n\n` +
+    `👥 Total users : ${users.length}\n` +
+    `📬 Sent successfully : ${success}\n` +
+    `❌ Failed : ${failed}`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+// orders admin only 
+bot.onText(/\/orders/, async (msg) => {
+  if (!isAdmin(msg.chat.id)) {
+    return bot.sendMessage(msg.chat.id, "⛔ Admin only");
+  }
+
+  const orders = await Order.find().sort({ createdAt: -1 }).limit(10);
+
+  let text = "📋 Last Orders\n\n";
+  orders.forEach(o => {
+    text += `🆔 ${o.orderId}\n💰 ${o.price} MMK\n📦 ${o.status}\n\n`;
+  });
+
+  bot.sendMessage(msg.chat.id, text);
+});
+// Start Message 
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
