@@ -235,7 +235,7 @@ Account: 09YYYYYYYY`,
     }
   );
 });
-});
+}); // callback query close 
 
   
 // ===== PAYMENT SCREENSHOT =====
