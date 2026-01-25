@@ -2,6 +2,16 @@
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
+const PAYMENT_ACCOUNTS = {
+  KPay: {
+    name: "💜 KPay",
+    account: "09xxxxxxxx (Aung Aung)"
+  },
+  WavePay: {
+    name: "💙 WavePay",
+    account: "09yyyyyyyy (Mg Mg)"
+  }
+};
 
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -113,19 +123,19 @@ bot.on("callback_query", async (q) => {
   const d = q.data;
 
   if (PRICES[d]) {
-    temp[chatId] = { productKey: d };
+  temp[chatId] = { productKey: d };
 
-    let priceText = "";
-    for (let a in PRICES[d].prices) {
-      priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
-    }
-
-    return bot.sendMessage(
-      chatId,
-      `${PRICES[d].name}\n\n${priceText}\nGameID ServerID\nAmount`
-    );
+  let priceText = "";
+  for (let a in PRICES[d].prices) {
+    priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
   }
-});
+
+  return bot.sendMessage(
+    chatId,
+    `${PRICES[d].name}\n\n📋 Price List\n${priceText}\n📝 Order Format:\nGameID ServerID\nAmount\n\nExample:\n12345678 4321\n86`
+  );
+  }
+  
 
 // ===== WEB =====
 app.get("/", (_, res) => res.send("Bot Running"));
