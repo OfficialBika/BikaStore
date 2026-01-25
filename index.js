@@ -2,6 +2,8 @@
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
+
+// ===== PAYMENT ACCOUNTS =====
 const PAYMENT_ACCOUNTS = {
   KPay: {
     name: "💜 KPay",
@@ -68,300 +70,175 @@ bot.onText(/\/start/, async (msg) => {
 
   await User.updateOne(
     { chatId },
-    {
-      chatId,
-      firstName: msg.from.first_name,
-      username: msg.from.username
-    },
+    { chatId, firstName: msg.from.first_name, username: msg.from.username },
     { upsert: true }
   );
 
-  bot.sendMessage(
-    chatId,
-    "🛒 *Bika Store*\n\nကုန်ပစ္စည်းရွေးပါ 👇",
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }]
-        ]
-      }
+  bot.sendMessage(chatId, "🛒 *Bika Store*\n\nကုန်ပစ္စည်းရွေးပါ 👇", {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }]
+      ]
     }
-  );
+  });
 });
 
-// ===== BROADCAST (ADMIN ONLY) =====
-bot.onText(/\/broadcast (.+)/, async (msg, match) => {
-  if (!isAdmin(msg.chat.id)) {
-    return bot.sendMessage(msg.chat.id, "⛔ Admin only command");
-  }
-
-  const users = await User.find().select("chatId");
-  const text = match[1];
-
-  let success = 0;
-  let failed = 0;
-
-  for (const u of users) {
-    try {
-      await bot.sendMessage(u.chatId, text);
-      success++;
-    } catch {
-      failed++;
-    }
-  }
-
-  bot.sendMessage(
-    msg.chat.id,
-    `✅ Broadcast Finished\n👥 Total: ${users.length}\n📬 Success: ${success}\n❌ Failed: ${failed}`
-  );
-});
-
-// ====== CALLBACK QUERY MAIN POINT ======
+// ===== CALLBACK QUERY =====
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
 
-  // ===== PAYMENT METHOD SELECT =====
-if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
-  const t = temp[chatId];
-  if (!t) {
-    return bot.sendMessage(chatId, "❌ Session မရှိပါ /start ပြန်လုပ်ပါ");
+  // ===== ADMIN APPROVE / REJECT =====
+  if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
+    if (!isAdmin(chatId)) return;
+
+    const [action, orderId] = d.split("_");
+    const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
+
+    const order = await Order.findOneAndUpdate(
+      { orderId },
+      { status },
+      { new: true }
+    );
+
+    if (!order) {
+      return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
+    }
+
+    await bot.sendMessage(
+      chatId,
+      status === "COMPLETED"
+        ? `✅ Order ${orderId} ပြီးဆုံး`
+        : `❌ Order ${orderId} ငြင်းပယ်ပြီးပါပြီ`
+    );
+
+    await bot.sendMessage(
+      order.chatId,
+      status === "COMPLETED"
+        ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+        : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+    );
+    return;
   }
 
-  const paymentMethod = d === "PAY_KPAY" ? "KPay" : "WavePay";
-  const orderId = oid();
+  // ===== PAYMENT METHOD =====
+  if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
+    const t = temp[chatId];
+    if (!t) return bot.sendMessage(chatId, "❌ Session မရှိပါ");
 
-  // ✅ Order create HERE
-  await Order.create({
-    orderId,
-    chatId: chatId.toString(),
-    user: q.from.username ? `@${q.from.username}` : q.from.first_name,
-    gameId: t.gameId,
-    serverId: t.serverId,
-    product: t.productKey,
-    amount: t.amount,
-    price: t.price,
-    paymentMethod,
-    status: "WAITING_PAYMENT"
-  });
+    const paymentMethod = d === "PAY_KPAY" ? "KPay" : "WavePay";
+    const orderId = oid();
 
-  delete temp[chatId];
+    await Order.create({
+      orderId,
+      chatId: chatId.toString(),
+      user: q.from.username ? `@${q.from.username}` : q.from.first_name,
+      gameId: t.gameId,
+      serverId: t.serverId,
+      product: t.productKey,
+      amount: t.amount,
+      price: t.price,
+      paymentMethod,
+      status: "WAITING_PAYMENT"
+    });
 
-  return bot.sendMessage(
-    chatId,
+    delete temp[chatId];
+
+    return bot.sendMessage(chatId,
 `🧾 *Order Created*
 
-🆔 Order ID: ${orderId}
-🎮 Game ID: ${t.gameId}
-🖥 Server ID: ${t.serverId}
-💎 Amount: ${t.amount}
-💰 Price: ${t.price} MMK
-💳 Payment: ${paymentMethod}
+🆔 ${orderId}
+💎 ${t.amount} Diamonds
+💰 ${t.price} MMK
+💳 ${paymentMethod}
 
-📸 ငွေလွှဲပြီး Screenshot ပို့ပေးပါ`,
-    { parse_mode: "Markdown" }
-  );
-}
-
-  // ===== ADMIN APPROVE / REJECT =====
-if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
-  if (!isAdmin(chatId)) return;
-
-  const [action, orderId] = d.split("_");
-  const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
-
-  const order = await Order.findOneAndUpdate(
-    { orderId },
-    { status },
-    { new: true }
-  );
-
-  if (!order) {
-    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
-  }
-
-  // ✅ Admin confirm
-  await bot.sendMessage(
-    chatId,
-    status === "COMPLETED"
-      ? `✅ Order ${orderId} အောင်မြင်စွာ ပြီးဆုံး`
-      : `❌ Order ${orderId} ကို ငြင်းပယ်ပြီးပါပြီ`
-  );
-
-  // ✅ User notify
-  await bot.sendMessage(
-    order.chatId,
-    status === "COMPLETED"
-      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
-  );
-
-  return;
-}
-
-
-
- 
-  if (PRICES[d]) {
-  temp[chatId] = { productKey: d };
-
-  let priceText = "";
-  for (let a in PRICES[d].prices) {
-    priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
-  }
-
-
-  
-  // looklike html form 
-  return bot.sendMessage(
-    chatId,
-`📝 *Order Form* (reply ပြန်ရေးပါ)
-
-${PRICES[d].name}
-
-📋 Price List
-${priceText}
-
-ID / Server ID:
-Amount:`,
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        force_reply: true
-      }
-    }
-  );
-}
-
-// ===== USER TEXT INPUT (ORDER FORM) =====
-bot.on("message", (msg) => {
-  if (!msg.text) return;
-  if (msg.text.startsWith("/")) return;
-  if (!msg.reply_to_message) return;
-
-  const chatId = msg.chat.id;
-  const t = temp[chatId];
-  if (!t || !t.productKey) return;
-
-  const lines = msg.text.trim().split("\n");
-  if (lines.length < 2) {
-    return bot.sendMessage(
-      chatId,
-      "❌ Format မမှန်ပါ\n\nExample:\n12345678 4321\n86"
+📸 Screenshot ပို့ပေးပါ`,
+      { parse_mode: "Markdown" }
     );
   }
 
-  const [gameId, serverId] = lines[0].trim().split(" ");
-  const amount = lines[1].trim();
+  // ===== PRODUCT SELECT =====
+  if (PRICES[d]) {
+    temp[chatId] = { productKey: d };
 
-  if (!gameId || !serverId) {
-    return bot.sendMessage(chatId, "❌ Game ID / Server ID မမှန်ပါ");
+    let priceText = "";
+    for (let a in PRICES[d].prices) {
+      priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
+    }
+
+    return bot.sendMessage(chatId,
+`📝 *Order Form*
+
+${PRICES[d].name}
+
+${priceText}
+
+ID ServerID
+Amount`,
+      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+    );
   }
+});
+
+// ===== USER FORM INPUT =====
+bot.on("message", (msg) => {
+  if (!msg.text || !msg.reply_to_message) return;
+
+  const chatId = msg.chat.id;
+  const t = temp[chatId];
+  if (!t) return;
+
+  const [idLine, amount] = msg.text.split("\n");
+  const [gameId, serverId] = idLine.split(" ");
 
   const price = PRICES[t.productKey].prices[amount];
-  if (!price) {
-    return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
-  }
+  if (!price) return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
 
-  // save temp
-  t.gameId = gameId;
-  t.serverId = serverId;
-  t.amount = amount;
-  t.price = price;
+  Object.assign(t, { gameId, serverId, amount, price });
 
-  bot.sendMessage(
-    chatId,
-`💳 *Payment Method ရွေးပါ*
-
-💜 KPay  
-Account: 09XXXXXXXX
-
-💙 WavePay  
-Account: 09YYYYYYYY`,
+  bot.sendMessage(chatId,
+`💳 Payment Method`,
     {
-      parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [
-          [{ text: "💜 KPay", callback_data: "PAY_KPAY" }],
-          [{ text: "💙 WavePay", callback_data: "PAY_WAVEPAY" }]
+          [{ text: PAYMENT_ACCOUNTS.KPay.name, callback_data: "PAY_KPAY" }],
+          [{ text: PAYMENT_ACCOUNTS.WavePay.name, callback_data: "PAY_WAVEPAY" }]
         ]
       }
     }
   );
 });
-}); // callback query close 
 
-// =====Global Listener=====
-
- // ✅ Admin chat မှာ confirm message
-  bot.sendMessage(
-    chatId,
-    status === "COMPLETED"
-      ? `✅ Order ${order.orderId} အောင်မြင်စွာ ပြီးဆုံးပါပြီ`
-      : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
-  );
-}
-  
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
 
-  // user ရဲ့ waiting order ကိုရှာ
   const order = await Order.findOne({
     chatId: chatId.toString(),
     status: "WAITING_PAYMENT"
   });
 
-  if (!order) {
-    return bot.sendMessage(chatId, "❌ Pending order မရှိပါ");
-  }
+  if (!order) return bot.sendMessage(chatId, "❌ Pending order မရှိပါ");
 
-  const photoId = msg.photo[msg.photo.length - 1].file_id;
+  const photoId = msg.photo.pop().file_id;
 
-  // Admin ဆီပို့မယ့် caption
-  const caption =
-`📥 *New Payment Screenshot*
-
-🆔 Order ID: ${order.orderId}
-👤 User: ${order.user}
-
-🎮 Game ID: ${order.gameId}
-🖥 Server ID: ${order.serverId}
-
-💎 Amount: ${order.amount}
-💰 Price: ${order.price} MMK
-💳 Payment: ${order.paymentMethod}
-`;
-
-  // Admin ဆီပို့
-  await bot.sendPhoto(
-    ADMIN_ID,
-    photoId,
-    {
-      caption,
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [[
-          { text: "✅ Approve", callback_data: `APPROVE_${order.orderId}` },
-          { text: "❌ Reject", callback_data: `REJECT_${order.orderId}` }
-        ]]
-      }
+  await bot.sendPhoto(ADMIN_ID, photoId, {
+    caption:
+`🆔 ${order.orderId}
+👤 ${order.user}
+💎 ${order.amount}
+💰 ${order.price} MMK`,
+    reply_markup: {
+      inline_keyboard: [[
+        { text: "✅ Approve", callback_data: `APPROVE_${order.orderId}` },
+        { text: "❌ Reject", callback_data: `REJECT_${order.orderId}` }
+      ]]
     }
-  );
+  });
 
-  bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါတယ် ခနစောင့်ပေးပါ...");
+  bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါတယ်...");
 });
-
-// ✅ User ကို message
-  bot.sendMessage(
-    order.chatId,
-    status === "COMPLETED"
-      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
-  );
-
-  
 
 // ===== WEB =====
 app.get("/", (_, res) => res.send("Bot Running"));
