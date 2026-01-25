@@ -535,9 +535,7 @@ result.forEach((u, i) => {
 text += `🔥 *Top ${result.length} Customers of the Month*\nThank you for supporting *Bika Store* 💙`;
 
 bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
-
-
-  
+});
 
 // ===== WEB Sever =====
 app.get("/", (_, res) => res.send("Bot Running"));
