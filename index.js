@@ -16,6 +16,16 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error(err));
 
+// ===== WEB ROUTE (UptimeRobot အတွက်) =====
+app.get("/", (req, res) => {
+  res.status(200).send("OK");
+});
+
+// ===== START SERVER =====
+app.listen(PORT, () => {
+  console.log("Server running");
+});
+
 // ===== SCHEMA =====
 const Order = mongoose.model("Order", new mongoose.Schema({
   orderId: String,
