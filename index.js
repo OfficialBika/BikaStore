@@ -138,13 +138,6 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
     return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
   }
 
-  // ✅ User ကို message
-  bot.sendMessage(
-    order.chatId,
-    status === "COMPLETED"
-      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
-  );
 
   // ✅ Admin chat မှာ confirm message
   bot.sendMessage(
@@ -244,7 +237,7 @@ Account: 09YYYYYYYY`,
 });
 });
 
-
+  
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
@@ -294,6 +287,14 @@ bot.on("photo", async (msg) => {
 
   bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါတယ် ခနစောင့်ပေးပါ...");
 });
+
+// ✅ User ကို message
+  bot.sendMessage(
+    order.chatId,
+    status === "COMPLETED"
+      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+  );
 
   
 
