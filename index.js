@@ -121,6 +121,52 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
+
+  // ===== PAYMENT METHOD SELECT =====
+if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
+  const t = temp[chatId];
+  if (!t) {
+    return bot.sendMessage(chatId, "❌ Order session မတွေ့ပါ၊ /start ပြန်လုပ်ပါ");
+  }
+
+  const paymentMethod = d === "PAY_KPAY" ? "KPay" : "WavePay";
+  const orderId = oid();
+
+  // Order save to DB
+  await Order.create({
+    orderId,
+    chatId: chatId.toString(),
+    user: q.from.username
+      ? `@${q.from.username}`
+      : q.from.first_name,
+    gameId: t.gameId,
+    serverId: t.serverId,
+    product: t.productKey,
+    amount: t.amount,
+    price: t.price,
+    paymentMethod,
+    status: "WAITING_PAYMENT"
+  });
+
+  // temp clear (optional but recommended)
+  delete temp[chatId];
+
+  // User confirm message
+  return bot.sendMessage(
+    chatId,
+`🧾 *Order Created Successfully*
+
+🆔 Order ID: ${orderId}
+🎮 Game ID: ${t.gameId}
+🖥 Server ID: ${t.serverId}
+💎 Amount: ${t.amount}
+💰 Price: ${t.price} MMK
+💳 Payment: ${paymentMethod}
+
+📸 *ငွေလွှဲပြီး Screenshot ပို့ပေးပါ*`,
+    { parse_mode: "Markdown" }
+  );
+}
   
   // ===== ADMIN APPROVE / REJECT =====
 if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
@@ -137,16 +183,6 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
   if (!order) {
     return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
   }
-
-
-  // ✅ Admin chat မှာ confirm message
-  bot.sendMessage(
-    chatId,
-    status === "COMPLETED"
-      ? `✅ Order ${order.orderId} အောင်မြင်စွာ ပြီးဆုံးပါပြီ`
-      : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
-  );
-}
  
   if (PRICES[d]) {
   temp[chatId] = { productKey: d };
@@ -158,7 +194,7 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
 
 
   
-  
+  // looklike html form 
   return bot.sendMessage(
     chatId,
 `📝 *Order Form* (reply ပြန်ရေးပါ)
@@ -237,6 +273,16 @@ Account: 09YYYYYYYY`,
 });
 }); // callback query close 
 
+// =====Global Listener=====
+
+ // ✅ Admin chat မှာ confirm message
+  bot.sendMessage(
+    chatId,
+    status === "COMPLETED"
+      ? `✅ Order ${order.orderId} အောင်မြင်စွာ ပြီးဆုံးပါပြီ`
+      : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
+  );
+}
   
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
