@@ -6,9 +6,7 @@ const mongoose = require("mongoose");
 // Admin Telegram ID
 const ADMIN_ID = process.env.ADMIN_ID;
 
-const isAdmin = (chatId) => {
-  return chatId.toString() === ADMIN_ID;
-};
+const isAdmin = (id) => id.toString() === ADMIN_ID;
 
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -43,9 +41,15 @@ const Order = mongoose.model("Order", new mongoose.Schema({
 const userSchema = new mongoose.Schema({
   chatId: { type: Number, unique: true }
 });
-
+// start user save db
 const User = mongoose.model("User", userSchema);
 
+const User = mongoose.model("User", new mongoose.Schema({
+  chatId: { type: String, unique: true },
+  firstName: String,
+  username: String,
+  createdAt: { type: Date, default: Date.now }
+}));
 // ===== DATA =====
 const PRICES = {
   MLBB: {
@@ -62,6 +66,29 @@ const isAdmin = (id) => ADMINS.includes(id.toString());
 const oid = () => `BKS-${Date.now().toString().slice(-6)}`;
 
 // ===== START =====
+bot.onText(/\/start/, async (msg) => {
+  const chatId = msg.chat.id.toString();
+
+  // ✅ user ကို DB ထဲ save (ရှိရင် မထည့်)
+  await User.updateOne(
+    { chatId },
+    {
+      chatId,
+      firstName: msg.from.first_name,
+      username: msg.from.username
+    },
+    { upsert: true }
+  );
+
+  bot.sendMessage(chatId, "🛒 Select Product", {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }]
+      ]
+    }
+  });
+});
+
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
 
@@ -100,22 +127,24 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
 
   // DB ထဲက user chatId အားလုံးယူ
   const users = await Order.distinct("chatId");
+ const users = await User.find().select("chatId");
+  
 
   let success = 0;
   let failed = 0;
 
-  for (const uid of users) {
-    try {
-      await bot.sendMessage(
-        uid,
-        `📢 *Announcement*\n\n${text}`,
-        { parse_mode: "Markdown" }
-      );
-      success++;
-    } catch (err) {
-      failed++;
-    }
+for (const u of users) {
+  try {
+    await bot.sendMessage(
+      u.chatId,
+      `📢 *Announcement*\n\n${text}`,
+      { parse_mode: "Markdown" }
+    );
+    success++;
+  } catch (e) {
+    failed++;
   }
+}
 
   // ✅ Admin ကို report ပြန်
   bot.sendMessage(
