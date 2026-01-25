@@ -3,19 +3,6 @@ const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
 const cron = require("node-cron");
-const Order = mongoose.model("Order", new mongoose.Schema({
-
-// ===== PAYMENT ACCOUNTS =====
-const PAYMENT_ACCOUNTS = {
-  KPay: {
-    name: "💜 KPay",
-    account: "09264202647 (Shine Htet Aung)"
-  },
-  WavePay: {
-    name: "💙 WavePay",
-    account: "09264202647 (Shine Htet Aung)"
-  }
-};
 
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -47,6 +34,19 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   status: String,
   approvedAt: Date, 
   createdAt: { type: Date, default: Date.now }
+}));
+
+const Order = mongoose.model("Order", new mongoose.Schema({
+// ===== PAYMENT ACCOUNTS =====
+const PAYMENT_ACCOUNTS = {
+  KPay: {
+    name: "💜 KPay",
+    account: "09264202647 (Shine Htet Aung)"
+  },
+  WavePay: {
+    name: "💙 WavePay",
+    account: "09264202647 (Shine Htet Aung)"
+  }
 }));
 
 const User = mongoose.model("User", new mongoose.Schema({
