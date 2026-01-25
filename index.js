@@ -117,14 +117,11 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   );
 });
 
-// ===== CALLBACK query =====
+// ====== CALLBACK QUERY MAIN POINT ======
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
-  const d = q.data; }
-
-
+  const d = q.data;
   
-
   // ✅ User ကို message
   bot.sendMessage(
     order.chatId,
@@ -132,6 +129,22 @@ bot.on("callback_query", async (q) => {
       ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
       : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
   );
+
+  // ===== ADMIN APPROVE / REJECT =====
+if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
+  if (!isAdmin(chatId)) return;
+
+  const [action, orderId] = d.split("_");
+  const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
+
+  const order = await Order.findOneAndUpdate(
+    { orderId },
+    { status }
+  );
+
+  if (!order) {
+    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
+  }
 
   // ✅ Admin chat မှာ confirm message
   bot.sendMessage(
@@ -141,7 +154,7 @@ bot.on("callback_query", async (q) => {
       : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
   );
 }
-  
+ 
   if (PRICES[d]) {
   temp[chatId] = { productKey: d };
 
@@ -150,6 +163,9 @@ bot.on("callback_query", async (q) => {
     priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
   }
 
+
+  
+  
   return bot.sendMessage(
     chatId,
 `📝 *Order Form* (reply ပြန်ရေးပါ)
@@ -226,6 +242,8 @@ Account: 09YYYYYYYY`,
     }
   );
 });
+});
+
 
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
@@ -277,21 +295,7 @@ bot.on("photo", async (msg) => {
   bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါတယ် ခနစောင့်ပေးပါ...");
 });
 
-  // ===== ADMIN APPROVE / REJECT =====
-if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
-  if (!isAdmin(chatId)) return;
-
-  const [action, orderId] = d.split("_");
-  const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
-
-  const order = await Order.findOneAndUpdate(
-    { orderId },
-    { status }
-  );
-
-  if (!order) {
-    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
-  }
+  
 
 // ===== WEB =====
 app.get("/", (_, res) => res.send("Bot Running"));
