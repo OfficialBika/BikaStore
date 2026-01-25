@@ -51,6 +51,26 @@ const oid = () => `BKS-${Date.now().toString().slice(-6)}`;
 
 // ===== START =====
 bot.onText(/\/start/, (msg) => {
+  const chatId = msg.chat.id;
+
+  const menuKeyboard = {
+    reply_markup: {
+      keyboard: [
+        [{ text: "/start" }, { text: "/orders" }]
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: false
+    }
+  };
+
+  bot.sendMessage(
+    chatId,
+    "👋 မင်္ဂလာပါ!\nBika Store Bot မှ ကြိုဆိုပါတယ် 🙌\n\nMenu ကို အောက်မှာ ရွေးပါ 👇",
+    menuKeyboard
+  );
+});
+
+bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
     "🛒 *Bika Store*\n\nကုန်ပစ္စည်းရွေးပါ 👇",
