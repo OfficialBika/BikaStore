@@ -71,6 +71,17 @@ const PRICES = {
       "963": 53000,
       "1049": 59900
     }
+  },
+  PUBG: {
+    name: "🎯 PUBG UC",
+    prices: {
+      "60": 4500,
+      "325": 19500,
+      "660": 38000,
+      "1800": 90500,
+      "3850": 185000,
+      "8100": 363000
+    }
   }
 };
 
@@ -87,11 +98,12 @@ bot.onText(/\/start/, async (msg) => {
     { upsert: true }
   );
 
-  bot.sendMessage(chatId, "🛒 *Bika Store*\n\nကုန်ပစ္စည်းရွေးပါ 👇", {
+  bot.sendMessage(chatId, "🛒 *Welcome to Bika Store*\n\n မိမိဝယ်ချင်တဲ့ ဂိမ်းကိုရွေးပါ 👇", {
     parse_mode: "Markdown",
     reply_markup: {
       inline_keyboard: [
-        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }]
+        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
+        [{ text: "🎯 PUBG UC", callback_data: "PUBG" }]
       ]
     }
   });
@@ -171,27 +183,43 @@ bot.on("callback_query", async (q) => {
     );
   }
 
-  // ===== PRODUCT SELECT =====
+  // ===== PRODUCT Form SELECT =====
   if (PRICES[d]) {
-    temp[chatId] = { productKey: d };
+  temp[chatId] = { productKey: d };
 
-    let priceText = "";
-    for (let a in PRICES[d].prices) {
-      priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
-    }
+  let priceText = "";
+  for (let a in PRICES[d].prices) {
+    priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
+  }
 
+  // 🔥 PUBG order form
+  if (d === "PUBG") {
     return bot.sendMessage(chatId,
 `📝 *Order Form*
 
-${PRICES[d].name}
+🎯 PUBG UC
 
 ${priceText}
 
-ID ServerID
-Amount`,
+📌 Pubg ID:
+📌 Amount:`,
       { parse_mode: "Markdown", reply_markup: { force_reply: true } }
     );
   }
+
+  // 🔥 MLBB order form
+  return bot.sendMessage(chatId,
+`📝 *Order Form*
+
+💎 MLBB Diamonds
+
+${priceText}
+
+📌 Game ID / Server ID:
+📌 Amount:`,
+    { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+  );
+}
 }); 
 // callback quary end
 
