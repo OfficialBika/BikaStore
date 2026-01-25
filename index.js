@@ -217,6 +217,7 @@ ${priceText}
 
 ✍️ *ရေးထည့်ပုံ (Example)*
 မိမိ Id ကိုမှန်ကန်စွာရေးသားပါ
+
 486679424 2463
 1049
 
@@ -228,6 +229,37 @@ ${priceText}
 }
 }); 
 // callback quary end
+
+// ===== BROADCAST (ADMIN ONLY) =====
+bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+  if (!isAdmin(msg.chat.id)) {
+    return bot.sendMessage(msg.chat.id, "⛔ Admin only");
+  }
+
+  const text = match[1];
+  const users = await User.find().select("chatId");
+
+  let success = 0;
+  let failed = 0;
+
+  for (const u of users) {
+    try {
+      await bot.sendMessage(u.chatId, text);
+      success++;
+    } catch (err) {
+      failed++;
+    }
+  }
+
+  bot.sendMessage(
+    msg.chat.id,
+    `📣 Broadcast Done
+
+👥 Total: ${users.length}
+✅ Success: ${success}
+❌ Failed: ${failed}`
+  );
+});
 
 // ===== USER FORM INPUT =====
 bot.on("message", (msg) => {
