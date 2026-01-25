@@ -117,11 +117,150 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   );
 });
 
-// ===== CALLBACK =====
+// ===== CALLBACK query =====
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
 
+// ===== USER TEXT INPUT (ORDER FORM) =====
+bot.on("message", (msg) => {
+  if (!msg.text) return;
+  if (msg.text.startsWith("/")) return;
+  if (!msg.reply_to_message) return;
+
+  const chatId = msg.chat.id;
+  const t = temp[chatId];
+  if (!t || !t.productKey) return;
+
+  const lines = msg.text.trim().split("\n");
+  if (lines.length < 2) {
+    return bot.sendMessage(
+      chatId,
+      "❌ Format မမှန်ပါ\n\nExample:\n12345678 4321\n86"
+    );
+  }
+
+  const [gameId, serverId] = lines[0].trim().split(" ");
+  const amount = lines[1].trim();
+
+  if (!gameId || !serverId) {
+    return bot.sendMessage(chatId, "❌ Game ID / Server ID မမှန်ပါ");
+  }
+
+  const price = PRICES[t.productKey].prices[amount];
+  if (!price) {
+    return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
+  }
+
+  // save temp
+  t.gameId = gameId;
+  t.serverId = serverId;
+  t.amount = amount;
+  t.price = price;
+
+  bot.sendMessage(
+    chatId,
+`💳 *Payment Method ရွေးပါ*
+
+💜 KPay  
+Account: 09XXXXXXXX
+
+💙 WavePay  
+Account: 09YYYYYYYY`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "💜 KPay", callback_data: "PAY_KPAY" }],
+          [{ text: "💙 WavePay", callback_data: "PAY_WAVEPAY" }]
+        ]
+      }
+    }
+  );
+});
+  // ===== PAYMENT SCREENSHOT =====
+bot.on("photo", async (msg) => {
+  const chatId = msg.chat.id;
+
+  // user ရဲ့ waiting order ကိုရှာ
+  const order = await Order.findOne({
+    chatId: chatId.toString(),
+    status: "WAITING_PAYMENT"
+  });
+
+  if (!order) {
+    return bot.sendMessage(chatId, "❌ Pending order မရှိပါ");
+  }
+
+  const photoId = msg.photo[msg.photo.length - 1].file_id;
+
+  // Admin ဆီပို့မယ့် caption
+  const caption =
+`📥 *New Payment Screenshot*
+
+🆔 Order ID: ${order.orderId}
+👤 User: ${order.user}
+
+🎮 Game ID: ${order.gameId}
+🖥 Server ID: ${order.serverId}
+
+💎 Amount: ${order.amount}
+💰 Price: ${order.price} MMK
+💳 Payment: ${order.paymentMethod}
+`;
+
+  // Admin ဆီပို့
+  await bot.sendPhoto(
+    ADMIN_ID,
+    photoId,
+    {
+      caption,
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "✅ Approve", callback_data: `APPROVE_${order.orderId}` },
+          { text: "❌ Reject", callback_data: `REJECT_${order.orderId}` }
+        ]]
+      }
+    }
+  );
+
+  bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါတယ် ခနစောင့်ပေးပါ...");
+});
+
+  // ===== ADMIN APPROVE / REJECT =====
+if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
+  if (!isAdmin(chatId)) return;
+
+  const [action, orderId] = d.split("_");
+  const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
+
+  const order = await Order.findOneAndUpdate(
+    { orderId },
+    { status }
+  );
+
+  if (!order) {
+    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
+  }
+
+  // ✅ User ကို message
+  bot.sendMessage(
+    order.chatId,
+    status === "COMPLETED"
+      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+  );
+
+  // ✅ Admin chat မှာ confirm message
+  bot.sendMessage(
+    chatId,
+    status === "COMPLETED"
+      ? `✅ Order ${order.orderId} အောင်မြင်စွာ ပြီးဆုံးပါပြီ`
+      : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
+  );
+}
+  
   if (PRICES[d]) {
   temp[chatId] = { productKey: d };
 
@@ -132,9 +271,23 @@ bot.on("callback_query", async (q) => {
 
   return bot.sendMessage(
     chatId,
-    `${PRICES[d].name}\n\n📋 Price List\n${priceText}\n📝 Order Format:\nGameID ServerID\nAmount\n\nExample:\n12345678 4321\n86`
+`📝 *Order Form* (reply ပြန်ရေးပါ)
+
+${PRICES[d].name}
+
+📋 Price List
+${priceText}
+
+ID / Server ID:
+Amount:`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        force_reply: true
+      }
+    }
   );
-  }
+}
   
 
 // ===== WEB =====
