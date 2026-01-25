@@ -120,7 +120,55 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
 // ===== CALLBACK query =====
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
-  const d = q.data;
+  const d = q.data; }
+
+
+  
+
+  // ✅ User ကို message
+  bot.sendMessage(
+    order.chatId,
+    status === "COMPLETED"
+      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+  );
+
+  // ✅ Admin chat မှာ confirm message
+  bot.sendMessage(
+    chatId,
+    status === "COMPLETED"
+      ? `✅ Order ${order.orderId} အောင်မြင်စွာ ပြီးဆုံးပါပြီ`
+      : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
+  );
+}
+  
+  if (PRICES[d]) {
+  temp[chatId] = { productKey: d };
+
+  let priceText = "";
+  for (let a in PRICES[d].prices) {
+    priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
+  }
+
+  return bot.sendMessage(
+    chatId,
+`📝 *Order Form* (reply ပြန်ရေးပါ)
+
+${PRICES[d].name}
+
+📋 Price List
+${priceText}
+
+ID / Server ID:
+Amount:`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        force_reply: true
+      }
+    }
+  );
+}
 
 // ===== USER TEXT INPUT (ORDER FORM) =====
 bot.on("message", (msg) => {
@@ -178,7 +226,8 @@ Account: 09YYYYYYYY`,
     }
   );
 });
-  // ===== PAYMENT SCREENSHOT =====
+
+// ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
 
@@ -243,52 +292,6 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
   if (!order) {
     return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
   }
-
-  // ✅ User ကို message
-  bot.sendMessage(
-    order.chatId,
-    status === "COMPLETED"
-      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
-  );
-
-  // ✅ Admin chat မှာ confirm message
-  bot.sendMessage(
-    chatId,
-    status === "COMPLETED"
-      ? `✅ Order ${order.orderId} အောင်မြင်စွာ ပြီးဆုံးပါပြီ`
-      : `❌ Order ${order.orderId} ကို ငြင်းပယ်ခြင်းပြီးဆုံးပါပြီ`
-  );
-}
-  
-  if (PRICES[d]) {
-  temp[chatId] = { productKey: d };
-
-  let priceText = "";
-  for (let a in PRICES[d].prices) {
-    priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
-  }
-
-  return bot.sendMessage(
-    chatId,
-`📝 *Order Form* (reply ပြန်ရေးပါ)
-
-${PRICES[d].name}
-
-📋 Price List
-${priceText}
-
-ID / Server ID:
-Amount:`,
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        force_reply: true
-      }
-    }
-  );
-}
-  
 
 // ===== WEB =====
 app.get("/", (_, res) => res.send("Bot Running"));
