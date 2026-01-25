@@ -126,11 +126,43 @@ bot.on("callback_query", async (q) => {
 if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
   const t = temp[chatId];
   if (!t) {
-    return bot.sendMessage(chatId, "❌ Order session မတွေ့ပါ၊ /start ပြန်လုပ်ပါ");
+    return bot.sendMessage(chatId, "❌ Session မရှိပါ /start ပြန်လုပ်ပါ");
   }
 
   const paymentMethod = d === "PAY_KPAY" ? "KPay" : "WavePay";
   const orderId = oid();
+
+  // ✅ Order create HERE
+  await Order.create({
+    orderId,
+    chatId: chatId.toString(),
+    user: q.from.username ? `@${q.from.username}` : q.from.first_name,
+    gameId: t.gameId,
+    serverId: t.serverId,
+    product: t.productKey,
+    amount: t.amount,
+    price: t.price,
+    paymentMethod,
+    status: "WAITING_PAYMENT"
+  });
+
+  delete temp[chatId];
+
+  return bot.sendMessage(
+    chatId,
+`🧾 *Order Created*
+
+🆔 Order ID: ${orderId}
+🎮 Game ID: ${t.gameId}
+🖥 Server ID: ${t.serverId}
+💎 Amount: ${t.amount}
+💰 Price: ${t.price} MMK
+💳 Payment: ${paymentMethod}
+
+📸 ငွေလွှဲပြီး Screenshot ပို့ပေးပါ`,
+    { parse_mode: "Markdown" }
+  );
+}
 
   // ===== ADMIN APPROVE / REJECT =====
 if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
@@ -141,45 +173,34 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
 
   const order = await Order.findOneAndUpdate(
     { orderId },
-    { status }
+    { status },
+    { new: true }
   );
 
-  // Order save to DB
-  await Order.create({
-    orderId,
-    chatId: chatId.toString(),
-    user: q.from.username
-      ? `@${q.from.username}`
-      : q.from.first_name,
-    gameId: t.gameId,
-    serverId: t.serverId,
-    product: t.productKey,
-    amount: t.amount,
-    price: t.price,
-    paymentMethod,
-    status: "WAITING_PAYMENT"
-  });
+  if (!order) {
+    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
+  }
 
-  // temp clear (optional but recommended)
-  delete temp[chatId];
-
-  // User confirm message
-  return bot.sendMessage(
+  // ✅ Admin confirm
+  await bot.sendMessage(
     chatId,
-`🧾 *Order Created Successfully*
-
-🆔 Order ID: ${orderId}
-🎮 Game ID: ${t.gameId}
-🖥 Server ID: ${t.serverId}
-💎 Amount: ${t.amount}
-💰 Price: ${t.price} MMK
-💳 Payment: ${paymentMethod}
-
-📸 *ငွေလွှဲပြီး Screenshot ပို့ပေးပါ*`,
-    { parse_mode: "Markdown" }
+    status === "COMPLETED"
+      ? `✅ Order ${orderId} အောင်မြင်စွာ ပြီးဆုံး`
+      : `❌ Order ${orderId} ကို ငြင်းပယ်ပြီးပါပြီ`
   );
+
+  // ✅ User notify
+  await bot.sendMessage(
+    order.chatId,
+    status === "COMPLETED"
+      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+  );
+
+  return;
 }
-  
+
+
 
   if (!order) {
     return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
