@@ -3,6 +3,9 @@ const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
 
+// Admin Telegram ID
+const ADMIN_ID = 123456789; 
+
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const ADMINS = process.env.ADMIN_CHAT_IDS.split(",");
@@ -33,6 +36,11 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   status: String,
   createdAt: { type: Date, default: Date.now }
 }));
+const userSchema = new mongoose.Schema({
+  chatId: { type: Number, unique: true }
+});
+
+const User = mongoose.model("User", userSchema);
 
 // ===== DATA =====
 const PRICES = {
@@ -50,23 +58,30 @@ const isAdmin = (id) => ADMINS.includes(id.toString());
 const oid = () => `BKS-${Date.now().toString().slice(-6)}`;
 
 // ===== START =====
-bot.onText(/\/start/, (msg) => {
+bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
 
-  const menuKeyboard = {
-    reply_markup: {
-      keyboard: [
-        [{ text: "/start" }, { text: "/orders" }]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: false
-    }
-  };
+  try {
+    await User.updateOne(
+      { chatId },
+      { chatId },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.log("User save error:", err.message);
+  }
 
   bot.sendMessage(
     chatId,
-    "👋 မင်္ဂလာပါ!\nBika Store Bot မှ ကြိုဆိုပါတယ် 🙌\n\nMenu ကို အောက်မှာ ရွေးပါ 👇",
-    menuKeyboard
+    "👋 Bika Store Bot မှ ကြိုဆိုပါတယ် 🙌\nMenu ကို အသုံးပြုပါ 👇",
+    {
+      reply_markup: {
+        keyboard: [
+          [{ text: "/start" }, { text: "/orders" }]
+        ],
+        resize_keyboard: true
+      }
+    }
   );
 });
 
@@ -147,6 +162,35 @@ bot.on("callback_query", async (q) => {
       bot.sendMessage(order.chatId, `✅ Order ${status}`);
     }
   }
+});
+//  Broadcat + admin only
+bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+
+  // 🔐 Admin check
+  if (chatId !== ADMIN_ID) {
+    return bot.sendMessage(chatId, "⛔ Admin only command");
+  }
+
+  const broadcastMessage = match[1];
+
+  const users = await User.find();
+
+  let success = 0;
+
+  for (const user of users) {
+    try {
+      await bot.sendMessage(user.chatId, broadcastMessage);
+      success++;
+    } catch (err) {
+      console.log("Send failed:", user.chatId);
+    }
+  }
+
+  bot.sendMessage(
+    chatId,
+    `✅ Broadcast completed\n📤 Sent to ${success} users`
+  );
 });
 
 // ===== USER TEXT =====
