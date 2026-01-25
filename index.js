@@ -46,7 +46,7 @@ const PAYMENT_ACCOUNTS = {
   WavePay: {
     name: "💙 WavePay",
     account: "09264202647 (Shine Htet Aung)"
-   }ø
+   }
   };
 
 
