@@ -7,11 +7,11 @@ const mongoose = require("mongoose");
 const PAYMENT_ACCOUNTS = {
   KPay: {
     name: "💜 KPay",
-    account: "09xxxxxxxx (Aung Aung)"
+    account: "09264202647 (Shine Htet Aung)"
   },
   WavePay: {
     name: "💙 WavePay",
-    account: "09yyyyyyyy (Mg Mg)"
+    account: "09264202647 (Shine Htet Aung"
   }
 };
 
