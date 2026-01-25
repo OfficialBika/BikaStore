@@ -34,9 +34,7 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   status: String,
   approvedAt: Date, 
   createdAt: { type: Date, default: Date.now }
-}));
-
-const Order = mongoose.model("Order", new mongoose.Schema({
+    
 // ===== PAYMENT ACCOUNTS =====
 const PAYMENT_ACCOUNTS = {
   KPay: {
@@ -48,6 +46,7 @@ const PAYMENT_ACCOUNTS = {
     account: "09264202647 (Shine Htet Aung)"
   }
 }));
+
 
 const User = mongoose.model("User", new mongoose.Schema({
   chatId: { type: String, unique: true },
@@ -252,21 +251,16 @@ bot.on("callback_query", async (q) => {
     const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
 
     const updateData =
-  action === "APPROVE"
-    ? { status: "COMPLETED", approvedAt: new Date() }
-    : { status: "REJECTED" };
+    action === "APPROVE"
+      ? { status: "COMPLETED", approvedAt: new Date() }
+      : { status: "REJECTED" };
 
-const order = await Order.findOneAndUpdate(
-  { orderId },
-  updateData,
-  { new: true }
-);
-    const order = await Order.findOneAndUpdate(
-      { orderId },
-      { status },
-      { new: true }
-    );
-
+  const order = await Order.findOneAndUpdate(
+    { orderId },
+    updateData,
+    { new: true }
+  );
+    
     if (!order) {
       return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
     }
@@ -475,10 +469,6 @@ bot.on("photo", async (msg) => {
   bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါတယ်...");
 });
 
-// ===== START =====
-bot.onText(/\/start/, async (msg) => {
-  ...
-});
 
 // ===== TOP USERS CMT (ADD HERE) =====
 bot.onText(/\/topusers/, async (msg) => {
@@ -544,10 +534,6 @@ text += `🔥 *Top ${result.length} Customers of the Month*\nThank you for suppo
 
 bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 
-// ===== CALLBACK QUERY =====
-bot.on("callback_query", async (q) => {
-  ...
-});
 
   
 
