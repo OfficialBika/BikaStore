@@ -453,47 +453,63 @@ bot.on("message", async (msg) => {
 
   // ===== PUBG =====
   if (t.productKey === "PUBG") {
-    const gameId = lines[0];
-    const amount = lines[1];
+  const gameId = lines[0];
+  const amountLine = lines[1];
 
-    if (!gameId || !amount) {
-      return bot.sendMessage(chatId, "❌ Pubg ID / Amount မမှန်ပါ");
-    }
-
-    const price = PRICES.PUBG.prices[amount];
-    if (!price) {
-      return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
-    }
-
-    Object.assign(t, {
-      gameId,
-      serverId: "-",
-      amount,
-      price
-    });
+  if (!gameId || !amountLine) {
+    return bot.sendMessage(chatId, "❌ Pubg ID / Amount မမှန်ပါ");
   }
+
+  // ⭐ multiple UC support (60+325)
+  const amounts = amountLine.split("+");
+
+  let totalPrice = 0;
+
+  for (const amt of amounts) {
+    const price = PRICES.PUBG.prices[amt];
+    if (!price) {
+      return bot.sendMessage(chatId, `❌ Amount မမှန်ပါ : ${amt}`);
+    }
+    totalPrice += price;
+  }
+
+  Object.assign(t, {
+    gameId,
+    serverId: "-",
+    amount: amounts.join(" + "),
+    price: totalPrice
+  });
+}
 
   // ===== MLBB =====
-  if (t.productKey === "MLBB") {
-    const [idLine, amount] = lines;
-    const [gameId, serverId] = idLine.split(" ");
+ if (t.productKey === "MLBB") {
+  const [idLine, amountLine] = lines;
+  const [gameId, serverId] = idLine.split(" ");
 
-    if (!gameId || !serverId || !amount) {
-      return bot.sendMessage(chatId, "❌ ID / Server ID / Amount မမှန်ပါ");
-    }
-
-    const price = PRICES.MLBB.prices[amount];
-    if (!price) {
-      return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
-    }
-
-    Object.assign(t, {
-      gameId,
-      serverId,
-      amount,
-      price
-    });
+  if (!gameId || !serverId || !amountLine) {
+    return bot.sendMessage(chatId, "❌ ID / Server ID / Amount မမှန်ပါ");
   }
+
+  // ⭐ multiple amount support (86+343)
+  const amounts = amountLine.split("+");
+
+  let totalPrice = 0;
+
+  for (const amt of amounts) {
+    const price = PRICES.MLBB.prices[amt];
+    if (!price) {
+      return bot.sendMessage(chatId, `❌ Amount မမှန်ပါ : ${amt}`);
+    }
+    totalPrice += price;
+  }
+
+  Object.assign(t, {
+    gameId,
+    serverId,
+    amount: amounts.join(" + "),
+    price: totalPrice
+  });
+}
 
   // ===== PAYMENT METHOD =====
   return bot.sendMessage(
