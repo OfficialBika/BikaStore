@@ -313,7 +313,10 @@ bot.on("callback_query", async (q) => {
           approvedAt: new Date(),
           expireAt: endOfMonth // ⭐ TTL trigger
         }
-      : { status: "REJECTED" };
+    : {
+    status: "REJECTED",
+    expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+  };
 
   const order = await Order.findOneAndUpdate(
     { orderId },
@@ -376,54 +379,32 @@ bot.on("callback_query", async (q) => {
     );
   }
 
-  // ===== PRODUCT Form SELECT =====
-  if (PRICES[d]) {
-  temp[chatId] = { productKey: d };
+  // ===== PRODUCT SELECT (INLINE FLOW) =====
+if (d === "MLBB") {
+  temp[chatId] = {
+    product: "MLBB",
+    step: "GAME_ID",
+    items: []
+  };
 
-  let priceText = "";
-  for (let a in PRICES[d].prices) {
-    priceText += `${a} → ${PRICES[d].prices[a]} MMK\n`;
-  }
+  return bot.sendMessage(
+    chatId,
+    "🆔 *MLBB Game ID ကိုထည့်ပါ*",
+    { parse_mode: "Markdown" }
+  );
+}
 
-  // 🔥 PUBG order form
-  if (d === "PUBG") {
-    return bot.sendMessage(chatId,
-`📝 *Order Form*
+if (d === "PUBG") {
+  temp[chatId] = {
+    product: "PUBG",
+    step: "GAME_ID",
+    items: []
+  };
 
-🎯 PUBG UC
-
-${priceText}
-
-✍️ *ရေးထည့်ပုံ (Example)*
-
-5123456789
-60+325
-
-📌 UC အများကြီးဝယ်ချင်ရင် + နဲ့ရေးနိုင်ပါတယ်`,
-                           
-      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
-    );
-  }
-
-  // 🔥 MLBB order form
-  return bot.sendMessage(chatId,
-`📝 *Order Form*
-
-💎 MLBB Diamonds
-
-${priceText}
-
-✍️ *ရေးထည့်ပုံ (Example)*
-
-486679424 2463
-86+343
-
-
-📌 ပထမလိုင်း → Game ID + Server ID  
-📌 ဒုတိယလိုင်း → DiaAmount(ဥပမာ-86)
-📌 Diamond အများကြီးဆို + နဲ့ရေးနိုင်ပါတယ်`,
-                         
-    { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+  return bot.sendMessage(
+    chatId,
+    "🆔 *PUBG Game ID ကိုထည့်ပါ*",
+    { parse_mode: "Markdown" }
   );
 }
 }); 
@@ -556,10 +537,11 @@ const order = await Order.create({
 
   items,
   totalPrice,
-  status: "pending"
-});
+  status: "pending",
 
-// Order save
+  // ⏳ 3 days pending auto delete
+  expireAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+});
 
  // ===== STEP 3: ORDER SUMMARY MESSAGE =====
 const itemsText = order.items
