@@ -191,9 +191,14 @@ d==="MLBB"
     await bot.sendMessage(order.userId,
 "🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်");
 
-    await bot.editMessageCaption("✅ ORDER COMPLETED",
-      { chat_id:ADMIN_ID, message_id:order.adminMsgId });
-  }
+    for (const adminId of ADMIN_IDS) {
+  try {
+    await bot.editMessageCaption(
+      "✅ ORDER COMPLETED",
+      { chat_id: adminId, message_id: order.adminMsgId }
+    );
+  } catch {}
+}
 
   // ADMIN REJECT
   if (d.startsWith("REJECT_") && isAdmin(q.from.id)) {
