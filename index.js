@@ -198,7 +198,8 @@ bot.sendMessage(
 💰 Total : ${me.totalMMK.toLocaleString()} MMK
 `,
   { parse_mode: "Markdown" }
-);
+ );
+});
 // Top 10 CMT
 bot.onText(/\/top10/, async (msg) => {
   const chatId = msg.chat.id.toString();
