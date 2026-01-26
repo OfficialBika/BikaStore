@@ -2,7 +2,6 @@
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
-const cron = require("node-cron");
 
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -33,9 +32,19 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   paymentMethod: String,
   status: String,
   approvedAt: Date, 
+  // ⭐ TTL FIELD
+  expireAt: { type: Date },
+
   createdAt: { type: Date, default: Date.now }
     })
  );
+// TTL index
+OrderSchema.index(
+  { expireAt: 1 },
+  { expireAfterSeconds: 0 }
+);
+// ===== MODEL CREATE =====
+const Order = mongoose.model("Order", OrderSchema);
 
 // ===== PAYMENT ACCOUNTS =====
 const PAYMENT_ACCOUNTS = {
@@ -247,14 +256,24 @@ bot.on("callback_query", async (q) => {
 
   // ===== ADMIN APPROVE / REJECT =====
   if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
-    if (!isAdmin(chatId)) return;
+  if (!isAdmin(chatId)) return;
 
-    const [action, orderId] = d.split("_");
-    const status = action === "APPROVE" ? "COMPLETED" : "REJECTED";
+  const [action, orderId] = d.split("_");
 
-    const updateData =
+  // 📅 ဒီလကုန် (next month 1st day)
+  const endOfMonth = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth() + 1,
+    1
+  );
+
+  const updateData =
     action === "APPROVE"
-      ? { status: "COMPLETED", approvedAt: new Date() }
+      ? {
+          status: "COMPLETED",
+          approvedAt: new Date(),
+          expireAt: endOfMonth // ⭐ TTL trigger
+        }
       : { status: "REJECTED" };
 
   const order = await Order.findOneAndUpdate(
@@ -262,25 +281,24 @@ bot.on("callback_query", async (q) => {
     updateData,
     { new: true }
   );
-    
-    if (!order) {
-      return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
-    }
 
-    await bot.sendMessage(
-      chatId,
-      status === "COMPLETED"
-        ? `✅ Order ${orderId} ပြီးဆုံး`
-        : `❌ Order ${orderId} ငြင်းပယ်ပြီးပါပြီ`
-    );
+  if (!order) {
+    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
+  }
 
-    await bot.sendMessage(
-      order.chatId,
-      status === "COMPLETED"
-        ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-        : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
-    );
-    return;
+  await bot.sendMessage(
+    chatId,
+    action === "APPROVE"
+      ? `✅ Order ${orderId} ပြီးဆုံး`
+      : `❌ Order ${orderId} ငြင်းပယ်ပြီးပါပြီ`
+  );
+
+  await bot.sendMessage(
+    order.chatId,
+    action === "APPROVE"
+      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
+      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+  );
   }
 
   // ===== PAYMENT METHOD =====
@@ -539,41 +557,5 @@ bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 
 // ===== WEB Sever =====
 app.get("/", (_, res) => res.send("Bot Running"));
-  
-  cron.schedule("0 0 1 * *", async () => {
-  try {
-    const now = new Date();
-
-    // အရင်လရဲ့ first day
-    const firstDayLastMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      1
-    );
-
-    // အရင်လရဲ့ last day
-    const lastDayLastMonth = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      0,
-      23, 59, 59
-    );
-
-    // ✅ အတည်ပြုထားတဲ့ order ပဲ delete
-    const result = await Order.deleteMany({
-      status: "COMPLETED",
-      createdAt: {
-        $gte: firstDayLastMonth,
-        $lte: lastDayLastMonth
-      }
-    });
-
-    console.log(
-      `🧹 Monthly Cleanup: ${result.deletedCount} orders deleted`
-    );
-  } catch (err) {
-    console.error("❌ Monthly cleanup error:", err);
-  }
-});
   
 app.listen(PORT, () => console.log("Server running"));
