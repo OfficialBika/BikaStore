@@ -293,6 +293,15 @@ bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
 
+  if (d === "CONFIRM_ORDER") {
+  return bot.sendMessage(chatId, "⏳ Order ကို submit လုပ်နေပါသည်...");
+}
+
+if (d === "CANCEL_ORDER") {
+  delete temp[chatId];
+  return bot.sendMessage(chatId, "❌ Order ကို ဖျက်လိုက်ပါပြီ");
+}
+
   // ===== ADMIN APPROVE / REJECT =====
   if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
   if (!isAdmin(chatId)) return;
@@ -477,51 +486,42 @@ bot.on("message", async (msg) => {
 
   // ===== STEP: ITEMS =====
   if (t.step === "ITEMS") {
-    const amounts = msg.text.trim().split("+");
-    let items = [];
-    let total = 0;
+  if (t.step === "DONE") {
+  let itemText = "";
+  let total = 0;
 
-    for (const amt of amounts) {
-      const price =
-        t.product === "MLBB"
-          ? PRICES.MLBB.prices[amt]
-          : PRICES.PUBG.prices[amt];
+  t.items.forEach(i => {
+    itemText += `• ${i.amount} 💎 — ${i.price.toLocaleString()} MMK\n`;
+    total += i.price;
+  });
 
-      if (!price) {
-        return bot.sendMessage(chatId, `❌ Amount မမှန်ပါ : ${amt}`);
-      }
+  t.totalPrice = total;
 
-      items.push({ amount: amt, price });
-      total += price;
-    }
-
-    // save to temp
-    t.items = items;
-    t.totalPrice = total;
-    t.step = "CONFIRM";
-
-    const itemsText = items
-      .map(i => `• ${i.amount} — ${i.price.toLocaleString()} MMK`)
-      .join("\n");
-
-    return bot.sendMessage(
-      chatId,
+  const text =
 `━━━━━━━━━━━━━━━
-📦 *Order Preview*
+📦 Order Preview
 ━━━━━━━━━━━━━━━
 🎮 Product : ${t.product}
 🆔 Game ID : ${t.gameId}
-🌐 Server  : ${t.serverId || "-"}
+🌐 Server  : ${t.serverId}
 
 🛒 Items:
-${itemsText}
-
+${itemText}
 💰 Total : ${total.toLocaleString()} MMK
-━━━━━━━━━━━━━━━`,
-      { parse_mode: "Markdown" }
-    );
-  }
-});
+━━━━━━━━━━━━━━━
+Confirm လုပ်မလား?`;
+
+  return bot.sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Confirm Order", callback_data: "CONFIRM_ORDER" },
+          { text: "❌ Cancel", callback_data: "CANCEL_ORDER" }
+        ]
+      ]
+    }
+  });
+}
 
   
   // ===== STEP 2: CREATE ORDER IN MONGODB =====
