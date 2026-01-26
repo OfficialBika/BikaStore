@@ -561,9 +561,7 @@ const order = await Order.create({
 
 // Order save
 
-  // ===== STEP 3:Wait ORDER SUMMARY MESSAGE =====
-const order = await Order.create({
-// Items list text
+ // ===== STEP 3: ORDER SUMMARY MESSAGE =====
 const itemsText = order.items
   .map(i => `• ${i.amount} 💎 — ${i.price.toLocaleString()} MMK`)
   .join("\n");
