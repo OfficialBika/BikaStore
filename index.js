@@ -35,7 +35,6 @@ const OrderSchema = new mongoose.Schema({
 
   // ⭐ TTL field
   expireAt: { type: Date },
-
   createdAt: { type: Date, default: Date.now }
 });
 
