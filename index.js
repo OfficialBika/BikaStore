@@ -6,7 +6,9 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-const ADMIN_ID = process.env.ADMIN_CHAT_IDS;
+const ADMIN_IDS = process.env.ADMIN_CHAT_IDS
+  ? process.env.ADMIN_CHAT_IDS.split(",")
+  : [];
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -45,7 +47,7 @@ const PAYMENTS = {
 // ===============================
 // HELPERS
 // ===============================
-const isAdmin = id => id.toString() === ADMIN_ID;
+const isAdmin = id => ADMIN_IDS.includes(id.toString());
 
 function generateOrderId() {
   const d = new Date();
@@ -300,8 +302,9 @@ Your Order ID: ${t.orderId}`);
     expireAt: new Date(Date.now()+30*24*60*60*1000)
   });
 
+  for (const adminId of ADMIN_IDS) {
   const adminMsg = await bot.sendPhoto(
-    ADMIN_ID,
+    adminId,
     order.paymentPhoto,
     {
       caption:
@@ -312,17 +315,19 @@ Your Order ID: ${t.orderId}`);
 🎮 ${order.product}
 🆔 ${order.gameId} (${order.serverId})
 💰 ${order.totalPrice.toLocaleString()} MMK`,
-      reply_markup:{ inline_keyboard:[
-        [{ text:"✅ Approve", callback_data:`APPROVE_${order._id}` },
-         { text:"❌ Reject", callback_data:`REJECT_${order._id}` }]
-      ]}
+      reply_markup:{
+        inline_keyboard:[
+          [
+            { text:"✅ Approve", callback_data:`APPROVE_${order._id}` },
+            { text:"❌ Reject",  callback_data:`REJECT_${order._id}` }
+          ]
+        ]
+      }
     }
   );
 
   order.adminMsgId = adminMsg.message_id;
-  await order.save();
-  delete temp[chatId];
-});
+}
 
 // ===============================
 // WEB SERVER (RENDER)
