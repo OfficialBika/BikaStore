@@ -85,6 +85,11 @@ const PRICES = {
   MLBB: {
     name: "💎 Mobile Legends Diamonds",
     prices: {
+      "wp":5900,
+      "wp2":11800,
+      "wp3":17700,
+      "wp4":23600,
+      "wp5":29500,
       "86": 4800,
       "172": 9800,
       "257": 14500,
