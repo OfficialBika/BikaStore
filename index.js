@@ -150,6 +150,33 @@ d === "MLBB"
 `${PAYMENTS[t.paymentMethod]}\n\n📸 ငွေလွှဲ ပြေစာ ပို့ပေးပါ`);
   }
 
+  if (d.startsWith("REJECT_")) {
+  if (!isAdmin(q.from.id)) return;
+
+  const order = await Order.findById(d.split("_")[1]);
+  if (!order) return;
+
+  order.status = "REJECTED";
+  await order.save();
+
+  await bot.editMessageCaption(
+`❌ ORDER REJECTED
+
+🎮 ${order.product}
+🆔 ${order.gameId} (${order.serverId})
+💰 ${order.totalPrice.toLocaleString()} MMK`,
+    {
+      chat_id: ADMIN_ID,
+      message_id: order.adminMsgId
+    }
+  );
+
+  await bot.sendMessage(
+    order.userId,
+    "❌ သင့် Order ကို Admin မှ Reject လုပ်လိုက်ပါသည်။ ပြဿနာရှိပါက Owner @Official_Bika ကို ဆက်သွယ်ပါ။"
+  );
+  }
+  
   if (d.startsWith("APPROVE_")) {
     if (!isAdmin(q.from.id)) return;
     const order = await Order.findById(d.split("_")[1]);
@@ -163,7 +190,7 @@ d === "MLBB"
       { chat_id:ADMIN_ID, message_id:order.adminMsgId });
 
     await bot.sendPhoto(order.userId, order.paymentPhoto, {
-      caption:"✅ ဒီ Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ"
+      caption:"✅ ဒီ Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ။ဝယ်ယူအားပေးမူ့အတွက် ကျေးဇူးတင်ပါတယ်"
     });
   }
 });
