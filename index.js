@@ -292,12 +292,61 @@ let text =
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
+
 // ===== CONFIRM ORDER =====
 if (d === "CONFIRM_ORDER") {
   const t = temp[chatId];
   if (!t || !t.items || !t.items.length) {
     return bot.sendMessage(chatId, "❌ Order data မရှိပါ");
   }
+
+  // ===== STEP 6: ADMIN APPROVE / REJECT =====
+if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
+
+  if (!isAdmin(chatId)) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "⛔ Admin only",
+      show_alert: true
+    });
+  }
+
+  const orderId = d.split("_")[1];
+  const isApprove = d.startsWith("APPROVE_");
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "❌ Order မတွေ့ပါ",
+      show_alert: true
+    });
+  }
+
+  order.status = isApprove ? "COMPLETED" : "REJECTED";
+  order.approvedAt = new Date();
+  await order.save();
+
+  // 📩 notify user
+  await bot.sendMessage(
+    order.userId,
+    isApprove
+      ? `✅ *Order Approved!*\n\n🆔 ${order._id}\n💰 ${order.totalPrice.toLocaleString()} MMK`
+      : `❌ *Order Rejected*\n\n🆔 ${order._id}`,
+    { parse_mode: "Markdown" }
+  );
+
+  // 📩 notify admin
+  await bot.editMessageReplyMarkup(
+    { inline_keyboard: [] },
+    {
+      chat_id: q.message.chat.id,
+      message_id: q.message.message_id
+    }
+  );
+
+  return bot.answerCallbackQuery(q.id, {
+    text: isApprove ? "✅ Approved" : "❌ Rejected"
+  });
+}
 
   // ✅ Save to MongoDB
   const order = await Order.create({
@@ -570,112 +619,6 @@ Confirm လုပ်မလား?`;
   });
 }
 
-  
-  // ===== STEP 2: CREATE ORDER IN MONGODB =====
-
-// items array
-const items = t.amount.split(" + ").map((amt) => {
-  const price =
-    t.productKey === "MLBB"
-      ? PRICES.MLBB.prices[amt]
-      : PRICES.PUBG.prices[amt];
-
-  return { amount: amt, price };
-});
-
-// total price
-const totalPrice = items.reduce((s, i) => s + i.price, 0);
-
-// save order
-const order = await Order.create({
-  userId: chatId.toString(),
-  username: msg.from.username || msg.from.first_name,
-
-  product: t.productKey,
-  gameId: t.gameId,
-  serverId: t.serverId,
-
-  items,
-  totalPrice,
-  status: "pending",
-
-  // ⏳ 3 days pending auto delete
-  expireAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-});
-
- // ===== STEP 3: ORDER SUMMARY MESSAGE =====
-const itemsText = order.items
-  .map(i => `• ${i.amount} 💎 — ${i.price.toLocaleString()} MMK`)
-  .join("\n");
-
-const summaryMessage = `
-━━━━━━━━━━━━━━━
-📦 Order Submitted Successfully!
-━━━━━━━━━━━━━━━
-🎮 Product : ${order.product}
-🆔 Game ID : ${order.gameId}
-🌐 Server  : ${order.serverId}
-
-🛒 Items:
-${itemsText}
-
-💰 Total : ${order.totalPrice.toLocaleString()} MMK
-📌 Status: ⏳ Pending Admin Approval
-━━━━━━━━━━━━━━━
-`;
-
-await bot.sendMessage(chatId, summaryMessage);
-
-// ===== STEP 4: SEND ORDER TO ADMIN =====
-
-const adminText = `
-🆕 *New Order Received*
-━━━━━━━━━━━━━━━
-👤 User     : ${order.username}
-🎮 Product  : ${order.product}
-🆔 Game ID  : ${order.gameId}
-🌐 Server   : ${order.serverId}
-
-🛒 Items:
-${itemsText}
-
-💰 Total : ${order.totalPrice.toLocaleString()} MMK
-📌 Status: ⏳ Pending
-`;
-
-await bot.sendMessage(ADMIN_ID, adminText, {
-  parse_mode: "Markdown",
-  reply_markup: {
-    inline_keyboard: [
-      [
-        { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
-        { text: "❌ Reject", callback_data: `REJECT_${order._id}` }
-      ]
-    ]
-  }
-});
-
-  // ===== PAYMENT METHOD =====
-  return bot.sendMessage(
-    chatId,
-`💳 *Payment Method ရွေးပါ*
-
-${PAYMENT_ACCOUNTS.KPay.name}
-Account: ${PAYMENT_ACCOUNTS.KPay.account}
-
-${PAYMENT_ACCOUNTS.WavePay.name}
-Account: ${PAYMENT_ACCOUNTS.WavePay.account}`,
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: PAYMENT_ACCOUNTS.KPay.name, callback_data: "PAY_KPAY" }],
-          [{ text: PAYMENT_ACCOUNTS.WavePay.name, callback_data: "PAY_WAVEPAY" }]
-        ]
-      }
-    }
-  );
-});
 
 // ===== PAYMENT SCREENSHOT =====
 bot.on("photo", async (msg) => {
