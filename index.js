@@ -293,14 +293,7 @@ bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
 
-// ===== CONFIRM ORDER =====
-if (d === "CONFIRM_ORDER") {
-  const t = temp[chatId];
-  if (!t || !t.items || !t.items.length) {
-    return bot.sendMessage(chatId, "❌ Order data မရှိပါ");
-  }
-
-  // ===== STEP 6: ADMIN APPROVE / REJECT =====
+   // ===== STEP 6: ADMIN APPROVE / REJECT =====
 if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
 
   if (!isAdmin(chatId)) {
@@ -347,6 +340,14 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
     text: isApprove ? "✅ Approved" : "❌ Rejected"
   });
 }
+
+// ===== CONFIRM ORDER =====
+if (d === "CONFIRM_ORDER") {
+  const t = temp[chatId];
+  if (!t || !t.items || !t.items.length) {
+    return bot.sendMessage(chatId, "❌ Order data မရှိပါ");
+  }
+
 
   // ✅ Save to MongoDB
   const order = await Order.create({
