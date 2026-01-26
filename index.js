@@ -1,5 +1,5 @@
 // ===============================
-// IMPORTS & SETUP (BIKA CODE OFFICIAL)
+// IMPORTS & SETUP (BIKA CODE OFFICIAL FINAL)
 // ===============================
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
@@ -19,7 +19,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(console.error);
 
 // ===============================
-// PRICE LIST
+// PRICE LIST (UNCHANGED)
 // ===============================
 const PRICES = {
   MLBB: {
@@ -43,9 +43,27 @@ const PAYMENTS = {
 };
 
 // ===============================
+// HELPERS
+// ===============================
+const isAdmin = id => id.toString() === ADMIN_ID;
+
+function generateOrderId() {
+  const d = new Date();
+  const ymd = d.toISOString().slice(0,10).replace(/-/g,"");
+  const r = Math.floor(1000 + Math.random() * 9000);
+  return `BKS-${ymd}-${r}`;
+}
+
+const priceText = p =>
+  Object.entries(PRICES[p])
+    .map(([k,v]) => `• ${k} = ${v.toLocaleString()} MMK`)
+    .join("\n");
+
+// ===============================
 // SCHEMAS
 // ===============================
 const OrderSchema = new mongoose.Schema({
+  orderId: String,
   userId: String,
   username: String,
   product: String,
@@ -56,8 +74,9 @@ const OrderSchema = new mongoose.Schema({
   paymentMethod: String,
   paymentPhoto: String,
   adminMsgId: Number,
+  userMsgId: Number,
+  waitMsgId: Number,
   status: { type: String, default: "PENDING" },
-  createdAt: { type: Date, default: Date.now },
   approvedAt: Date,
   expireAt: Date
 });
@@ -75,26 +94,11 @@ const User = mongoose.model("User", new mongoose.Schema({
 const temp = {};
 
 // ===============================
-// HELPERS
-// ===============================
-const isAdmin = id => id.toString() === ADMIN_ID;
-
-const monthRange = () => {
-  const s = new Date(); s.setDate(1); s.setHours(0,0,0,0);
-  const e = new Date(s); e.setMonth(e.getMonth()+1);
-  return { s, e };
-};
-
-const priceText = p =>
-  Object.entries(PRICES[p])
-    .map(([k,v]) => `• ${k} = ${v.toLocaleString()} MMK`)
-    .join("\n");
-
-// ===============================
 // /start
 // ===============================
 bot.onText(/\/start/, async msg => {
   const id = msg.chat.id.toString();
+
   await User.updateOne(
     { userId: id },
     { userId: id, username: msg.from.username || msg.from.first_name },
@@ -118,67 +122,50 @@ bot.on("callback_query", async q => {
   const d = q.data;
   const t = temp[chatId];
 
+  // GAME SELECT
   if (d === "MLBB" || d === "PUBG") {
-    temp[chatId] = { product:d, step:"GAME", items:[] };
+    temp[chatId] = { product:d, step:"GAME", items:[], msgs:[] };
 
-    await bot.sendMessage(chatId,
+    const p1 = await bot.sendMessage(chatId,
 `📋 *${d} Price List*\n\n${priceText(d)}`,
       { parse_mode:"Markdown" });
 
-    return bot.sendMessage(chatId,
-d === "MLBB"
-? "🆔 *Game ID + Server ID ကို တစ်ခါတည်း ထည့်ပါ*\n\nဥပမာ:\n11111111 2222\n11111111(2222)"
+    const p2 = await bot.sendMessage(chatId,
+d==="MLBB"
+? "🆔 *Game ID + Server ID ကို တစ်ခါတည်းထည့်ပါ*\n\nဥပမာ:\n11111111 2222\n11111111(2222)"
 : "🆔 *PUBG Game ID ကို ထည့်ပါ*",
       { parse_mode:"Markdown" });
+
+    temp[chatId].msgs.push(p1.message_id,p2.message_id);
+    return;
   }
 
+  // CONFIRM ORDER
   if (d === "CONFIRM") {
     await bot.deleteMessage(chatId, t.previewMsgId);
     t.step = "PAY_METHOD";
-    return bot.sendMessage(chatId,"💳 Payment Method ရွေးပါ",{
+    const m = await bot.sendMessage(chatId,"💳 Payment Method ရွေးပါ",{
       reply_markup:{ inline_keyboard:[
         [{ text:"💜 KPay", callback_data:"PAY_KPAY" }],
         [{ text:"💙 WavePay", callback_data:"PAY_WAVEPAY" }]
       ]}
     });
+    t.msgs.push(m.message_id);
+    return;
   }
 
+  // PAYMENT METHOD
   if (d.startsWith("PAY_")) {
     t.paymentMethod = d.replace("PAY_","");
     t.step = "PAYMENT";
-    return bot.sendMessage(chatId,
+    const m = await bot.sendMessage(chatId,
 `${PAYMENTS[t.paymentMethod]}\n\n📸 ငွေလွှဲ ပြေစာ ပို့ပေးပါ`);
+    t.msgs.push(m.message_id);
+    return;
   }
 
-  if (d.startsWith("REJECT_")) {
-  if (!isAdmin(q.from.id)) return;
-
-  const order = await Order.findById(d.split("_")[1]);
-  if (!order) return;
-
-  order.status = "REJECTED";
-  await order.save();
-
-  await bot.editMessageCaption(
-`❌ ORDER REJECTED
-
-🎮 ${order.product}
-🆔 ${order.gameId} (${order.serverId})
-💰 ${order.totalPrice.toLocaleString()} MMK`,
-    {
-      chat_id: ADMIN_ID,
-      message_id: order.adminMsgId
-    }
-  );
-
-  await bot.sendMessage(
-    order.userId,
-    "❌ သင့် Order ကို Admin မှ Reject လုပ်လိုက်ပါသည်။ ပြဿနာရှိပါက Owner @Official_Bika ကို ဆက်သွယ်ပါ။"
-  );
-  }
-  
-  if (d.startsWith("APPROVE_")) {
-    if (!isAdmin(q.from.id)) return;
+  // ADMIN APPROVE
+  if (d.startsWith("APPROVE_") && isAdmin(q.from.id)) {
     const order = await Order.findById(d.split("_")[1]);
     if (!order) return;
 
@@ -186,12 +173,36 @@ d === "MLBB"
     order.approvedAt=new Date();
     await order.save();
 
+    await bot.deleteMessage(order.userId, order.waitMsgId);
+
+    await bot.editMessageCaption(
+`📦 ORDER COMPLETED
+━━━━━━━━━━━━━━━
+🎮 ${order.product}
+🆔 ${order.gameId} (${order.serverId})
+💰 ${order.totalPrice.toLocaleString()} MMK
+
+✅ သင့် Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ`,
+      { chat_id: order.userId, message_id: order.userMsgId }
+    );
+
+    await bot.sendMessage(order.userId,
+"🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်");
+
     await bot.editMessageCaption("✅ ORDER COMPLETED",
       { chat_id:ADMIN_ID, message_id:order.adminMsgId });
+  }
 
-    await bot.sendPhoto(order.userId, order.paymentPhoto, {
-      caption:"✅ ဒီ Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ။ဝယ်ယူအားပေးမူ့အတွက် ကျေးဇူးတင်ပါတယ်"
-    });
+  // ADMIN REJECT
+  if (d.startsWith("REJECT_") && isAdmin(q.from.id)) {
+    const order = await Order.findById(d.split("_")[1]);
+    if (!order) return;
+
+    order.status="REJECTED";
+    await order.save();
+
+    await bot.sendMessage(order.userId,
+"❌ သင့် Order ကို Reject လုပ်လိုက်ပါသည်။ Owner @Official_Bika ကို ဆက်သွယ်ပါ");
   }
 });
 
@@ -204,6 +215,7 @@ bot.on("message", async msg => {
   const t = temp[chatId];
   if (!t) return;
 
+  // GAME ID
   if (t.step === "GAME") {
     if (t.product==="MLBB") {
       const m = msg.text.match(/^(\d+)\s*\(?(\d+)\)?$/);
@@ -216,6 +228,7 @@ bot.on("message", async msg => {
     return bot.sendMessage(chatId,"🛒 Amount ထည့်ပါ (86+343)");
   }
 
+  // ITEMS
   if (t.step==="ITEMS") {
     let total=0; t.items=[];
     for (const a of msg.text.split("+")) {
@@ -225,15 +238,22 @@ bot.on("message", async msg => {
       total+=p;
     }
     t.totalPrice=total;
-    t.step="PREVIEW";
+    t.orderId = generateOrderId();
+
+    // CLEAN OLD MSGS
+    for (const id of t.msgs) {
+      try { await bot.deleteMessage(chatId,id); } catch {}
+    }
 
     const p = await bot.sendMessage(chatId,
 `📦 Order Preview
+━━━━━━━━━━━━━━━
+🆔 Order ID: ${t.orderId}
 🎮 ${t.product}
 🆔 ${t.gameId} (${t.serverId})
 💰 ${total.toLocaleString()} MMK`,
       { reply_markup:{ inline_keyboard:[
-        [{ text:"✅ Confirm", callback_data:"CONFIRM" }]
+        [{ text:"✅ Confirm Order", callback_data:"CONFIRM" }]
       ]}}
     );
     t.previewMsgId=p.message_id;
@@ -248,54 +268,60 @@ bot.on("photo", async msg => {
   const t = temp[chatId];
   if (!t || t.step!=="PAYMENT") return;
 
+  const userMsg = await bot.sendPhoto(chatId,msg.photo.at(-1).file_id,{
+    caption:
+`📦 Order Info
+━━━━━━━━━━━━━━━
+🆔 ${t.orderId}
+🎮 ${t.product}
+🆔 ${t.gameId} (${t.serverId})
+💰 ${t.totalPrice.toLocaleString()} MMK
+
+📨 Admin ထံ ပေးပို့ထားပါသည်`
+  });
+
+  const waitMsg = await bot.sendMessage(chatId,
+`⏳ Admin စစ်ဆေးနေပါသည်...
+Your Order ID: ${t.orderId}`);
+
   const order = await Order.create({
-    userId:chatId.toString(),
-    username:msg.from.username || msg.from.first_name,
-    product:t.product,
-    gameId:t.gameId,
-    serverId:t.serverId,
-    items:t.items,
-    totalPrice:t.totalPrice,
-    paymentMethod:t.paymentMethod,
-    paymentPhoto:msg.photo.at(-1).file_id,
-    expireAt:new Date(Date.now()+30*24*60*60*1000)
+    orderId: t.orderId,
+    userId: chatId.toString(),
+    username: msg.from.username || msg.from.first_name,
+    product: t.product,
+    gameId: t.gameId,
+    serverId: t.serverId,
+    items: t.items,
+    totalPrice: t.totalPrice,
+    paymentMethod: t.paymentMethod,
+    paymentPhoto: msg.photo.at(-1).file_id,
+    userMsgId: userMsg.message_id,
+    waitMsgId: waitMsg.message_id,
+    expireAt: new Date(Date.now()+30*24*60*60*1000)
   });
 
   const adminMsg = await bot.sendPhoto(
-  ADMIN_ID,
-  order.paymentPhoto,
-  {
-    caption:
-`📦 NEW ORDER (PAYMENT RECEIVED)
+    ADMIN_ID,
+    order.paymentPhoto,
+    {
+      caption:
+`📦 NEW ORDER
 ━━━━━━━━━━━━━━━
-👤 User : @${order.username}
-🎮 Game : ${order.product}
-
-🆔 ID   : ${order.gameId}
-🌐 Server: ${order.serverId}
-
-🛒 Items:
-${order.items.map(i => `• ${i.amount} = ${i.price.toLocaleString()} MMK`).join("\n")}
-
-💳 Payment : ${order.paymentMethod}
-💰 Total   : ${order.totalPrice.toLocaleString()} MMK
-━━━━━━━━━━━━━━━
-Admin action လုပ်ပါ 👇`,
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
-          { text: "❌ Reject",  callback_data: `REJECT_${order._id}` }
-        ]
-      ]
+🆔 ${order.orderId}
+👤 @${order.username}
+🎮 ${order.product}
+🆔 ${order.gameId} (${order.serverId})
+💰 ${order.totalPrice.toLocaleString()} MMK`,
+      reply_markup:{ inline_keyboard:[
+        [{ text:"✅ Approve", callback_data:`APPROVE_${order._id}` },
+         { text:"❌ Reject", callback_data:`REJECT_${order._id}` }]
+      ]}
     }
-  }
-);
-  order.adminMsgId=adminMsg.message_id;
-  await order.save();
+  );
 
+  order.adminMsgId = adminMsg.message_id;
+  await order.save();
   delete temp[chatId];
-  bot.sendMessage(chatId,"⏳ Admin စစ်ဆေးနေပါသည်...");
 });
 
 // ===============================
