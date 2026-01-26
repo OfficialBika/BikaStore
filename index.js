@@ -441,76 +441,89 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
   );
 });
 
-// ===== USER FORM INPUT =====
+// ===== INLINE STEP FLOW =====
 bot.on("message", async (msg) => {
-  if (!msg.text || !msg.reply_to_message) return;
+  if (!msg.text) return;
 
   const chatId = msg.chat.id;
   const t = temp[chatId];
-  if (!t) return;
+  if (!t || !t.step) return;
 
-  const lines = msg.text.trim().split("\n");
+  // ===== STEP: GAME ID =====
+  if (t.step === "GAME_ID") {
+    t.gameId = msg.text.trim();
+    t.step = t.product === "MLBB" ? "SERVER_ID" : "ITEMS";
 
-  // ===== PUBG =====
-  if (t.productKey === "PUBG") {
-  const gameId = lines[0];
-  const amountLine = lines[1];
-
-  if (!gameId || !amountLine) {
-    return bot.sendMessage(chatId, "❌ Pubg ID / Amount မမှန်ပါ");
+    return bot.sendMessage(
+      chatId,
+      t.product === "MLBB"
+        ? "🌐 *Server ID ကိုထည့်ပါ*"
+        : "🛒 *UC Amount ကိုထည့်ပါ* (ဥပမာ: 60+325)",
+      { parse_mode: "Markdown" }
+    );
   }
 
-  // ⭐ multiple UC support (60+325)
-  const amounts = amountLine.split("+");
+  // ===== STEP: SERVER ID (MLBB) =====
+  if (t.step === "SERVER_ID") {
+    t.serverId = msg.text.trim();
+    t.step = "ITEMS";
 
-  let totalPrice = 0;
+    return bot.sendMessage(
+      chatId,
+      "🛒 *Diamond Amount ကိုထည့်ပါ* (ဥပမာ: 86+343)",
+      { parse_mode: "Markdown" }
+    );
+  }
 
-  for (const amt of amounts) {
-    const price = PRICES.PUBG.prices[amt];
-    if (!price) {
-      return bot.sendMessage(chatId, `❌ Amount မမှန်ပါ : ${amt}`);
+  // ===== STEP: ITEMS =====
+  if (t.step === "ITEMS") {
+    const amounts = msg.text.trim().split("+");
+    let items = [];
+    let total = 0;
+
+    for (const amt of amounts) {
+      const price =
+        t.product === "MLBB"
+          ? PRICES.MLBB.prices[amt]
+          : PRICES.PUBG.prices[amt];
+
+      if (!price) {
+        return bot.sendMessage(chatId, `❌ Amount မမှန်ပါ : ${amt}`);
+      }
+
+      items.push({ amount: amt, price });
+      total += price;
     }
-    totalPrice += price;
+
+    // save to temp
+    t.items = items;
+    t.totalPrice = total;
+    t.step = "CONFIRM";
+
+    const itemsText = items
+      .map(i => `• ${i.amount} — ${i.price.toLocaleString()} MMK`)
+      .join("\n");
+
+    return bot.sendMessage(
+      chatId,
+`━━━━━━━━━━━━━━━
+📦 *Order Preview*
+━━━━━━━━━━━━━━━
+🎮 Product : ${t.product}
+🆔 Game ID : ${t.gameId}
+🌐 Server  : ${t.serverId || "-"}
+
+🛒 Items:
+${itemsText}
+
+💰 Total : ${total.toLocaleString()} MMK
+━━━━━━━━━━━━━━━`,
+      { parse_mode: "Markdown" }
+    );
   }
+});
 
-  Object.assign(t, {
-    gameId,
-    serverId: "-",
-    amount: amounts.join(" + "),
-    price: totalPrice
-  });
-}
-
-  // ===== MLBB =====
- if (t.productKey === "MLBB") {
-  const [idLine, amountLine] = lines;
-  const [gameId, serverId] = idLine.split(" ");
-
-  if (!gameId || !serverId || !amountLine) {
-    return bot.sendMessage(chatId, "❌ ID / Server ID / Amount မမှန်ပါ");
-  }
-
-  // ⭐ multiple amount support (86+343)
-  const amounts = amountLine.split("+");
-
-  let totalPrice = 0;
-
-  for (const amt of amounts) {
-    const price = PRICES.MLBB.prices[amt];
-    if (!price) {
-      return bot.sendMessage(chatId, `❌ Amount မမှန်ပါ : ${amt}`);
-    }
-    totalPrice += price;
-  }
-
-  Object.assign(t, {
-    gameId,
-    serverId,
-    amount: amounts.join(" + "),
-    price: totalPrice
-  });
-}
-
+  
   // ===== STEP 2: CREATE ORDER IN MONGODB =====
 
 // items array
