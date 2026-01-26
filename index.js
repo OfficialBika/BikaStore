@@ -608,6 +608,58 @@ text += `🔥 *Top ${result.length} Customers of the Month*\nThank you for suppo
 bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 
+// ===== DELETE ALL ORDERS BY USER (ADMIN) =====
+bot.onText(/\/deleteorders (.+)/, async (msg, match) => {
+  if (!isAdmin(msg.chat.id)) {
+    return bot.sendMessage(msg.chat.id, "⛔ Admin only");
+  }
+
+  const targetChatId = match[1].trim();
+
+  const result = await Order.deleteMany({ chatId: targetChatId });
+
+  if (result.deletedCount === 0) {
+    return bot.sendMessage(
+      msg.chat.id,
+      "❌ ဒီ user အတွက် order မတွေ့ပါ"
+    );
+  }
+
+  bot.sendMessage(
+    msg.chat.id,
+    `🗑️ Order Deleted Successfully
+
+👤 User Chat ID : ${targetChatId}
+📦 Deleted Orders : ${result.deletedCount}`
+  );
+});
+
+// ===== DELETE SINGLE ORDER (ADMIN) =====
+bot.onText(/\/deleteorder (.+)/, async (msg, match) => {
+  if (!isAdmin(msg.chat.id)) {
+    return bot.sendMessage(msg.chat.id, "⛔ Admin only");
+  }
+
+  const orderId = match[1].trim();
+
+  const result = await Order.findOneAndDelete({ orderId });
+
+  if (!result) {
+    return bot.sendMessage(
+      msg.chat.id,
+      "❌ Order ID မတွေ့ပါ"
+    );
+  }
+
+  bot.sendMessage(
+    msg.chat.id,
+    `🗑️ Order Deleted
+
+🆔 Order ID : ${orderId}
+👤 User : ${result.user}`
+  );
+});
+
 // ===== WEB Sever =====
 app.get("/", (_, res) => res.send("Bot Running"));
   
