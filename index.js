@@ -61,7 +61,7 @@ const OrderSchema = new mongoose.Schema({
 
   // ⭐ TTL field
   expireAt: { type: Date },
-  createdAt: { type: Date, default: Date.now }
+  
 });
 
 // ⭐ TTL INDEX
@@ -529,19 +529,34 @@ bot.on("message", async (msg) => {
     price: totalPrice
   });
 }
+
   // ===== STEP 2: CREATE ORDER IN MONGODB =====
 
-// items array ပြင်ဆင်
+// items array
 const items = t.amount.split(" + ").map((amt) => {
   const price =
     t.productKey === "MLBB"
       ? PRICES.MLBB.prices[amt]
       : PRICES.PUBG.prices[amt];
 
-  return {
-    amount: amt,
-    price: price
-  };
+  return { amount: amt, price };
+});
+
+// total price
+const totalPrice = items.reduce((s, i) => s + i.price, 0);
+
+// save order
+const order = await Order.create({
+  userId: chatId.toString(),
+  username: msg.from.username || msg.from.first_name,
+
+  product: t.productKey,
+  gameId: t.gameId,
+  serverId: t.serverId,
+
+  items,
+  totalPrice,
+  status: "pending"
 });
 
 // Order save
@@ -549,11 +564,10 @@ const items = t.amount.split(" + ").map((amt) => {
   // ===== STEP 3:Wait ORDER SUMMARY MESSAGE =====
 const order = await Order.create({
 // Items list text
- const itemsText = order.items
+const itemsText = order.items
   .map(i => `• ${i.amount} 💎 — ${i.price.toLocaleString()} MMK`)
   .join("\n");
 
-// Message text
 const summaryMessage = `
 ━━━━━━━━━━━━━━━
 📦 Order Submitted Successfully!
@@ -569,7 +583,6 @@ ${itemsText}
 📌 Status: ⏳ Pending Admin Approval
 ━━━━━━━━━━━━━━━
 `;
-});
 
 await bot.sendMessage(chatId, summaryMessage);
 
@@ -578,7 +591,7 @@ await bot.sendMessage(chatId, summaryMessage);
 const adminText = `
 🆕 *New Order Received*
 ━━━━━━━━━━━━━━━
-👤 User     : ${order.user}
+👤 User     : ${order.username}
 🎮 Product  : ${order.product}
 🆔 Game ID  : ${order.gameId}
 🌐 Server   : ${order.serverId}
