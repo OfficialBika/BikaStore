@@ -529,6 +529,78 @@ bot.on("message", async (msg) => {
     price: totalPrice
   });
 }
+  // ===== STEP 2: CREATE ORDER IN MONGODB =====
+
+// items array ပြင်ဆင်
+const items = t.amount.split(" + ").map((amt) => {
+  const price =
+    t.productKey === "MLBB"
+      ? PRICES.MLBB.prices[amt]
+      : PRICES.PUBG.prices[amt];
+
+  return {
+    amount: amt,
+    price: price
+  };
+});
+
+// Order save
+
+  // ===== STEP 3:Wait ORDER SUMMARY MESSAGE =====
+const order = await Order.create({
+// Items list text
+ const itemsText = order.items
+  .map(i => `• ${i.amount} 💎 — ${i.price.toLocaleString()} MMK`)
+  .join("\n");
+
+// Message text
+const summaryMessage = `
+━━━━━━━━━━━━━━━
+📦 Order Submitted Successfully!
+━━━━━━━━━━━━━━━
+🎮 Product : ${order.product}
+🆔 Game ID : ${order.gameId}
+🌐 Server  : ${order.serverId}
+
+🛒 Items:
+${itemsText}
+
+💰 Total : ${order.totalPrice.toLocaleString()} MMK
+📌 Status: ⏳ Pending Admin Approval
+━━━━━━━━━━━━━━━
+`;
+});
+
+await bot.sendMessage(chatId, summaryMessage);
+
+// ===== STEP 4: SEND ORDER TO ADMIN =====
+
+const adminText = `
+🆕 *New Order Received*
+━━━━━━━━━━━━━━━
+👤 User     : ${order.user}
+🎮 Product  : ${order.product}
+🆔 Game ID  : ${order.gameId}
+🌐 Server   : ${order.serverId}
+
+🛒 Items:
+${itemsText}
+
+💰 Total : ${order.totalPrice.toLocaleString()} MMK
+📌 Status: ⏳ Pending
+`;
+
+await bot.sendMessage(ADMIN_ID, adminText, {
+  parse_mode: "Markdown",
+  reply_markup: {
+    inline_keyboard: [
+      [
+        { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
+        { text: "❌ Reject", callback_data: `REJECT_${order._id}` }
+      ]
+    ]
+  }
+});
 
   // ===== PAYMENT METHOD =====
   return bot.sendMessage(
