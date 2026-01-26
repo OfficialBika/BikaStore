@@ -36,13 +36,14 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   expireAt: { type: Date },
 
   createdAt: { type: Date, default: Date.now }
-    })
- );
+  });
+
 // TTL index
 OrderSchema.index(
   { expireAt: 1 },
   { expireAfterSeconds: 0 }
 );
+
 // ===== MODEL CREATE =====
 const Order = mongoose.model("Order", OrderSchema);
 
