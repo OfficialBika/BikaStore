@@ -292,65 +292,83 @@ let text =
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
-
-  if (d === "CONFIRM_ORDER") {
-  return bot.sendMessage(chatId, "⏳ Order ကို submit လုပ်နေပါသည်...");
-}
-
-if (d === "CANCEL_ORDER") {
-  delete temp[chatId];
-  return bot.sendMessage(chatId, "❌ Order ကို ဖျက်လိုက်ပါပြီ");
-}
-
-  // ===== ADMIN APPROVE / REJECT =====
-  if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
-  if (!isAdmin(chatId)) return;
-
-  const [action, orderId] = d.split("_");
-
-  // 📅 ဒီလကုန် (next month 1st day)
-  const endOfMonth = new Date(
-    new Date().getFullYear(),
-    new Date().getMonth() + 1,
-    1
-  );
-
-  const updateData =
-    action === "APPROVE"
-      ? {
-          status: "COMPLETED",
-          approvedAt: new Date(),
-          expireAt: endOfMonth // ⭐ TTL trigger
-        }
-    : {
-    status: "REJECTED",
-    expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-  };
-
-  const order = await Order.findOneAndUpdate(
-    { orderId },
-    updateData,
-    { new: true }
-  );
-
-  if (!order) {
-    return bot.sendMessage(chatId, "❌ Order မတွေ့ပါ");
+// ===== CONFIRM ORDER =====
+if (d === "CONFIRM_ORDER") {
+  const t = temp[chatId];
+  if (!t || !t.items || !t.items.length) {
+    return bot.sendMessage(chatId, "❌ Order data မရှိပါ");
   }
+
+  // ✅ Save to MongoDB
+  const order = await Order.create({
+    userId: chatId.toString(),
+    username: q.from.username || q.from.first_name,
+
+    product: t.product,
+    gameId: t.gameId,
+    serverId: t.serverId || "-",
+
+    items: t.items,
+    totalPrice: t.totalPrice,
+    status: "pending",
+
+    // ⏳ 3 days pending → auto delete
+    expireAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+  });
+
+  // 🧾 User summary
+  const itemsText = order.items
+    .map(i => `• ${i.amount} 💎 — ${i.price.toLocaleString()} MMK`)
+    .join("\n");
 
   await bot.sendMessage(
     chatId,
-    action === "APPROVE"
-      ? `✅ Order ${orderId} ပြီးဆုံး`
-      : `❌ Order ${orderId} ငြင်းပယ်ပြီးပါပြီ`
+`━━━━━━━━━━━━━━━
+📦 Order Submitted Successfully!
+━━━━━━━━━━━━━━━
+🎮 Product : ${order.product}
+🆔 Game ID : ${order.gameId}
+🌐 Server  : ${order.serverId}
+
+🛒 Items:
+${itemsText}
+
+💰 Total : ${order.totalPrice.toLocaleString()} MMK
+📌 Status: ⏳ Pending Admin Approval
+━━━━━━━━━━━━━━━`
   );
 
+  // 📤 Send to Admin
   await bot.sendMessage(
-    order.chatId,
-    action === "APPROVE"
-      ? "✅ Order အောင်မြင်စွာ ပြီးဆုံးပါပြီ"
-      : "❌ Order ကို ငြင်းပယ်လိုက်ပါသည်"
+    ADMIN_ID,
+`🆕 *New Order Received*
+━━━━━━━━━━━━━━━
+👤 User    : ${order.username}
+🎮 Product : ${order.product}
+🆔 Game ID : ${order.gameId}
+🌐 Server  : ${order.serverId}
+
+🛒 Items:
+${itemsText}
+
+💰 Total : ${order.totalPrice.toLocaleString()} MMK
+━━━━━━━━━━━━━━━`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
+            { text: "❌ Reject", callback_data: `REJECT_${order._id}` }
+          ]
+        ]
+      }
+    }
   );
-  }
+
+  // 🧹 clear session
+  delete temp[chatId];
+}
 
   // ===== PAYMENT METHOD =====
   if (d === "PAY_KPAY" || d === "PAY_WAVEPAY") {
@@ -484,9 +502,38 @@ bot.on("message", async (msg) => {
     );
   }
 
-  // ===== STEP: ITEMS =====
-  if (t.step === "ITEMS") {
-  if (t.step === "DONE") {
+// ===== STEP: ITEMS =====
+if (t.step === "ITEMS") {
+  const input = msg.text.trim(); // e.g. 86+343
+  const amounts = input.split("+");
+
+  t.items = [];
+
+  for (const amt of amounts) {
+    const price =
+      t.product === "MLBB"
+        ? PRICES.MLBB.prices[amt]
+        : PRICES.PUBG.prices[amt];
+
+    if (!price) {
+      return bot.sendMessage(
+        chatId,
+        `❌ Amount မမှန်ပါ : ${amt}`
+      );
+    }
+
+    t.items.push({
+      amount: amt,
+      price
+    });
+  }
+
+  // ✅ ITEMS complete → DONE
+  t.step = "DONE";
+}
+  
+  // ===== STEP: DONE (ORDER PREVIEW) =====
+if (t.step === "DONE") {
   let itemText = "";
   let total = 0;
 
@@ -503,7 +550,7 @@ bot.on("message", async (msg) => {
 ━━━━━━━━━━━━━━━
 🎮 Product : ${t.product}
 🆔 Game ID : ${t.gameId}
-🌐 Server  : ${t.serverId}
+🌐 Server  : ${t.serverId || "-"}
 
 🛒 Items:
 ${itemText}
