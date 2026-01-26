@@ -236,8 +236,8 @@ d==="MLBB"
     const m = await bot.sendMessage(chatId,"💳 Payment Method ရွေးပါ",{
       reply_markup:{
         inline_keyboard:[
-          [{ text:"💜 KPay", callback_data:"PAY_KPAY" }],
-          [{ text:"💙 WavePay", callback_data:"PAY_WAVEPAY" }]
+          [{ text:"💜 KPay", callback_data:"KPay" }],
+          [{ text:"💙 WavePay", callback_data:"WavePay" }]
         ]
       }
     });
