@@ -234,13 +234,36 @@ bot.on("photo", async msg => {
     expireAt:new Date(Date.now()+30*24*60*60*1000)
   });
 
-  const adminMsg = await bot.sendPhoto(ADMIN_ID, order.paymentPhoto,{
-    caption:`📦 NEW ORDER\n💰 ${order.totalPrice}`,
-    reply_markup:{ inline_keyboard:[
-      [{ text:"✅ Approve", callback_data:`APPROVE_${order._id}` }]
-    ]}
-  });
+  const adminMsg = await bot.sendPhoto(
+  ADMIN_ID,
+  order.paymentPhoto,
+  {
+    caption:
+`📦 NEW ORDER (PAYMENT RECEIVED)
+━━━━━━━━━━━━━━━
+👤 User : @${order.username}
+🎮 Game : ${order.product}
 
+🆔 ID   : ${order.gameId}
+🌐 Server: ${order.serverId}
+
+🛒 Items:
+${order.items.map(i => `• ${i.amount} = ${i.price.toLocaleString()} MMK`).join("\n")}
+
+💳 Payment : ${order.paymentMethod}
+💰 Total   : ${order.totalPrice.toLocaleString()} MMK
+━━━━━━━━━━━━━━━
+Admin action လုပ်ပါ 👇`,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
+          { text: "❌ Reject",  callback_data: `REJECT_${order._id}` }
+        ]
+      ]
+    }
+  }
+);
   order.adminMsgId=adminMsg.message_id;
   await order.save();
 
