@@ -294,67 +294,54 @@ let text =
   bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
 });
 
-// ===== CALLBACK QUERY =====
+// =====📛 CALLBACK QUERY 📛=====
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
   const d = q.data;
 
-   // ===== STEP 6: ADMIN APPROVE / REJECT =====
-if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
-
-  if (!isAdmin(chatId)) {
-    return bot.answerCallbackQuery(q.id, {
-      text: "⛔ Admin only",
-      show_alert: true
-    });
-  }
-
+  // ===Admin Approve (Message Edit)===
+if (d.startsWith("APPROVE_")) {
   const orderId = d.split("_")[1];
-  const isApprove = d.startsWith("APPROVE_");
-
   const order = await Order.findById(orderId);
-  if (!order) {
-    return bot.answerCallbackQuery(q.id, {
-      text: "❌ Order မတွေ့ပါ",
-      show_alert: true
-    });
-  }
+  if (!order) return;
 
-  order.status = isApprove ? "COMPLETED" : "REJECTED";
+  order.status = "COMPLETED";
   order.approvedAt = new Date();
   await order.save();
 
-  // 📩 notify user
-  await bot.sendMessage(
-    order.userId,
-    isApprove
-      ? `✅ *Order Approved!*\n\n🆔 ${order._id}\n💰 ${order.totalPrice.toLocaleString()} MMK`
-      : `❌ *Order Rejected*\n\n🆔 ${order._id}`,
-    { parse_mode: "Markdown" }
-  );
+  const newCaption =
+`📦 ORDER COMPLETED ✅
+━━━━━━━━━━━━━━━
+👤 User : @${order.username}
+🎮 Product : ${order.product}
+🆔 Game ID : ${order.gameId}
+🌐 Server : ${order.serverId}
 
-  // 📩 notify admin
-  await bot.editMessageReplyMarkup(
-    { inline_keyboard: [] },
-    {
-      chat_id: q.message.chat.id,
-      message_id: q.message.message_id
-    }
-  );
+💰 Total : ${order.totalPrice.toLocaleString()} MMK
 
-  return bot.answerCallbackQuery(q.id, {
-    text: isApprove ? "✅ Approved" : "❌ Rejected"
+━━━━━━━━━━━━━━━
+✅ ဒီ Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ`;
+
+  await bot.editMessageCaption(newCaption, {
+    chat_id: process.env.ADMIN_CHAT_ID,
+    message_id: order.adminMsgId
   });
-}
 
+  await bot.sendMessage(order.userId, "✅ သင်၏ Order ကို အတည်ပြုပြီးပါပြီ");
+
+  return;
+}
+  
 // ===== CANCEL ORDER =====
   if (d === "CANCEL_ORDER") {
   delete temp[chatId];
   return bot.sendMessage(chatId, "❌ Order ကို ဖျက်လိုက်ပါပြီ");
   }
-
-// ===== CONFIRM ORDER =====
+// User Confirm Order 
 if (d === "CONFIRM_ORDER") {
+  const t = temp[chatId];
+  if (!t) return;
+
   t.step = "PAYMENT";
 
   return bot.sendMessage(
@@ -471,38 +458,7 @@ ${itemsText}
       { parse_mode: "Markdown" }
     );
   }
-// ===Admin Approve (Message Edit)===
-if (d.startsWith("APPROVE_")) {
-  const orderId = d.split("_")[1];
-  const order = await Order.findById(orderId);
-  if (!order) return;
 
-  order.status = "COMPLETED";
-  order.approvedAt = new Date();
-  await order.save();
-
-  const newCaption =
-`📦 ORDER COMPLETED ✅
-━━━━━━━━━━━━━━━
-👤 User : @${order.username}
-🎮 Product : ${order.product}
-🆔 Game ID : ${order.gameId}
-🌐 Server : ${order.serverId}
-
-💰 Total : ${order.totalPrice.toLocaleString()} MMK
-
-━━━━━━━━━━━━━━━
-✅ ဒီ Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ`;
-
-  await bot.editMessageCaption(newCaption, {
-    chat_id: process.env.ADMIN_CHAT_ID,
-    message_id: order.adminMsgId
-  });
-
-  await bot.sendMessage(order.userId, "✅ သင်၏ Order ကို အတည်ပြုပြီးပါပြီ");
-
-  return;
-}
 // Admin Reject Order 
 if (d.startsWith("REJECT_")) {
   const orderId = d.split("_")[1];
