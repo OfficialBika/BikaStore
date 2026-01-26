@@ -58,6 +58,12 @@ const OrderSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  paymentPhoto: String,     // Telegram file_id
+  adminMsgId: Number,      // Admin chat message_id
+
+  approvedAt: {
+  type: Date
+  }
 
   // ⭐ TTL field
   expireAt: { type: Date },
@@ -341,12 +347,22 @@ if (d.startsWith("APPROVE_") || d.startsWith("REJECT_")) {
   });
 }
 
+// ===== CANCEL ORDER =====
+  if (d === "CANCEL_ORDER") {
+  delete temp[chatId];
+  return bot.sendMessage(chatId, "❌ Order ကို ဖျက်လိုက်ပါပြီ");
+  }
+
 // ===== CONFIRM ORDER =====
 if (d === "CONFIRM_ORDER") {
-  const t = temp[chatId];
-  if (!t || !t.items || !t.items.length) {
-    return bot.sendMessage(chatId, "❌ Order data မရှိပါ");
-  }
+  t.step = "PAYMENT";
+
+  return bot.sendMessage(
+    chatId,
+    "💸 *ငွေလွှဲပြေစာကို ဓာတ်ပုံနဲ့ ပို့ပေးပါ*",
+    { parse_mode: "Markdown" }
+  );
+}
 
 
   // ✅ Save to MongoDB
@@ -455,6 +471,51 @@ ${itemsText}
       { parse_mode: "Markdown" }
     );
   }
+// ===Admin Approve (Message Edit)===
+if (d.startsWith("APPROVE_")) {
+  const orderId = d.split("_")[1];
+  const order = await Order.findById(orderId);
+  if (!order) return;
+
+  order.status = "COMPLETED";
+  order.approvedAt = new Date();
+  await order.save();
+
+  const newCaption =
+`📦 ORDER COMPLETED ✅
+━━━━━━━━━━━━━━━
+👤 User : @${order.username}
+🎮 Product : ${order.product}
+🆔 Game ID : ${order.gameId}
+🌐 Server : ${order.serverId}
+
+💰 Total : ${order.totalPrice.toLocaleString()} MMK
+
+━━━━━━━━━━━━━━━
+✅ ဒီ Order လုပ်ဆောင်မှု ပြီးမြောက်သွားပါပြီ`;
+
+  await bot.editMessageCaption(newCaption, {
+    chat_id: process.env.ADMIN_CHAT_ID,
+    message_id: order.adminMsgId
+  });
+
+  await bot.sendMessage(order.userId, "✅ သင်၏ Order ကို အတည်ပြုပြီးပါပြီ");
+
+  return;
+}
+// Admin Reject Order 
+if (d.startsWith("REJECT_")) {
+  const orderId = d.split("_")[1];
+  const order = await Order.findById(orderId);
+  if (!order) return;
+
+  order.status = "rejected";
+  await order.save();
+
+  await bot.sendMessage(order.userId, "❌ Order ကို ပယ်ချလိုက်ပါသည်");
+
+  return;
+}
 
   // ===== PRODUCT SELECT (INLINE FLOW) =====
 if (d === "MLBB") {
@@ -486,6 +547,68 @@ if (d === "PUBG") {
 }
 }); 
 // callback quary end
+
+bot.on("photo", async (msg) => {
+  const chatId = msg.chat.id;
+  const t = temp[chatId];
+
+  if (!t || t.step !== "PAYMENT") return;
+
+  const fileId = msg.photo[msg.photo.length - 1].file_id;
+
+  // 💾 DB ထဲ save
+  const order = await Order.create({
+    userId: chatId.toString(),
+    username: msg.from.username || msg.from.first_name,
+
+    product: t.product,
+    gameId: t.gameId,
+    serverId: t.serverId,
+
+    items: t.items,
+    totalPrice: t.totalPrice,
+
+    paymentPhoto: fileId,
+    status: "waiting_payment",
+
+    expireAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+  });
+
+  // 📤 Admin ဆီပို့
+  const caption =
+`📦 NEW ORDER
+━━━━━━━━━━━━━━━
+👤 User : @${order.username}
+🎮 Product : ${order.product}
+🆔 Game ID : ${order.gameId}
+🌐 Server : ${order.serverId}
+
+💰 Total : ${order.totalPrice.toLocaleString()} MMK`;
+
+  const adminMsg = await bot.sendPhoto(
+    process.env.ADMIN_CHAT_ID,
+    fileId,
+    {
+      caption,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
+            { text: "❌ Reject", callback_data: `REJECT_${order._id}` }
+          ]
+        ]
+      }
+    }
+  );
+
+  // adminMsgId save
+  order.adminMsgId = adminMsg.message_id;
+  await order.save();
+
+  delete temp[chatId];
+
+  return bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါသည်...");
+});
 
 // ===== BROADCAST (ADMIN ONLY) =====
 bot.onText(/\/broadcast (.+)/, async (msg, match) => {
@@ -676,9 +799,9 @@ bot.onText(/\/topusers/, async (msg) => {
     },
     {
       $group: {
-        _id: "$chatId",
+        _id: "$userId",
         user: { $first: "$user" },
-        totalMMK: { $sum: "$price" },
+        totalMMK: { $sum: "$totalprice" },
         orders: { $sum: 1 }
       }
     },
