@@ -233,14 +233,15 @@ d==="MLBB"
     await bot.deleteMessage(chatId, t.previewMsgId);
     t.step = "PAY_METHOD";
 
-    const m = await bot.sendMessage(chatId,"💳 Payment Method ရွေးပါ",{
-      reply_markup:{
-        inline_keyboard:[
-          [{ text:"💜 KPay", callback_data:"KPay" }],
-          [{ text:"💙 WavePay", callback_data:"WavePay" }]
-        ]
-      }
-    });
+    // CONFIRM → Payment Method
+const m = await bot.sendMessage(chatId,"💳 Payment Method ရွေးပါ",{
+  reply_markup:{
+    inline_keyboard:[
+      [{ text:"💜 KPay", callback_data:"PAY_KPay" }],
+      [{ text:"💙 WavePay", callback_data:"PAY_WavePay" }]
+    ]
+  }
+});
     t.msgs.push(m.message_id);
     return;
   }
