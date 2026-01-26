@@ -19,8 +19,8 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error(err));
 
-// ===== SCHEMA =====
-const Order = mongoose.model("Order", new mongoose.Schema({
+// ===== ORDER SCHEMA =====
+const OrderSchema = new mongoose.Schema({
   orderId: String,
   chatId: String,
   user: String,
@@ -31,20 +31,21 @@ const Order = mongoose.model("Order", new mongoose.Schema({
   price: Number,
   paymentMethod: String,
   status: String,
-  approvedAt: Date, 
-  // ⭐ TTL FIELD
+  approvedAt: Date,
+
+  // ⭐ TTL field
   expireAt: { type: Date },
 
   createdAt: { type: Date, default: Date.now }
-  });
+});
 
-// TTL index
+// ⭐ TTL INDEX
 OrderSchema.index(
   { expireAt: 1 },
   { expireAfterSeconds: 0 }
 );
 
-// ===== MODEL CREATE =====
+// ===== MODEL (တစ်ခါပဲ) =====
 const Order = mongoose.model("Order", OrderSchema);
 
 // ===== PAYMENT ACCOUNTS =====
