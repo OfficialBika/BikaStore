@@ -417,28 +417,60 @@ bot.onText(/\/broadcast (.+)/, async (msg, match) => {
 });
 
 // ===== USER FORM INPUT =====
-bot.on("message", (msg) => {
+bot.on("message", async (msg) => {
   if (!msg.text || !msg.reply_to_message) return;
 
   const chatId = msg.chat.id;
   const t = temp[chatId];
   if (!t) return;
 
-  const [idLine, amount] = msg.text.trim().split("\n");
-  const [gameId, serverId] = idLine.split(" ");
+  const lines = msg.text.trim().split("\n");
 
-  if (!gameId || !serverId) {
-    return bot.sendMessage(chatId, "❌ ID / Server ID မမှန်ပါ");
+  // ===== PUBG =====
+  if (t.productKey === "PUBG") {
+    const gameId = lines[0];
+    const amount = lines[1];
+
+    if (!gameId || !amount) {
+      return bot.sendMessage(chatId, "❌ Pubg ID / Amount မမှန်ပါ");
+    }
+
+    const price = PRICES.PUBG.prices[amount];
+    if (!price) {
+      return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
+    }
+
+    Object.assign(t, {
+      gameId,
+      serverId: "-",
+      amount,
+      price
+    });
   }
 
-  const price = PRICES[t.productKey].prices[amount];
-  if (!price) {
-    return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
+  // ===== MLBB =====
+  if (t.productKey === "MLBB") {
+    const [idLine, amount] = lines;
+    const [gameId, serverId] = idLine.split(" ");
+
+    if (!gameId || !serverId || !amount) {
+      return bot.sendMessage(chatId, "❌ ID / Server ID / Amount မမှန်ပါ");
+    }
+
+    const price = PRICES.MLBB.prices[amount];
+    if (!price) {
+      return bot.sendMessage(chatId, "❌ Amount မမှန်ပါ");
+    }
+
+    Object.assign(t, {
+      gameId,
+      serverId,
+      amount,
+      price
+    });
   }
 
-  Object.assign(t, { gameId, serverId, amount, price });
-
-  // ✅ Payment Method ကို ဒီနေရာမှာပဲ ပို့
+  // ===== PAYMENT METHOD =====
   return bot.sendMessage(
     chatId,
 `💳 *Payment Method ရွေးပါ*
