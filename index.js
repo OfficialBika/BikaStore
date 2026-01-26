@@ -170,19 +170,22 @@ bot.onText(/\/myrank/, async (msg) => {
   // 👤 User info
   const user = await User.findOne({ chatId });
 
-  bot.sendMessage(
-    chatId,
+  const now = new Date();
+
+bot.sendMessage(
+  chatId,
 `🏆 *My Monthly Rank*
 
-👤 Name: ${user?.firstName || "User"}
-🏅 Rank: #${rankIndex + 1}
-📦 Orders: ${me.totalOrders}
-💰 Total: ${me.totalMMK.toLocaleString()} MMK
+📅 Month : ${formatMonthYear(now)}
+🗓 Date  : ${formatDateDMY(now)}
 
-📅 Period: This Month`,
-    { parse_mode: "Markdown" }
-  );
-});
+👤 Name  : ${user?.firstName || "User"}
+🏅 Rank  : #${rankIndex + 1}
+📦 Orders: ${me.totalOrders}
+💰 Total : ${me.totalMMK.toLocaleString()} MMK
+`,
+  { parse_mode: "Markdown" }
+);
 // Top 10 CMT
 bot.onText(/\/top10/, async (msg) => {
   const chatId = msg.chat.id.toString();
@@ -217,10 +220,13 @@ bot.onText(/\/top10/, async (msg) => {
     return bot.sendMessage(chatId, "📭 ဒီလ Order မရှိသေးပါ");
   }
 
-  let text =
+const now = new Date();
+  
+let text =
 `━━━━━━━━━━━━━━━
 🏆 *TOP 10 USERS*
-📅 *Monthly Ranking*
+📅 *${formatMonthYear(now)} Ranking*
+🗓 Date - ${formatDateDMY(now)}
 ━━━━━━━━━━━━━━━
 
 `;
