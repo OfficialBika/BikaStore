@@ -2,7 +2,20 @@
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
+// ===== DATE HELPERS =====
+const formatDateDMY = (date = new Date()) => {
+  const d = date.getDate();
+  const m = date.getMonth() + 1;
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+};
 
+const formatMonthYear = (date = new Date()) => {
+  return date.toLocaleString("en-US", {
+    month: "long",
+    year: "numeric"
+  });
+};
 // ===== ENV =====
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const ADMIN_ID = process.env.ADMIN_ID;
