@@ -34,17 +34,30 @@ mongoose.connect(process.env.MONGO_URI)
 
 // ===== ORDER SCHEMA =====
 const OrderSchema = new mongoose.Schema({
-  orderId: String,
-  chatId: String,
-  user: String,
+  userId: String,
+  username: String,
+
+  product: String,          // "MLBB" | "PUBG"
   gameId: String,
   serverId: String,
-  product: String,
-  amount: String,
-  price: Number,
-  paymentMethod: String,
-  status: String,
-  approvedAt: Date,
+
+  items: [
+    {
+      amount: String,
+      price: Number
+    }
+  ],
+
+  totalPrice: Number,
+  status: {
+    type: String,
+    default: "pending"       // pending | approved | rejected
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
 
   // ⭐ TTL field
   expireAt: { type: Date },
