@@ -6,7 +6,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-const ADMIN_ID = process.env.ADMIN_CHAT_ID;
+const ADMIN_ID = process.env.ADMIN_CHAT_IDS;
 const PORT = process.env.PORT || 3000;
 
 const app = express();
