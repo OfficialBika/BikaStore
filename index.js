@@ -381,8 +381,13 @@ bot.on("callback_query", async (q) => {
 
 ${priceText}
 
-📌 Pubg ID:
-📌 Amount:`,
+✍️ *ရေးထည့်ပုံ (Example)*
+
+5123456789
+60+325
+
+📌 UC အများကြီးဝယ်ချင်ရင် + နဲ့ရေးနိုင်ပါတယ်`,
+                           
       { parse_mode: "Markdown", reply_markup: { force_reply: true } }
     );
   }
@@ -396,13 +401,14 @@ ${priceText}
 ${priceText}
 
 ✍️ *ရေးထည့်ပုံ (Example)*
-မိမိ Id ကိုမှန်ကန်စွာရေးသားပါ
 
 486679424 2463
-1049
+86+343
+
 
 📌 ပထမလိုင်း → Game ID + Server ID  
-📌 ဒုတိယလိုင်း → Amount`,
+📌 ဒုတိယလိုင်း → DiaAmount(ဥပမာ-86)
+📌 Diamond အများကြီးဆို + နဲ့ရေးနိုင်ပါတယ်`,
                          
     { parse_mode: "Markdown", reply_markup: { force_reply: true } }
   );
