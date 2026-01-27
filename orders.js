@@ -2,7 +2,8 @@
 // ORDERS LOGIC (Bika Store)
 // ===============================
 
-console.log("ORDERS DIR:", __dirname);
+const fs = require("fs");
+console.log("MODELS:", fs.readdirSync(__dirname + "/models"));
 
 const Order = require("./models/order");
 const User = require("./models/User");
