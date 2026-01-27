@@ -5,7 +5,7 @@
 const ui = require("./ui");
 const Order = require("./src/models/order");
 const User  = require("./src/models/User");
-const { isAdmin } = require("./helpers");
+const { isAdmin } = require("./src/models/helpers");
 
 // ===============================
 // REGISTER COMMANDS
