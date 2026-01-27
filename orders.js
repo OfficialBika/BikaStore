@@ -1,13 +1,17 @@
 // ===============================
-// ORDERS LOGIC (Bika Store)
+// ORDERS LOGIC (BIKA STORE - FINAL)
 // ===============================
 
-const fs = require("fs");
-console.log("MODELS:", fs.readdirSync(__dirname + "/models"));
-
 const Order = require("./models/order");
-const User = require("./models/User");
-const ui = require("../ui/ui");
+const User  = require("./models/User");
+const ui    = require("./ui");
+
+// ===============================
+// UTILS
+// ===============================
+function escapeMd(text = "") {
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
+}
 
 // ===============================
 // CREATE ORDER (after payment photo)
@@ -16,7 +20,12 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
   const chatId = msg.chat.id.toString();
   const t = temp[chatId];
 
-  // 🛑 Anti duplicate (pending order)
+  if (!t) {
+    await bot.sendMessage(chatId, "❌ Session expired. /start again");
+    return null;
+  }
+
+  // 🛑 Anti duplicate pending order
   const exist = await Order.findOne({
     userId: chatId,
     status: "PENDING"
@@ -30,57 +39,78 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
     return null;
   }
 
-  // 🔗 user ref (important)
+  // 🖼 Payment photo safe check
+  const photo = msg.photo?.[msg.photo.length - 1];
+  if (!photo) {
+    await bot.sendMessage(chatId, "❌ Payment screenshot မတွေ့ပါ");
+    return null;
+  }
+
+  // 🔗 user reference
   const user = await User.findOne({ userId: chatId });
 
-  // Create order
+  // ===============================
+  // CREATE ORDER (DB)
+  // ===============================
   const order = await Order.create({
     orderId: t.orderId,
     userId: chatId,
-    userRef: user?._id,          // ⭐ JOIN KEY
-    username: msg.from.username || msg.from.first_name,
+    userRef: user?._id || null,
+    username: msg.from.username || msg.from.first_name || "",
     product: t.product,
     gameId: t.gameId,
     serverId: t.serverId,
     items: t.items,
     totalPrice: t.totalPrice,
     paymentMethod: t.paymentMethod,
-    paymentPhoto: msg.photo.at(-1).file_id,
+    paymentPhoto: photo.file_id,
     status: "PENDING",
+    adminMessages: [],
     expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   });
 
-  // USER UI
+  // ===============================
+  // USER UI (WAITING)
+  // ===============================
   const waitMsg = await ui.sendWaiting(bot, chatId, order.orderId);
   order.waitMsgId = waitMsg.message_id;
 
-  // ADMIN UI
+  // ===============================
+  // ADMIN UI (MULTI ADMIN SAFE)
+  // ===============================
   for (const adminId of ADMIN_IDS) {
-    const adminMsg = await bot.sendPhoto(
-      adminId,
-      order.paymentPhoto,
-      {
-        caption:
+    try {
+      const adminMsg = await bot.sendPhoto(
+        adminId,
+        order.paymentPhoto,
+        {
+          caption:
 `📦 *NEW ORDER*
 ━━━━━━━━━━━━━━━
-🆔 ${order.orderId}
-👤 @${order.username}
-🎮 ${order.product}
-🆔 ${order.gameId} (${order.serverId})
+🆔 ${escapeMd(order.orderId)}
+👤 @${escapeMd(order.username)}
+🎮 ${escapeMd(order.product)}
+🆔 ${escapeMd(order.gameId)} (${escapeMd(order.serverId)})
 💰 ${order.totalPrice.toLocaleString()} MMK`,
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
-              { text: "❌ Reject",  callback_data: `REJECT_${order._id}` }
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
+                { text: "❌ Reject",  callback_data: `REJECT_${order._id}` }
+              ]
             ]
-          ]
+          }
         }
-      }
-    );
-    order.adminMsgId = adminMsg.message_id;
-    order.adminChatId = adminId;
+      );
+
+      order.adminMessages.push({
+        chatId: adminId,
+        messageId: adminMsg.message_id
+      });
+    } catch (e) {
+      console.error("Admin send failed:", adminId);
+    }
   }
 
   await order.save();
@@ -89,42 +119,63 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
 }
 
 // ===============================
-// APPROVE ORDER
+// APPROVE ORDER (ATOMIC)
 // ===============================
 async function approveOrder({ bot, orderId }) {
-  const order = await Order.findById(orderId).populate("userRef");
-  if (!order || order.status !== "PENDING") return;
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, status: "PENDING" },
+    { status: "COMPLETED", approvedAt: new Date() },
+    { new: true }
+  ).populate("userRef");
 
-  order.status = "COMPLETED";
-  order.approvedAt = new Date();
-  await order.save();
+  if (!order) return;
 
   // USER UI
-  await ui.notifyUserApproved(bot, order);
+  try {
+    await ui.notifyUserApproved(bot, order);
+  } catch {}
 
-  // ADMIN UI
-  await ui.updateAdminMessage(bot, order, "APPROVED");
+  // ADMIN UI (ALL ADMINS)
+  for (const m of order.adminMessages || []) {
+    try {
+      await ui.updateAdminMessage(bot, {
+        adminChatId: m.chatId,
+        adminMsgId: m.messageId
+      }, "APPROVED");
+    } catch {}
+  }
 }
 
 // ===============================
-// REJECT ORDER
+// REJECT ORDER (ATOMIC)
 // ===============================
 async function rejectOrder({ bot, orderId }) {
-  const order = await Order.findById(orderId);
-  if (!order || order.status !== "PENDING") return;
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, status: "PENDING" },
+    { status: "REJECTED" },
+    { new: true }
+  );
 
-  order.status = "REJECTED";
-  await order.save();
+  if (!order) return;
 
   // USER UI
-  await ui.notifyUserRejected(bot, order);
+  try {
+    await ui.notifyUserRejected(bot, order);
+  } catch {}
 
   // ADMIN UI
-  await ui.updateAdminMessage(bot, order, "REJECTED");
+  for (const m of order.adminMessages || []) {
+    try {
+      await ui.updateAdminMessage(bot, {
+        adminChatId: m.chatId,
+        adminMsgId: m.messageId
+      }, "REJECTED");
+    } catch {}
+  }
 }
 
 // ===============================
-// STATS HELPERS
+// STATS
 // ===============================
 async function getStatusStats(isAdmin) {
   const total = await Order.countDocuments();
