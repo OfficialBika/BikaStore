@@ -12,17 +12,27 @@ const orders = require("./orders");
 function initUser({ bot, temp, ADMIN_IDS }) {
 
 
-  // src/handlers/user.js
+// src/handlers/user.js
 
-async function onMessage(bot, msg) {
 async function onMessage(bot, msg) {
   const chatId = msg.chat.id;
+  const text = msg.text;
 
-  if (msg.text === "/start") {
+  // /start command
+  if (text === "/start") {
     await bot.sendMessage(
       chatId,
-      "👋 Welcome to BikaStore!\nChoose a product 👇"
+      "👋 Welcome to BikaStore!\n\nရွေးချယ်လိုတဲ့ game ကို အောက်ကနေ ရွေးပါ ⬇️",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
+            [{ text: "🎯 PUBG UC", callback_data: "PUBG" }]
+          ]
+        }
+      }
     );
+    return;
   }
 }
 
