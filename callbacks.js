@@ -4,43 +4,45 @@
 
 const ui = require("./ui");
 const orders = require("./orders");
-const { isAdmin } = require("./src/models/helpers");
+const { isAdmin } = require("./helpers"); // ✅ PATH FIX
 
-// temp session (inject from index.js)
-let tempSession = null;
-
-// ===============================
-// INIT
-// ===============================
-function registerCallbacks({ bot, session, ADMIN_IDS }) {
-  tempSession = session;
+module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
 
   bot.on("callback_query", async q => {
     const chatId = q.message.chat.id.toString();
     const data = q.data;
-    const t = tempSession[chatId];
 
     try {
       // ===============================
       // GAME SELECT
       // ===============================
       if (data === "MLBB" || data === "PUBG") {
-        tempSession[chatId] = {
+
+        // ✅ SESSION INIT (CRITICAL)
+        session[chatId] = {
           product: data,
-          step: "GAME_ID",
+          step: "GAME",   // ✅ MATCH user.js
           items: [],
-          msgs: []
+          totalPrice: 0
         };
 
-        const msgs = await ui.sendPriceList(bot, chatId, data);
-        tempSession[chatId].msgs.push(...msgs);
-        return bot.answerCallbackQuery(q.id);
+        await bot.answerCallbackQuery(q.id);
+
+        // 👉 Ask for Game ID FIRST
+        return bot.sendMessage(
+          chatId,
+          data === "MLBB"
+            ? "🆔 *Game ID + Server ID*\n`12345678 1234`"
+            : "🆔 *PUBG Game ID ကို ထည့်ပါ*",
+          { parse_mode: "Markdown" }
+        );
       }
 
       // ===============================
       // CONFIRM ORDER
       // ===============================
       if (data === "CONFIRM") {
+        const t = session[chatId];
         if (!t) return bot.answerCallbackQuery(q.id);
 
         if (t.previewMsgId) {
@@ -48,23 +50,23 @@ function registerCallbacks({ bot, session, ADMIN_IDS }) {
         }
 
         t.step = "PAY_METHOD";
-        const m = await ui.sendPaymentMethods(bot, chatId);
-        t.msgs.push(m);
 
-        return bot.answerCallbackQuery(q.id);
+        await bot.answerCallbackQuery(q.id);
+        return ui.sendPaymentMethods(bot, chatId);
       }
 
       // ===============================
       // PAYMENT METHOD
       // ===============================
       if (data.startsWith("PAY_")) {
+        const t = session[chatId];
         if (!t) return bot.answerCallbackQuery(q.id);
 
         t.paymentMethod = data.replace("PAY_", "");
         t.step = "PAYMENT";
 
-        await ui.sendPaymentInfo(bot, chatId, t.paymentMethod);
-        return bot.answerCallbackQuery(q.id);
+        await bot.answerCallbackQuery(q.id);
+        return ui.sendPaymentInfo(bot, chatId, t.paymentMethod);
       }
 
       // ===============================
@@ -81,9 +83,7 @@ function registerCallbacks({ bot, session, ADMIN_IDS }) {
         const orderId = data.replace("APPROVE_", "");
         await orders.approveOrder({ bot, orderId });
 
-        return bot.answerCallbackQuery(q.id, {
-          text: "✅ Order approved"
-        });
+        return bot.answerCallbackQuery(q.id, { text: "✅ Approved" });
       }
 
       // ===============================
@@ -100,12 +100,9 @@ function registerCallbacks({ bot, session, ADMIN_IDS }) {
         const orderId = data.replace("REJECT_", "");
         await orders.rejectOrder({ bot, orderId });
 
-        return bot.answerCallbackQuery(q.id, {
-          text: "❌ Order rejected"
-        });
+        return bot.answerCallbackQuery(q.id, { text: "❌ Rejected" });
       }
 
-      // fallback
       await bot.answerCallbackQuery(q.id);
 
     } catch (err) {
@@ -116,6 +113,4 @@ function registerCallbacks({ bot, session, ADMIN_IDS }) {
       });
     }
   });
-}
-
-module.exports = registerCallbacks;
+};
