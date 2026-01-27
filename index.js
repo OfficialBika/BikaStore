@@ -437,11 +437,8 @@ bot.on("message", async msg => {
 bot.on("photo", async msg => {
   const chatId = msg.chat.id;
   const t = temp[chatId];
-  if (!t || t.step !== "PAYMENT") return;
-  if (!t.userObjectId) {
-  return bot.sendMessage(chatId,
-    "⚠️ Session expired ဖြစ်သွားပါတယ်\n/start ကို ပြန်နှိပ်ပြီး ထပ်လုပ်ပါ");
-  }
+  // ✅ CORRECT
+if (!t || t.step !== "PAYMENT") return;
  const existing = await Order.findOne({
   user: t.userObjectId,
   status: "PENDING"
