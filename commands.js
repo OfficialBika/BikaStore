@@ -19,17 +19,18 @@ async function startCommand(bot, msg) {
   const chatId = msg.chat.id;
   const from = msg.from;
 
+  // save or update user
   await User.findOneAndUpdate(
     { telegramId: from.id },
     {
       telegramId: from.id,
-      username: from.username,
-      firstName: from.first_name
+      username: from.username || "",
+      firstName: from.first_name || ""
     },
     { upsert: true, new: true }
   );
-  
-    await bot.sendMessage(
+
+  await bot.sendMessage(
       chatId,
       `👋 *Welcome to Bika Store*
 ━━━━━━━━━━━━━━━
@@ -47,7 +48,11 @@ async function startCommand(bot, msg) {
         }
       }
     );
-  });
+ };
+
+module.exports = {
+  startCommand
+};
 
   // -------------------------------
   // /status (user + admin)
