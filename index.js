@@ -6,12 +6,11 @@
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
-
-// Handlers
-const registerCommands = require("./handlers/commands");
-const registerCallbacks = require("./handlers/callbacks");
-const userHandlers = require("./handlers/user");
-const adminHandlers = require("./handlers/admin");
+const commands  = require("./commands");
+const callbacks = require("./callbacks");
+const admin     = require("./admin");
+const user      = require("./user");
+const orders    = require("./orders");
 
 // ===============================
 // BOT & SERVER SETUP
