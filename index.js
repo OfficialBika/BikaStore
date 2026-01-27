@@ -112,11 +112,21 @@ const temp = {};
 bot.onText(/\/start/, async msg => {
   const id = msg.chat.id.toString();
 
-  await User.updateOne(
-    { userId: id },
-    { userId: id, username: msg.from.username || msg.from.first_name },
-    { upsert: true }
-  );
+  await users.updateOne(
+  { userId: chatId },
+  {
+    $set: {
+      username,
+      firstName,
+      lastName,
+      updatedAt: new Date()
+    },
+    $setOnInsert: {
+      createdAt: new Date()
+    }
+  },
+  { upsert: true }
+);
 
   bot.sendMessage(id,"🛒 *Bika Store*\n\nGame ကိုရွေးပါ 👇",{
     parse_mode:"Markdown",
