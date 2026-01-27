@@ -1,14 +1,12 @@
 // ===============================
-// USER MODEL (FINAL)
+// USER MODEL (Bika Store - FINAL)
 // ===============================
 
 const mongoose = require("mongoose");
 
-const UserSchema = new mongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
-    // ===============================
-    // TELEGRAM INFO
-    // ===============================
+    // Telegram User ID
     userId: {
       type: String,
       required: true,
@@ -31,15 +29,8 @@ const UserSchema = new mongoose.Schema(
       default: ""
     },
 
-    // ===============================
-    // USER STATS
-    // ===============================
+    // Stats (optional but useful)
     totalOrders: {
-      type: Number,
-      default: 0
-    },
-
-    completedOrders: {
       type: Number,
       default: 0
     },
@@ -49,22 +40,22 @@ const UserSchema = new mongoose.Schema(
       default: 0
     },
 
-    // ===============================
-    // ROLE
-    // ===============================
+    // Role (future use)
     role: {
       type: String,
       enum: ["USER", "ADMIN"],
-      default: "USER",
-      index: true
+      default: "USER"
     }
   },
   {
-    timestamps: true
+    timestamps: true // createdAt / updatedAt
   }
 );
 
 // ===============================
-// EXPORT
+// INDEXES
 // ===============================
-module.exports = mongoose.model("User", UserSchema);
+userSchema.index({ totalSpent: -1 });
+
+// ===============================
+module.exports = mongoose.model("User", userSchema);
