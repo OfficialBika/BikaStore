@@ -62,35 +62,44 @@ registerCommands(context);
 // ===============================
 registerCallbacks(context);
 
-
 // ===============================
-// USER MESSAGE HANDLER
+// USER / ADMIN MESSAGE HANDLER
 // ===============================
 bot.on("message", async msg => {
   try {
-    // admin message handled separately
-    if (ADMIN_IDS.includes(msg.from?.id?.toString())) {
+    if (!msg.text) return;
+
+    const chatId = msg.from?.id?.toString();
+
+    // ===============================
+    // ADMIN MESSAGE
+    // ===============================
+    if (ADMIN_IDS.includes(chatId)) {
       await adminHandlers.onMessage({
         bot,
         msg,
         ADMIN_IDS
       });
+      return; // ❗ admin message ကို user handler မပို့
     }
 
-    // user flow
+    // ===============================
+    // USER MESSAGE
+    // ===============================
     await userHandlers.onMessage({
       bot,
       msg,
       session,
       ADMIN_IDS
     });
+
   } catch (err) {
     console.error("Message handler error:", err);
   }
 });
 
 // ===============================
-// PAYMENT PHOTO HANDLER
+// PAYMENT PHOTO HANDLER (USER)
 // ===============================
 bot.on("photo", async msg => {
   try {
