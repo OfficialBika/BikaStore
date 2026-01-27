@@ -1,52 +1,69 @@
 // ===============================
-// UI TEMPLATES (Bika Store)
+// UI TEMPLATES (BIKA STORE - FINAL)
 // ===============================
 
+const PRICES = require("./prices");
+
+// ===============================
+// PAYMENT ACCOUNTS
+// ===============================
 const PAYMENTS = {
   KPay: "💜 *KPay*\n09264202637\nName - Shine Htet Aung",
   WavePay: "💙 *WavePay*\n09264202637\nName - Shine Htet Aung"
 };
 
-const PRICES = require("./prices"); // optional (if separated)
+// ===============================
+// UTILS
+// ===============================
+function esc(text = "") {
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
+}
 
 // ===============================
 // PRICE LIST
 // ===============================
-async function sendPriceList(bot, chatId, product) {
-  const priceText = Object.entries(PRICES[product])
-    .map(([k, v]) => `• *${k}* = ${v.toLocaleString()} MMK`)
+async function sendPriceList(bot, chatId, productKey) {
+  const product = PRICES[productKey];
+  if (!product) return [];
+
+  const priceText = product.items
+    .map(i => `• ${i.label} = *${i.price.toLocaleString()} ${product.currency}*`)
     .join("\n");
 
-  const p1 = await bot.sendMessage(
+  const m1 = await bot.sendMessage(
     chatId,
-    `📋 *${product} PRICE LIST*\n━━━━━━━━━━━━━━━\n${priceText}`,
+    `📋 *${esc(product.name)} PRICE LIST*\n━━━━━━━━━━━━━━━\n${priceText}`,
     { parse_mode: "Markdown" }
   );
 
-  const p2 = await bot.sendMessage(
+  const m2 = await bot.sendMessage(
     chatId,
-    product === "MLBB"
+    productKey === "MLBB"
       ? "🆔 *Game ID + Server ID*\n\n`11111111 2222`\n`11111111(2222)`"
       : "🆔 *PUBG Game ID ကို ထည့်ပါ*",
     { parse_mode: "Markdown" }
   );
 
-  return [p1.message_id, p2.message_id];
+  return [m1.message_id, m2.message_id];
 }
 
 // ===============================
 // PAYMENT METHOD SELECT
 // ===============================
 async function sendPaymentMethods(bot, chatId) {
-  const m = await bot.sendMessage(chatId, "💳 *Payment Method ရွေးပါ*", {
-    parse_mode: "Markdown",
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "💜 KPay", callback_data: "PAY_KPay" }],
-        [{ text: "💙 WavePay", callback_data: "PAY_WavePay" }]
-      ]
+  const m = await bot.sendMessage(
+    chatId,
+    "💳 *Payment Method ရွေးပါ*",
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "💜 KPay",  callback_data: "PAY_KPay" }],
+          [{ text: "💙 WavePay", callback_data: "PAY_WavePay" }]
+        ]
+      }
     }
-  });
+  );
   return m.message_id;
 }
 
@@ -56,7 +73,7 @@ async function sendPaymentMethods(bot, chatId) {
 async function sendPaymentInfo(bot, chatId, method) {
   return bot.sendMessage(
     chatId,
-    `${PAYMENTS[method]}\n\n📸 *ငွေလွှဲ ပြေစာ ပို့ပေးပါ*`,
+    `${PAYMENTS[method]}\n\n📸 *ငွေလွှဲပြီး Screenshot ပို့ပေးပါ*`,
     { parse_mode: "Markdown" }
   );
 }
@@ -69,9 +86,9 @@ async function sendOrderPreview(bot, chatId, order) {
     chatId,
     `📦 *ORDER PREVIEW*
 ━━━━━━━━━━━━━━━
-🆔 *Order ID:* ${order.orderId}
-🎮 *Game:* ${order.product}
-🆔 *ID:* ${order.gameId} (${order.serverId})
+🆔 *Order ID:* ${esc(order.orderId)}
+🎮 *Game:* ${esc(order.product)}
+🆔 *ID:* ${esc(order.gameId)} (${esc(order.serverId)})
 💰 *Total:* ${order.totalPrice.toLocaleString()} MMK`,
     {
       parse_mode: "Markdown",
@@ -92,7 +109,7 @@ async function sendOrderPreview(bot, chatId, order) {
 async function sendWaiting(bot, chatId, orderId) {
   return bot.sendMessage(
     chatId,
-    `⏳ *Admin စစ်ဆေးနေပါသည်...*\n\n🆔 Order ID: ${orderId}`,
+    `⏳ *Admin စစ်ဆေးနေပါသည်...*\n\n🆔 Order ID: ${esc(orderId)}`,
     { parse_mode: "Markdown" }
   );
 }
@@ -101,14 +118,18 @@ async function sendWaiting(bot, chatId, orderId) {
 // USER APPROVED
 // ===============================
 async function notifyUserApproved(bot, order) {
-  await bot.deleteMessage(order.userId, order.waitMsgId);
+  if (order.waitMsgId) {
+    try {
+      await bot.deleteMessage(order.userId, order.waitMsgId);
+    } catch {}
+  }
 
   return bot.sendMessage(
     order.userId,
     `✅ *ORDER COMPLETED*
 ━━━━━━━━━━━━━━━
-🎮 ${order.product}
-🆔 ${order.gameId} (${order.serverId})
+🎮 ${esc(order.product)}
+🆔 ${esc(order.gameId)} (${esc(order.serverId)})
 💰 ${order.totalPrice.toLocaleString()} MMK
 
 🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်`,
@@ -124,7 +145,7 @@ async function notifyUserRejected(bot, order) {
     order.userId,
     `❌ *ORDER REJECTED*
 ━━━━━━━━━━━━━━━
-Order ID: ${order.orderId}
+🆔 Order ID: ${esc(order.orderId)}
 
 Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
     { parse_mode: "Markdown" }
@@ -134,15 +155,15 @@ Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
 // ===============================
 // ADMIN UPDATE
 // ===============================
-async function updateAdminMessage(bot, order, status) {
+async function updateAdminMessage(bot, adminMsg, status) {
   const text =
     status === "APPROVED"
       ? "✅ ORDER COMPLETED"
       : "❌ ORDER REJECTED";
 
   return bot.editMessageCaption(text, {
-    chat_id: order.adminChatId,
-    message_id: order.adminMsgId
+    chat_id: adminMsg.adminChatId,
+    message_id: adminMsg.adminMsgId
   });
 }
 
@@ -158,7 +179,7 @@ function statusUI({ role, total, pending }) {
 }
 
 // ===============================
-// TOP10 UI
+// TOP 10 UI
 // ===============================
 function top10UI(list) {
   let text = "🏆 *TOP 10 USERS (This Month)*\n━━━━━━━━━━━━━━━\n\n";
