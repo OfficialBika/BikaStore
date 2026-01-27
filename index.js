@@ -66,16 +66,11 @@ registerCallbacks(context);
 // /START MESSAGE HANDLER
 // ===============================
 
-bot.onText(/\/start/, async (msg) => {
-  const chatId = msg.chat.id;
-  console.log("START CMD FROM", chatId);
+const userHandlers = require("./src/handlers/user");
 
-  await bot.sendMessage(
-    chatId,
-    "👋 Welcome to Bika Store\n\n💎 Order စတင်ရန် menu ကိုရွေးပါ"
-  );
+bot.on("message", async (msg) => {
+  await userHandlers.onMessage(bot, msg);
 });
-
 
 // ===============================
 // USER MESSAGE HANDLER
