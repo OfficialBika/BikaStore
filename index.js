@@ -5,7 +5,7 @@
 // Core //
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
-const mongoose = require("mongoose");
+
 const commands  = require("./commands");
 const callbacks = require("./callbacks");
 const admin     = require("./admin");
@@ -14,10 +14,11 @@ const Order = require("./models/order");
 
 //MONGO DB//
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error("❌ MongoDB Error:", err));
+const mongoose = require("mongoose");
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error(err));
 
 
 // ===============================
