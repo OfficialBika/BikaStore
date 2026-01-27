@@ -68,7 +68,7 @@ async function onMessage({ bot, msg, ADMIN_IDS }) {
       const message = text.replace("/broadcast ", "").trim();
       if (!message) return;
 
-      const User = require("./models/User");
+      const User = require("./src/models/User");
       const users = await User.find({}, { userId: 1 });
 
       let success = 0;
