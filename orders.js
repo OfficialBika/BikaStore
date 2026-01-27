@@ -1,223 +1,165 @@
 // ===============================
-// ORDERS DOMAIN LOGIC
+// ORDERS LOGIC (Bika Store)
 // ===============================
 
-const Order = require("./models/Order");
+const Order = require("../models/Order");
+const User = require("../models/User");
+const ui = require("../ui/ui");
 
-/*
-|--------------------------------------------------------------------------
-| 1️⃣ CREATE ORDER
-|--------------------------------------------------------------------------
-| Payment photo received -> DB only
-*/
-async function createOrder(data) {
+// ===============================
+// CREATE ORDER (after payment photo)
+// ===============================
+async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
+  const chatId = msg.chat.id.toString();
+  const t = temp[chatId];
+
+  // 🛑 Anti duplicate (pending order)
+  const exist = await Order.findOne({
+    userId: chatId,
+    status: "PENDING"
+  });
+  if (exist) {
+    await bot.sendMessage(
+      chatId,
+      "⛔ *Pending Order ရှိပြီးသားပါ*\nAdmin approve ပြီးမှ အသစ်လုပ်နိုင်ပါတယ်",
+      { parse_mode: "Markdown" }
+    );
+    return null;
+  }
+
+  // 🔗 user ref (important)
+  const user = await User.findOne({ userId: chatId });
+
+  // Create order
   const order = await Order.create({
-    orderId: data.orderId,
-    userId: data.userId,
-    username: data.username,
-
-    product: data.product,
-    gameId: data.gameId,
-    serverId: data.serverId,
-
-    items: data.items,
-    totalPrice: data.totalPrice,
-
-    paymentMethod: data.paymentMethod,
-    paymentPhoto: data.paymentPhoto,
-
-    userMsgId: data.userMsgId,
-    waitMsgId: data.waitMsgId,
-
+    orderId: t.orderId,
+    userId: chatId,
+    userRef: user?._id,          // ⭐ JOIN KEY
+    username: msg.from.username || msg.from.first_name,
+    product: t.product,
+    gameId: t.gameId,
+    serverId: t.serverId,
+    items: t.items,
+    totalPrice: t.totalPrice,
+    paymentMethod: t.paymentMethod,
+    paymentPhoto: msg.photo.at(-1).file_id,
     status: "PENDING",
-    approvedAt: null,
-
     expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   });
 
+  // USER UI
+  const waitMsg = await ui.sendWaiting(bot, chatId, order.orderId);
+  order.waitMsgId = waitMsg.message_id;
+
+  // ADMIN UI
+  for (const adminId of ADMIN_IDS) {
+    const adminMsg = await bot.sendPhoto(
+      adminId,
+      order.paymentPhoto,
+      {
+        caption:
+`📦 *NEW ORDER*
+━━━━━━━━━━━━━━━
+🆔 ${order.orderId}
+👤 @${order.username}
+🎮 ${order.product}
+🆔 ${order.gameId} (${order.serverId})
+💰 ${order.totalPrice.toLocaleString()} MMK`,
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "✅ Approve", callback_data: `APPROVE_${order._id}` },
+              { text: "❌ Reject",  callback_data: `REJECT_${order._id}` }
+            ]
+          ]
+        }
+      }
+    );
+    order.adminMsgId = adminMsg.message_id;
+    order.adminChatId = adminId;
+  }
+
+  await order.save();
+  delete temp[chatId];
   return order;
 }
 
-/*
-|--------------------------------------------------------------------------
-| 2️⃣ ANTI-DUPLICATE ORDER CHECK
-|--------------------------------------------------------------------------
-| Same user + same gameId + serverId
-| PENDING within last X minutes
-*/
-async function hasPendingDuplicate({
-  userId,
-  gameId,
-  serverId,
-  minutes = 5
-}) {
-  const timeLimit = new Date(Date.now() - minutes * 60 * 1000);
+// ===============================
+// APPROVE ORDER
+// ===============================
+async function approveOrder({ bot, orderId }) {
+  const order = await Order.findById(orderId).populate("userRef");
+  if (!order || order.status !== "PENDING") return;
 
-  return Order.exists({
-    userId,
-    gameId,
-    serverId,
-    status: "PENDING",
-    createdAt: { $gte: timeLimit }
-  });
+  order.status = "COMPLETED";
+  order.approvedAt = new Date();
+  await order.save();
+
+  // USER UI
+  await ui.notifyUserApproved(bot, order);
+
+  // ADMIN UI
+  await ui.updateAdminMessage(bot, order, "APPROVED");
 }
 
-/*
-|--------------------------------------------------------------------------
-| 3️⃣ APPROVE ORDER (ADMIN)
-|--------------------------------------------------------------------------
-*/
-async function approveOrder(orderMongoId) {
-  return Order.findOneAndUpdate(
-    { _id: orderMongoId, status: "PENDING" },
-    {
-      $set: {
-        status: "COMPLETED",
-        approvedAt: new Date()
-      }
-    },
-    { new: true }
-  );
+// ===============================
+// REJECT ORDER
+// ===============================
+async function rejectOrder({ bot, orderId }) {
+  const order = await Order.findById(orderId);
+  if (!order || order.status !== "PENDING") return;
+
+  order.status = "REJECTED";
+  await order.save();
+
+  // USER UI
+  await ui.notifyUserRejected(bot, order);
+
+  // ADMIN UI
+  await ui.updateAdminMessage(bot, order, "REJECTED");
 }
 
-/*
-|--------------------------------------------------------------------------
-| 4️⃣ REJECT ORDER (ADMIN)
-|--------------------------------------------------------------------------
-*/
-async function rejectOrder(orderMongoId) {
-  return Order.findOneAndUpdate(
-    { _id: orderMongoId, status: "PENDING" },
-    {
-      $set: { status: "REJECTED" }
-    },
-    { new: true }
-  );
+// ===============================
+// STATS HELPERS
+// ===============================
+async function getStatusStats(isAdmin) {
+  const total = await Order.countDocuments();
+  const pending = await Order.countDocuments({ status: "PENDING" });
+
+  return {
+    role: isAdmin ? "👑 Admin" : "👤 User",
+    total,
+    pending
+  };
 }
 
-/*
-|--------------------------------------------------------------------------
-| 5️⃣ GET ORDER BY ID
-|--------------------------------------------------------------------------
-*/
-async function getOrderById(orderMongoId) {
-  return Order.findById(orderMongoId);
-}
-
-/*
-|--------------------------------------------------------------------------
-| 6️⃣ MONTH RANGE HELPER
-|--------------------------------------------------------------------------
-*/
-function getMonthRange(date = new Date()) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-  return { start, end };
-}
-
-/*
-|--------------------------------------------------------------------------
-| 7️⃣ TOP 10 USERS (MONTH)
-|--------------------------------------------------------------------------
-*/
-async function getTop10Users(date) {
-  const { start, end } = getMonthRange(date);
-
+async function getTop10(start, end) {
   return Order.aggregate([
-    {
-      $match: {
-        status: "COMPLETED",
-        approvedAt: { $gte: start, $lt: end }
-      }
-    },
-    {
-      $group: {
-        _id: "$userId",
-        total: { $sum: "$totalPrice" }
-      }
-    },
+    { $match: { status: "COMPLETED", approvedAt: { $gte: start, $lt: end } } },
+    { $group: { _id: "$userRef", total: { $sum: "$totalPrice" } } },
     { $sort: { total: -1 } },
     { $limit: 10 }
   ]);
 }
 
-/*
-|--------------------------------------------------------------------------
-| 8️⃣ USER RANK (MONTH)
-|--------------------------------------------------------------------------
-*/
-async function getUserRank(userId, date) {
-  const { start, end } = getMonthRange(date);
-
+async function getUserRank(userId, start, end) {
   const list = await Order.aggregate([
-    {
-      $match: {
-        status: "COMPLETED",
-        approvedAt: { $gte: start, $lt: end }
-      }
-    },
-    {
-      $group: {
-        _id: "$userId",
-        total: { $sum: "$totalPrice" }
-      }
-    },
+    { $match: { status: "COMPLETED", approvedAt: { $gte: start, $lt: end } } },
+    { $group: { _id: "$userId", total: { $sum: "$totalPrice" } } },
     { $sort: { total: -1 } }
   ]);
 
   const index = list.findIndex(u => u._id === userId);
-  if (index === -1) return null;
-
-  return {
-    rank: index + 1,
-    total: list[index].total
-  };
+  return index === -1 ? null : { rank: index + 1, total: list[index].total };
 }
 
-/*
-|--------------------------------------------------------------------------
-| 9️⃣ ADMIN DASHBOARD STATS
-|--------------------------------------------------------------------------
-*/
-async function getAdminStats() {
-  const totalOrders = await Order.countDocuments();
-  const pendingOrders = await Order.countDocuments({ status: "PENDING" });
-  const completedOrders = await Order.countDocuments({ status: "COMPLETED" });
-
-  return {
-    totalOrders,
-    pendingOrders,
-    completedOrders
-  };
-}
-
-/*
-|--------------------------------------------------------------------------
-| 🔟 USER ORDER HISTORY
-|--------------------------------------------------------------------------
-*/
-async function getUserOrders(userId, limit = 10) {
-  return Order.find({ userId })
-    .sort({ createdAt: -1 })
-    .limit(limit);
-}
-
-/*
-|--------------------------------------------------------------------------
-| EXPORTS
-|--------------------------------------------------------------------------
-*/
+// ===============================
 module.exports = {
   createOrder,
-  hasPendingDuplicate,
-
   approveOrder,
   rejectOrder,
-  getOrderById,
-
-  getTop10Users,
-  getUserRank,
-
-  getAdminStats,
-  getUserOrders
+  getStatusStats,
+  getTop10,
+  getUserRank
 };
