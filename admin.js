@@ -4,7 +4,7 @@
 
 const orders = require("./orders");
 const ui = require("./ui");
-const { isAdmin, monthRange } = require("./helpers");
+const { isAdmin, monthRange } = require("./src/models/helpers");
 
 // ===============================
 // ADMIN MESSAGE HANDLER
