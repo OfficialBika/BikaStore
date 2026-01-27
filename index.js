@@ -2,6 +2,13 @@
 // BIKA STORE — MAIN ENTRY (index.js)
 // ===============================
 
+const mongoose = require("mongoose");
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.error("❌ MongoDB Error:", err));
+
 // Core //
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
