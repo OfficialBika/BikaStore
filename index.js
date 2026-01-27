@@ -62,15 +62,6 @@ registerCommands(context);
 // ===============================
 registerCallbacks(context);
 
-// ===============================
-// /START MESSAGE HANDLER
-// ===============================
-
-const userHandlers = require("./src/handlers/user");
-
-bot.on("message", async (msg) => {
-  await userHandlers.onMessage(bot, msg);
-});
 
 // ===============================
 // USER MESSAGE HANDLER
