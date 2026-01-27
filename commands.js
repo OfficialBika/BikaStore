@@ -15,13 +15,20 @@ function registerCommands({ bot, ADMIN_IDS }) {
   // -------------------------------
   // /start
   // -------------------------------
-  bot.onText(/\/start/, async msg => {
-    const chatId = msg.chat.id;
-    const from = msg.from;
+async function startCommand(bot, msg) {
+  const chatId = msg.chat.id;
+  const from = msg.from;
 
-    // upsert user
-    await users.upsertUser(from);
-
+  await User.findOneAndUpdate(
+    { telegramId: from.id },
+    {
+      telegramId: from.id,
+      username: from.username,
+      firstName: from.first_name
+    },
+    { upsert: true, new: true }
+  );
+  
     await bot.sendMessage(
       chatId,
       `👋 *Welcome to Bika Store*
