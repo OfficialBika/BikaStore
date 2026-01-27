@@ -4,7 +4,7 @@
 
 console.log("ORDERS DIR:", __dirname);
 
-const Order = require("./models/Order");
+const Order = require("./models/order");
 const User = require("./models/User");
 const ui = require("../ui/ui");
 
