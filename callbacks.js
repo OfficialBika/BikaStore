@@ -4,7 +4,7 @@
 
 const ui = require("./ui");
 const orders = require("./orders");
-const { isAdmin } = require("./helpers");
+const { isAdmin } = require("./src/models/helpers");
 
 // temp session (inject from index.js)
 let tempSession = null;
