@@ -95,10 +95,11 @@ const OrderSchema = new mongoose.Schema({
 OrderSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 const Order = mongoose.model("Order", OrderSchema);
 
-const User = mongoose.model("User", new mongoose.Schema({
-  userId: String,
+const UserSchema = new mongoose.Schema({
+  userId: { type: String, unique: true },
   username: String
-}));
+});
+const User = mongoose.model("User", UserSchema);
 
 // ===============================
 // TEMP SESSION
