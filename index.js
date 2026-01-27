@@ -33,12 +33,6 @@ const ADMIN_IDS = process.env.ADMIN_CHAT_IDS
   ? process.env.ADMIN_CHAT_IDS.split(",")
   : [];
 
-// ===============================
-// DATABASE
-// ===============================
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error("❌ Mongo Error", err));
 
 // ===============================
 // GLOBAL CONTEXT (shared)
