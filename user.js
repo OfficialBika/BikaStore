@@ -18,11 +18,12 @@ async function onMessage(bot, msg) {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  // /start command
+  if (!text) return;
+
   if (text === "/start") {
     await bot.sendMessage(
       chatId,
-      "👋 Welcome to BikaStore!\n\nရွေးချယ်လိုတဲ့ game ကို အောက်ကနေ ရွေးပါ ⬇️",
+      "👋 Welcome to BikaStore!\n\nGame တစ်ခုကို ရွေးပါ ⬇️",
       {
         reply_markup: {
           inline_keyboard: [
@@ -32,7 +33,6 @@ async function onMessage(bot, msg) {
         }
       }
     );
-    return;
   }
 }
 
