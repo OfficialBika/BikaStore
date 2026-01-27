@@ -97,7 +97,10 @@ const Order = mongoose.model("Order", OrderSchema);
 
 const UserSchema = new mongoose.Schema({
   userId: { type: String, unique: true },
-  username: String
+  chatId: String,
+  username: String,
+  firstName: String,
+  createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model("User", UserSchema);
 
@@ -112,17 +115,11 @@ const temp = {};
 bot.onText(/\/start/, async msg => {
   const id = msg.chat.id.toString();
 
-  await users.updateOne(
-  { userid: msg.from.id },      // 🔑 unique key
+  await User.updateOne(
+  { userId: msg.from.id.toString() },
   {
     $set: {
-      chatId: msg.chat.id,
-      firstName: msg.from.first_name || "",
-      username: msg.from.username || "",
-      updatedAt: new Date()
-    },
-    $setOnInsert: {
-      createdAt: new Date()
+      username: msg.from.username || msg.from.first_name || ""
     }
   },
   { upsert: true }
