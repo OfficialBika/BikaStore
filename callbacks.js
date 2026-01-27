@@ -1,29 +1,32 @@
 // ===============================
-// CALLBACK QUERY ROUTER
+// CALLBACK QUERY ROUTER (BIKA STORE)
 // ===============================
 
-const Order = require("./models/order");
 const ui = require("./ui");
+const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 
-// temp session (shared from index.js)
+// temp session injected from index.js
 let temp = null;
 
 /*
 |--------------------------------------------------------------------------
-| INIT (index.js က inject လုပ်မယ်)
+| INIT CALLBACK ROUTER
+| index.js ကနေ bot + session inject လုပ်ရမယ်
 |--------------------------------------------------------------------------
 */
 function initCallbackRouter({ bot, session }) {
   temp = session;
 
   bot.on("callback_query", async q => {
-    const chatId = q.message.chat.id;
+    const chatId = q.message?.chat?.id?.toString();
     const data = q.data;
+
+    if (!chatId || !data) return;
+
     const t = temp[chatId];
 
     try {
-
       // ===============================
       // GAME SELECT
       // ===============================
@@ -44,11 +47,18 @@ function initCallbackRouter({ bot, session }) {
       // CONFIRM ORDER
       // ===============================
       if (data === "CONFIRM") {
-        if (!t) return;
+        if (!t) {
+          await bot.sendMessage(chatId, "❌ Session expired. /start again");
+          return;
+        }
 
-        await bot.deleteMessage(chatId, t.previewMsgId);
+        if (t.previewMsgId) {
+          try {
+            await bot.deleteMessage(chatId, t.previewMsgId);
+          } catch {}
+        }
+
         t.step = "PAY_METHOD";
-
         const m = await ui.sendPaymentMethods(bot, chatId);
         t.msgs.push(m);
         return;
@@ -58,7 +68,10 @@ function initCallbackRouter({ bot, session }) {
       // PAYMENT METHOD
       // ===============================
       if (data.startsWith("PAY_")) {
-        if (!t) return;
+        if (!t) {
+          await bot.sendMessage(chatId, "❌ Session expired. /start again");
+          return;
+        }
 
         t.paymentMethod = data.replace("PAY_", "");
         t.step = "PAYMENT";
@@ -73,12 +86,13 @@ function initCallbackRouter({ bot, session }) {
       if (data.startsWith("APPROVE_")) {
         if (!isAdmin(q.from.id)) return;
 
-        const orderId = data.split("_")[1];
-        const order = await orders.approveOrder(orderId);
-        if (!order) return;
+        const orderId = data.replace("APPROVE_", "");
 
-        await ui.notifyUserApproved(bot, order);
-        await ui.updateAdminMessage(bot, order, "APPROVED");
+        await orders.approveOrder({
+          bot,
+          orderId
+        });
+
         return;
       }
 
@@ -88,17 +102,18 @@ function initCallbackRouter({ bot, session }) {
       if (data.startsWith("REJECT_")) {
         if (!isAdmin(q.from.id)) return;
 
-        const orderId = data.split("_")[1];
-        const order = await orders.rejectOrder(orderId);
-        if (!order) return;
+        const orderId = data.replace("REJECT_", "");
 
-        await ui.notifyUserRejected(bot, order);
-        await ui.updateAdminMessage(bot, order, "REJECTED");
+        await orders.rejectOrder({
+          bot,
+          orderId
+        });
+
         return;
       }
 
     } catch (err) {
-      console.error("Callback error:", err);
+      console.error("❌ Callback Error:", err);
     }
   });
 }
