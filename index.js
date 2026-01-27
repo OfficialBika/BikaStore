@@ -443,11 +443,6 @@ if (!t || t.step !== "PAYMENT") return;
   user: t.userObjectId,
   status: "PENDING"
 });
-
-if (existing) {
-  return bot.sendMessage(chatId,
-"⛔ မပြီးသေးတဲ့ Order ရှိနေပါသည်\nAdmin စစ်ဆေးပြီးမှ နောက်ထပ် order တင်နိုင်ပါမယ်");
-}
   
 
   const userMsg = await bot.sendPhoto(chatId,msg.photo.at(-1).file_id,{
