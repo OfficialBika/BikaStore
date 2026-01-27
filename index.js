@@ -1,46 +1,54 @@
 // ===============================
-// BIKA STORE — MAIN ENTRY (index.js)
+// BIKA STORE — MAIN ENTRY (FINAL)
 // ===============================
 
-// Core //
+// Core
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
-
-const commands  = require("./commands");
-const callbacks = require("./callbacks");
-const admin     = require("./admin");
-const user      = require("./user");
-const Order = require("./models/order");
-
-//MONGO DB//
-
 const mongoose = require("mongoose");
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error(err));
-
+// Modules
+const registerCommands = require("./commands");
+const registerCallbacks = require("./callbacks");
+const adminHandlers = require("./admin");
+const userHandlers = require("./user");
 
 // ===============================
-// BOT & SERVER SETUP
+// ENV
 // ===============================
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-const app = express();
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const MONGO_URI = process.env.MONGO_URI;
 const PORT = process.env.PORT || 3000;
 
-// ===============================
-// ADMIN IDS
-// ===============================
 const ADMIN_IDS = process.env.ADMIN_CHAT_IDS
   ? process.env.ADMIN_CHAT_IDS.split(",")
   : [];
 
+// ===============================
+// DB CONNECT
+// ===============================
+mongoose
+  .connect(MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.error("❌ Mongo Error:", err));
 
 // ===============================
-// GLOBAL CONTEXT (shared)
+// BOT & SERVER
+// ===============================
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const app = express();
+
+// ===============================
+// TEMP SESSION (GLOBAL)
+// ===============================
+const session = {};
+
+// ===============================
+// GLOBAL CONTEXT
 // ===============================
 const context = {
   bot,
+  session,
   ADMIN_IDS
 };
 
@@ -55,29 +63,54 @@ registerCommands(context);
 registerCallbacks(context);
 
 // ===============================
-// USER MESSAGE HANDLERS
+// USER MESSAGE HANDLER
 // ===============================
 bot.on("message", async msg => {
-  await userHandlers.onMessage({ ...context, msg });
+  try {
+    // admin message handled separately
+    if (ADMIN_IDS.includes(msg.from?.id?.toString())) {
+      await adminHandlers.onMessage({
+        bot,
+        msg,
+        ADMIN_IDS
+      });
+    }
+
+    // user flow
+    await userHandlers.onMessage({
+      bot,
+      msg,
+      session,
+      ADMIN_IDS
+    });
+  } catch (err) {
+    console.error("Message handler error:", err);
+  }
 });
 
 // ===============================
 // PAYMENT PHOTO HANDLER
 // ===============================
 bot.on("photo", async msg => {
-  await userHandlers.onPaymentPhoto({ ...context, msg });
+  try {
+    await userHandlers.onPaymentPhoto({
+      bot,
+      msg,
+      session,
+      ADMIN_IDS
+    });
+  } catch (err) {
+    console.error("Photo handler error:", err);
+  }
 });
 
 // ===============================
-// ADMIN MESSAGE HANDLERS (optional)
+// WEB SERVER (KEEP ALIVE)
 // ===============================
-bot.on("message", async msg => {
-  if (!ADMIN_IDS.includes(msg.from?.id?.toString())) return;
-  await adminHandlers.onMessage({ ...context, msg });
+app.get("/", (_, res) => {
+  res.send("🚀 Bika Store Bot Running");
 });
 
-// ===============================
-// WEB SERVER (Render / Railway keep-alive)
-// ===============================
-app.get("/", (_, res) => res.send("🚀 Bika Store Bot Running"));
-app.listen(PORT, () => console.log("🌐 Server Running on", PORT));
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+});
