@@ -1,121 +1,121 @@
 // ===============================
-// CALLBACK QUERY ROUTER (BIKA STORE)
+// CALLBACK QUERY ROUTER (FINAL)
 // ===============================
 
 const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 
-// temp session injected from index.js
-let temp = null;
+// temp session (inject from index.js)
+let tempSession = null;
 
-/*
-|--------------------------------------------------------------------------
-| INIT CALLBACK ROUTER
-| index.js ကနေ bot + session inject လုပ်ရမယ်
-|--------------------------------------------------------------------------
-*/
-function initCallbackRouter({ bot, session }) {
-  temp = session;
+// ===============================
+// INIT
+// ===============================
+function registerCallbacks({ bot, session, ADMIN_IDS }) {
+  tempSession = session;
 
   bot.on("callback_query", async q => {
-    const chatId = q.message?.chat?.id?.toString();
+    const chatId = q.message.chat.id.toString();
     const data = q.data;
-
-    if (!chatId || !data) return;
-
-    const t = temp[chatId];
+    const t = tempSession[chatId];
 
     try {
       // ===============================
       // GAME SELECT
       // ===============================
       if (data === "MLBB" || data === "PUBG") {
-        temp[chatId] = {
+        tempSession[chatId] = {
           product: data,
-          step: "GAME",
+          step: "GAME_ID",
           items: [],
           msgs: []
         };
 
         const msgs = await ui.sendPriceList(bot, chatId, data);
-        temp[chatId].msgs.push(...msgs);
-        return;
+        tempSession[chatId].msgs.push(...msgs);
+        return bot.answerCallbackQuery(q.id);
       }
 
       // ===============================
       // CONFIRM ORDER
       // ===============================
       if (data === "CONFIRM") {
-        if (!t) {
-          await bot.sendMessage(chatId, "❌ Session expired. /start again");
-          return;
-        }
+        if (!t) return bot.answerCallbackQuery(q.id);
 
         if (t.previewMsgId) {
-          try {
-            await bot.deleteMessage(chatId, t.previewMsgId);
-          } catch {}
+          await bot.deleteMessage(chatId, t.previewMsgId).catch(() => {});
         }
 
         t.step = "PAY_METHOD";
         const m = await ui.sendPaymentMethods(bot, chatId);
         t.msgs.push(m);
-        return;
+
+        return bot.answerCallbackQuery(q.id);
       }
 
       // ===============================
       // PAYMENT METHOD
       // ===============================
       if (data.startsWith("PAY_")) {
-        if (!t) {
-          await bot.sendMessage(chatId, "❌ Session expired. /start again");
-          return;
-        }
+        if (!t) return bot.answerCallbackQuery(q.id);
 
         t.paymentMethod = data.replace("PAY_", "");
         t.step = "PAYMENT";
 
         await ui.sendPaymentInfo(bot, chatId, t.paymentMethod);
-        return;
+        return bot.answerCallbackQuery(q.id);
       }
 
       // ===============================
       // ADMIN APPROVE
       // ===============================
       if (data.startsWith("APPROVE_")) {
-        if (!isAdmin(q.from.id)) return;
+        if (!isAdmin(q.from.id.toString(), ADMIN_IDS)) {
+          return bot.answerCallbackQuery(q.id, {
+            text: "⛔ Admin only",
+            show_alert: true
+          });
+        }
 
         const orderId = data.replace("APPROVE_", "");
+        await orders.approveOrder({ bot, orderId });
 
-        await orders.approveOrder({
-          bot,
-          orderId
+        return bot.answerCallbackQuery(q.id, {
+          text: "✅ Order approved"
         });
-
-        return;
       }
 
       // ===============================
       // ADMIN REJECT
       // ===============================
       if (data.startsWith("REJECT_")) {
-        if (!isAdmin(q.from.id)) return;
+        if (!isAdmin(q.from.id.toString(), ADMIN_IDS)) {
+          return bot.answerCallbackQuery(q.id, {
+            text: "⛔ Admin only",
+            show_alert: true
+          });
+        }
 
         const orderId = data.replace("REJECT_", "");
+        await orders.rejectOrder({ bot, orderId });
 
-        await orders.rejectOrder({
-          bot,
-          orderId
+        return bot.answerCallbackQuery(q.id, {
+          text: "❌ Order rejected"
         });
-
-        return;
       }
 
+      // fallback
+      await bot.answerCallbackQuery(q.id);
+
     } catch (err) {
-      console.error("❌ Callback Error:", err);
+      console.error("Callback error:", err);
+      await bot.answerCallbackQuery(q.id, {
+        text: "⚠️ Error occurred",
+        show_alert: true
+      });
     }
   });
 }
 
-module.exports = initCallbackRouter;
+module.exports = registerCallbacks;
