@@ -2,7 +2,7 @@
 // CALLBACK QUERY ROUTER
 // ===============================
 
-const orders = require("./orders");
+const Order = require("./models/order");
 const ui = require("./ui");
 const { isAdmin } = require("./helpers");
 
