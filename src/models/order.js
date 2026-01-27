@@ -1,43 +1,41 @@
 // ===============================
-// ORDER MODEL (FINAL)
+// ORDER MODEL (Bika Store - FINAL)
 // ===============================
 
 const mongoose = require("mongoose");
 
-const OrderSchema = new mongoose.Schema(
+const orderSchema = new mongoose.Schema(
   {
-    // ===============================
-    // BASIC INFO
-    // ===============================
+    // Public Order ID (BKS-xxxx)
     orderId: {
       type: String,
       required: true,
-      unique: true,
-      index: true
+      unique: true
     },
 
+    // Telegram User ID
     userId: {
       type: String,
       required: true,
       index: true
     },
 
-    // 🔗 Reference to User collection
+    // Mongo User Ref (JOIN)
     userRef: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User"
     },
 
     username: {
-      type: String
+      type: String,
+      default: ""
     },
 
-    // ===============================
-    // PRODUCT INFO
-    // ===============================
+    // Product Info
     product: {
       type: String,
-      required: true
+      required: true,
+      enum: ["MLBB", "PUBG"]
     },
 
     gameId: {
@@ -46,24 +44,22 @@ const OrderSchema = new mongoose.Schema(
     },
 
     serverId: {
-      type: String
+      type: String,
+      default: ""
     },
 
-    items: [
-      {
-        name: String,
-        price: Number
-      }
-    ],
+    // Selected items (from prices.js)
+    items: {
+      type: Array,
+      default: []
+    },
 
     totalPrice: {
       type: Number,
       required: true
     },
 
-    // ===============================
-    // PAYMENT INFO
-    // ===============================
+    // Payment
     paymentMethod: {
       type: String,
       required: true
@@ -74,27 +70,7 @@ const OrderSchema = new mongoose.Schema(
       required: true
     },
 
-    // ===============================
-    // ADMIN UI TRACKING
-    // ===============================
-    adminChatId: {
-      type: String
-    },
-
-    adminMsgId: {
-      type: Number
-    },
-
-    // ===============================
-    // USER UI TRACKING
-    // ===============================
-    waitMsgId: {
-      type: Number
-    },
-
-    // ===============================
-    // ORDER STATUS
-    // ===============================
+    // Order Status
     status: {
       type: String,
       enum: ["PENDING", "COMPLETED", "REJECTED"],
@@ -102,24 +78,25 @@ const OrderSchema = new mongoose.Schema(
       index: true
     },
 
-    approvedAt: {
-      type: Date
-    },
+    // Telegram message references
+    waitMsgId: Number,
+    adminMsgId: Number,
+    adminChatId: String,
 
-    // ===============================
-    // AUTO CLEAN
-    // ===============================
-    expireAt: {
-      type: Date,
-      index: { expireAfterSeconds: 0 }
-    }
+    // Dates
+    approvedAt: Date,
+    expireAt: Date
   },
   {
-    timestamps: true
+    timestamps: true // createdAt / updatedAt
   }
 );
 
 // ===============================
-// EXPORT
+// INDEXES (performance)
 // ===============================
-module.exports = mongoose.model("Order", OrderSchema);
+orderSchema.index({ userId: 1, status: 1 });
+orderSchema.index({ approvedAt: 1 });
+
+// ===============================
+module.exports = mongoose.model("Order", orderSchema);
