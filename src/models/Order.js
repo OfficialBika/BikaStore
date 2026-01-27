@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const OrderSchema = new mongoose.Schema(
+const orderSchema = new mongoose.Schema(
   {
     orderId: {
       type: String,
@@ -8,54 +8,34 @@ const OrderSchema = new mongoose.Schema(
       unique: true
     },
 
-    userId: {
-      type: String,
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true
     },
-
-    userRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User"
-    },
-
-    username: String,
 
     product: {
       type: String,
       required: true
     },
 
-    gameId: String,
-    serverId: String,
-
-    items: {
-      type: Array,
-      default: []
+    package: {
+      type: String,
+      required: true
     },
 
-    totalPrice: {
+    price: {
       type: Number,
       required: true
     },
 
-    paymentMethod: String,
-    paymentPhoto: String,
-
     status: {
       type: String,
-      enum: ["PENDING", "COMPLETED", "REJECTED"],
-      default: "PENDING"
-    },
-
-    waitMsgId: Number,
-    adminMsgId: Number,
-    adminChatId: String,
-
-    approvedAt: Date,
-
-    expireAt: Date
+      enum: ["pending", "approved", "rejected"],
+      default: "pending"
+    }
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Order", OrderSchema);
+module.exports = mongoose.model("Order", orderSchema);
