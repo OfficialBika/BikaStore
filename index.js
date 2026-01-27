@@ -2,7 +2,7 @@
 // BIKA STORE — MAIN ENTRY (index.js)
 // ===============================
 
-// Core
+// Core //
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
