@@ -2,8 +2,8 @@
 // ORDERS LOGIC (BIKA STORE - FINAL)
 // ===============================
 
-const Order = require("./models/order");
-const User  = require("./models/User");
+const Order = require("./src/models/order");
+const User  = require("./src/models/User");
 const ui    = require("./ui");
 
 // ===============================
