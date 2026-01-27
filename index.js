@@ -2,11 +2,6 @@
 // BIKA STORE — MAIN ENTRY (index.js)
 // ===============================
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error("❌ MongoDB Error:", err));
-
 // Core //
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
@@ -16,6 +11,14 @@ const callbacks = require("./callbacks");
 const admin     = require("./admin");
 const user      = require("./user");
 const orders    = require("./orders");
+
+//MONGO DB//
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.error("❌ MongoDB Error:", err));
+
 
 // ===============================
 // BOT & SERVER SETUP
