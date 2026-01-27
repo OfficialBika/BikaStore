@@ -10,7 +10,7 @@ const commands  = require("./commands");
 const callbacks = require("./callbacks");
 const admin     = require("./admin");
 const user      = require("./user");
-const orders    = require("./orders");
+const Order = require("./models/order");
 
 //MONGO DB//
 
