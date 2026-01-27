@@ -72,11 +72,14 @@ function monthRange() {
 }
 
 // ===============================
-// SCHEMAS
+// ORDER SCHEMAS
 // ===============================
 const OrderSchema = new mongoose.Schema({
   orderId: String,
-  userId: String,
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "UserId"
+  },
   username: String,
   product: String,
   gameId: String,
@@ -94,7 +97,9 @@ const OrderSchema = new mongoose.Schema({
 });
 OrderSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 const Order = mongoose.model("Order", OrderSchema);
-
+//================
+// USER SCHEMA
+//================
 const UserSchema = new mongoose.Schema({
   userId: { type: String, unique: true },
   chatId: String,
@@ -110,26 +115,41 @@ const User = mongoose.model("User", UserSchema);
 const temp = {};
 
 // ===============================
-// /start
+// /start bot  (STEP 3 — USER UPSERT)
 // ===============================
 bot.onText(/\/start/, async msg => {
-  const id = msg.chat.id.toString();
+  const chatId = msg.chat.id.toString();
 
-  await User.updateOne(
-  { userId: msg.from.id.toString() },
-  {
-    $set: {
-      username: msg.from.username || msg.from.first_name || ""
+  // ✅ USER UPSERT (1 user = 1 row)
+  const user = await User.findOneAndUpdate(
+    { userId: chatId },               // 🔑 unique key
+    {
+      $set: {
+        username: msg.from.username || "",
+        firstName: msg.from.first_name || "",
+        updatedAt: new Date()
+      },
+      $setOnInsert: {
+        createdAt: new Date()
+      }
+    },
+    {
+      upsert: true,
+      new: true
     }
-  },
-  { upsert: true }
-);
-  bot.sendMessage(id,"🛒 *Bika Store*\n\nGame ကိုရွေးပါ 👇",{
-    parse_mode:"Markdown",
-    reply_markup:{
-      inline_keyboard:[
-        [{ text:"💎 MLBB Diamonds", callback_data:"MLBB" }],
-        [{ text:"🎯 PUBG UC", callback_data:"PUBG" }]
+  );
+
+  // (optional) temp session မှာ user _id သိမ်း
+  temp[chatId] = temp[chatId] || {};
+  temp[chatId].userObjectId = user._id;
+
+  // UI
+  bot.sendMessage(chatId, "🛒 *Bika Store*\n\nGame ကိုရွေးပါ 👇", {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
+        [{ text: "🎯 PUBG UC", callback_data: "PUBG" }]
       ]
     }
   });
@@ -206,6 +226,30 @@ bot.onText(/\/broadcast (.+)/, async (msg,match)=>{
     } catch {}
   }
   bot.sendMessage(msg.chat.id,"✅ Broadcast sent");
+});
+
+//Admin Dashboard(cmd)//
+
+bot.onText(/\/admin/, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const totalOrders = await Order.countDocuments();
+  const pending = await Order.countDocuments({ status:"PENDING" });
+  const completed = await Order.countDocuments({ status:"COMPLETED" });
+
+  const revenue = await Order.aggregate([
+    { $match:{ status:"COMPLETED" } },
+    { $group:{ _id:null, sum:{ $sum:"$totalPrice" }}}
+  ]);
+
+  bot.sendMessage(msg.chat.id,
+`📊 *Admin Dashboard*
+━━━━━━━━━━━━━━━
+📦 Total Orders: ${totalOrders}
+⏳ Pending: ${pending}
+✅ Completed: ${completed}
+💰 Revenue: ${(revenue[0]?.sum || 0).toLocaleString()} MMK`,
+{ parse_mode:"Markdown" });
 });
 
 
@@ -394,6 +438,20 @@ bot.on("photo", async msg => {
   const chatId = msg.chat.id;
   const t = temp[chatId];
   if (!t || t.step !== "PAYMENT") return;
+  if (!t.userObjectId) {
+  return bot.sendMessage(chatId,
+    "⚠️ Session expired ဖြစ်သွားပါတယ်\n/start ကို ပြန်နှိပ်ပြီး ထပ်လုပ်ပါ");
+  }
+ const existing = await Order.findOne({
+  user: t.userObjectId,
+  status: "PENDING"
+});
+
+if (existing) {
+  return bot.sendMessage(chatId,
+"⛔ မပြီးသေးတဲ့ Order ရှိနေပါသည်\nAdmin စစ်ဆေးပြီးမှ နောက်ထပ် order တင်နိုင်ပါမယ်");
+}
+  
 
   const userMsg = await bot.sendPhoto(chatId,msg.photo.at(-1).file_id,{
     caption:
@@ -404,16 +462,16 @@ bot.on("photo", async msg => {
 🆔 ${t.gameId} (${t.serverId})
 💰 ${t.totalPrice.toLocaleString()} MMK
 
-📨 Admin ထံ ပေးပို့ထားပါသည်`
+📨 Admin ထံ ပေးပို့ထားပါသည် `
   });
 
   const waitMsg = await bot.sendMessage(chatId,
-`⏳ Admin စစ်ဆေးနေပါသည်...
+`⏳ Admin စစ်ဆေးနေပါသည် ခနစောင့်ပါ...
 Your Order ID: ${t.orderId}`);
 
   const order = await Order.create({
     orderId: t.orderId,
-    userId: chatId.toString(),
+    user: t.userObjectId,
     username: msg.from.username || msg.from.first_name,
     product: t.product,
     gameId: t.gameId,
