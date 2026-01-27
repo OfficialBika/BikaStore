@@ -11,6 +11,23 @@ const orders = require("./orders");
 // ===============================
 function initUser({ bot, temp, ADMIN_IDS }) {
 
+
+  // src/handlers/user.js
+
+async function onMessage(bot, msg) {
+  const chatId = msg.chat.id;
+  console.log("USER MESSAGE:", msg.text);
+
+  // test reply
+  if (msg.text === "/start") {
+    await bot.sendMessage(chatId, "👋 Welcome from user.js");
+  }
+}
+
+module.exports = {
+  onMessage
+};
+  
   // ===============================
   // TEXT MESSAGE
   // ===============================
