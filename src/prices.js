@@ -1,5 +1,5 @@
 // ===============================
-// PRICES CONFIG (Bika Store)
+// PRICES CONFIG (Bika Store - FINAL)
 // ===============================
 
 module.exports = {
@@ -32,27 +32,19 @@ module.exports = {
       { id: "MLBB_2195", label: "💎 2195 Diamonds", diamonds: 2195, price: 118900 },
       { id: "MLBB_3158", label: "💎 3158 Diamonds", diamonds: 3158, price: 172000 },
       { id: "MLBB_3688", label: "💎 3688 Diamonds", diamonds: 3688, price: 202000 }
-    ],
-
-    // Optional: WP prices (kept here so you can show in UI if needed)
-    wp: [
-      { id: "MLBB_WP1", label: "WP 1", price: 5900 },
-      { id: "MLBB_WP2", label: "WP 2", price: 11800 },
-      { id: "MLBB_WP3", label: "WP 3", price: 17700 },
-      { id: "MLBB_WP4", label: "WP 4", price: 23600 },
-      { id: "MLBB_WP5", label: "WP 5", price: 29500 }
     ]
   },
 
   PUBG: {
-  name: "PUBG Mobile",
-  currency: "MMK",
-  items: [
-    { id: "PUBG_60",   label: "🤩 60 UC",   uc: 60,   price: 4500 },
-    { id: "PUBG_325",  label: "🤩 325 UC",  uc: 325,  price: 19500 },
-    { id: "PUBG_660",  label: "🤩 660 UC",  uc: 660,  price: 38000 },
-    { id: "PUBG_1800", label: "🤩 1800 UC", uc: 1800, price: 90500 },
-    { id: "PUBG_3850", label: "🤩 3850 UC", uc: 3850, price: 185000 },
-    { id: "PUBG_8100", label: "🤩 8100 UC", uc: 8100, price: 363000 }
-  ]
+    name: "PUBG Mobile",
+    currency: "MMK",
+    items: [
+      { id: "PUBG_60",   label: "🤩 60 UC",   uc: 60,   price: 4500 },
+      { id: "PUBG_325",  label: "🤩 325 UC",  uc: 325,  price: 19500 },
+      { id: "PUBG_660",  label: "🤩 660 UC",  uc: 660,  price: 38000 },
+      { id: "PUBG_1800", label: "🤩 1800 UC", uc: 1800, price: 90500 },
+      { id: "PUBG_3850", label: "🤩 3850 UC", uc: 3850, price: 185000 },
+      { id: "PUBG_8100", label: "🤩 8100 UC", uc: 8100, price: 363000 }
+    ]
   }
+};
