@@ -21,8 +21,18 @@ const MONGO_URI = process.env.MONGO_URI;
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_IDS = process.env.ADMIN_CHAT_IDS
-  ? process.env.ADMIN_CHAT_IDS.split(",")
+  ? process.env.ADMIN_CHAT_IDS.split(",").map(s => s.trim()).filter(Boolean)
   : [];
+
+// Basic env guard (avoid silent crashes)
+if (!BOT_TOKEN) {
+  console.error("❌ Missing env: BOT_TOKEN");
+  process.exit(1);
+}
+if (!MONGO_URI) {
+  console.error("❌ Missing env: MONGO_URI");
+  process.exit(1);
+}
 
 // ===============================
 // DB CONNECT
@@ -41,7 +51,7 @@ const app = express();
 // ===============================
 // TEMP SESSION (GLOBAL)
 // ===============================
-const session = {};
+const session = Object.create(null);
 
 // ===============================
 // GLOBAL CONTEXT
@@ -53,24 +63,28 @@ const context = {
 };
 
 // ===============================
-// REGISTER COMMANDS
+// REGISTER COMMANDS & CALLBACKS
 // ===============================
 registerCommands(context);
+registerCallbacks(context);
 
 // ===============================
-// REGISTER CALLBACK QUERIES
+// HELPERS
 // ===============================
-registerCallbacks(context);
+function getChatId(msg) {
+  // For "message" events, msg.chat.id is always the reliable chat identifier
+  return msg?.chat?.id != null ? String(msg.chat.id) : null;
+}
 
 // ===============================
 // USER / ADMIN MESSAGE HANDLER
 // ===============================
 bot.on("message", async msg => {
   try {
-    if (!msg.text) return;
+    if (!msg || !msg.text) return;
 
-    const chatId = msg.from?.id?.toString();
-    const chatId = msg.chat.id.toString();
+    const chatId = getChatId(msg);
+    if (!chatId) return;
 
     // ===============================
     // ADMIN MESSAGE
@@ -79,9 +93,10 @@ bot.on("message", async msg => {
       await adminHandlers.onMessage({
         bot,
         msg,
+        session,   // pass session too (optional but useful)
         ADMIN_IDS
       });
-      return; // ❗ admin message ကို user handler မပို့
+      return; // admin message ကို user handler မပို့
     }
 
     // ===============================
@@ -93,7 +108,6 @@ bot.on("message", async msg => {
       session,
       ADMIN_IDS
     });
-
   } catch (err) {
     console.error("Message handler error:", err);
   }
@@ -104,6 +118,8 @@ bot.on("message", async msg => {
 // ===============================
 bot.on("photo", async msg => {
   try {
+    if (!msg) return;
+
     await userHandlers.onPaymentPhoto({
       bot,
       msg,
@@ -113,6 +129,11 @@ bot.on("photo", async msg => {
   } catch (err) {
     console.error("Photo handler error:", err);
   }
+});
+
+// Optional: Log polling errors so you can diagnose quickly
+bot.on("polling_error", err => {
+  console.error("Polling error:", err?.message || err);
 });
 
 // ===============================
@@ -125,3 +146,9 @@ app.get("/", (_, res) => {
 app.listen(PORT, () => {
   console.log(`🌐 Server running on port ${PORT}`);
 });
+
+// ===============================
+// GRACEFUL SHUTDOWN (RENDER/PROD)
+// ===============================
+process.on("SIGINT", () => bot.stopPolling().finally(() => process.exit(0)));
+process.on("SIGTERM", () => bot.stopPolling().finally(() => process.exit(0)));
