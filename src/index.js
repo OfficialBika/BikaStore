@@ -53,10 +53,8 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "bika_webhook";
 const WEBHOOK_PATH = `/telegram/${WEBHOOK_SECRET}`;
 
 app.post(WEBHOOK_PATH, (req, res) => {
-  res.sendStatus(200); // reply fast
-
-  console.log("✅ WEBHOOK HIT:", req.body?.update_id, Object.keys(req.body || {}));
   bot.processUpdate(req.body);
+  res.sendStatus(200); //fast reply
 });
 
 // ===============================
