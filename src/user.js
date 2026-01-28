@@ -1,24 +1,71 @@
 // ===============================
-// USER HANDLER (CLEAN & FINAL)
+// USER HANDLER (FINAL)
+// Flow:
+// /start -> (callbacks: MLBB/PUBG) -> ask ID+ServerID -> ask Diamonds/UC amount
+// -> preview (callbacks: confirm/cancel) -> payment method (callbacks)
+// -> ask receipt photo -> photo upload -> create order (orders.createOrder)
 // ===============================
 
 const ui = require("./ui");
 const orders = require("./orders");
 
-// ===============================
-// USER TEXT HANDLER
-// ===============================
-async function onMessage({ bot, msg, session }) {
-  const chatId = msg.chat.id.toString();
-  const text = msg.text?.trim();
+// -------------------------------
+// Helpers
+// -------------------------------
+function getChatId(msg) {
+  return msg?.chat?.id != null ? String(msg.chat.id) : null;
+}
 
+function ensureSession(session, chatId) {
+  if (!session[chatId] || typeof session[chatId] !== "object") {
+    session[chatId] = {};
+  }
+  return session[chatId];
+}
+
+// Parse "id serverId" or "id|serverId" or "id,serverId" etc.
+function parseGameIdAndServer(input) {
+  const raw = String(input || "").trim();
+  // allow separators: space, comma, |, /, -, :
+  const parts = raw.split(/[\s,|\/\-:]+/).filter(Boolean);
+
+  if (parts.length < 2) return null;
+
+  const gameId = parts[0];
+  const serverId = parts[1];
+
+  // simple sanity checks: numbers only is common, but allow alphanum just in case
+  if (!gameId || !serverId) return null;
+
+  return { gameId, serverId };
+}
+
+function isPositiveIntString(s) {
+  if (typeof s !== "string") return false;
+  if (!/^\d+$/.test(s)) return false;
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0;
+}
+
+// -------------------------------
+// USER TEXT HANDLER
+// -------------------------------
+async function onMessage({ bot, msg, session, ADMIN_IDS }) {
+  const chatId = getChatId(msg);
+  if (!chatId) return;
+
+  const text = msg.text?.trim();
   if (!text) return;
+
+  const t = ensureSession(session, chatId);
 
   // ===============================
   // /start (RESET FLOW)
   // ===============================
   if (text === "/start") {
-    session[chatId] = {};
+    session[chatId] = {
+      step: "CHOOSE_GAME"
+    };
 
     await bot.sendMessage(
       chatId,
@@ -27,8 +74,8 @@ async function onMessage({ bot, msg, session }) {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
-            [{ text: "💎 MLBB Diamonds", callback_data: "MLBB" }],
-            [{ text: "🎯 PUBG UC", callback_data: "PUBG" }]
+            [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
+            [{ text: "🎯 PUBG UC", callback_data: "GAME:PUBG" }]
           ]
         }
       }
@@ -36,69 +83,100 @@ async function onMessage({ bot, msg, session }) {
     return;
   }
 
-  const t = session[chatId];
-  if (!t || !t.step) return;
+  // If user hasn't started, ignore or gently guide
+  if (!t.step) return;
 
   // ===============================
-  // STEP: GAME → USER ID
+  // STEP: WAIT_GAME_ID (ID + ServerID)
   // ===============================
-  if (t.step === "GAME") {
-    t.gameUserId = text;
-    t.step = "QTY";
-
-    await bot.sendMessage(
-      chatId,
-      "📦 *Quantity ကို ထည့်ပါ*",
-      { parse_mode: "Markdown" }
-    );
-    return;
-  }
-
-  // ===============================
-  // STEP: QTY → CONFIRM
-  // ===============================
-  if (t.step === "QTY") {
-    if (isNaN(text)) {
-      await bot.sendMessage(chatId, "❌ Quantity မှန်အောင် ထည့်ပါ");
+  if (t.step === "WAIT_GAME_ID") {
+    const parsed = parseGameIdAndServer(text);
+    if (!parsed) {
+      await bot.sendMessage(
+        chatId,
+        "❌ *ID နဲ့ Server ID ကို မှန်အောင်ထည့်ပါ*\n\nဥပမာ:\n`123456789 1234`\n( space သို့မဟုတ် comma သို့မဟုတ် | နဲ့ခွဲလို့ရ )",
+        { parse_mode: "Markdown" }
+      );
       return;
     }
 
-    t.qty = Number(text);
-    t.step = "CONFIRM";
+    t.game_id = parsed.gameId;
+    t.server_id = parsed.serverId;
 
-    return ui.sendOrderPreview(bot, chatId, t);
-  }
+    // Next: ask amount (diamonds/UC)
+    t.step = "WAIT_AMOUNT";
 
-  // ===============================
-  // STEP: PAYMENT METHOD
-  // ===============================
-  if (t.step === "PAY_METHOD") {
-    return;
-  }
-
-  // ===============================
-  // STEP: PAYMENT (WAIT PHOTO)
-  // ===============================
-  if (t.step === "PAYMENT") {
+    // If you want amount selection via inline buttons, do it in ui.
+    // Here we ask as text input (safe fallback).
     await bot.sendMessage(
       chatId,
-      "📸 Screenshot ကို *photo* အနေနဲ့ ပို့ပါ",
+      t.game === "MLBB"
+        ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: `86`)"
+        : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
       { parse_mode: "Markdown" }
     );
     return;
   }
+
+  // ===============================
+  // STEP: WAIT_AMOUNT (Diamonds/UC amount)
+  // ===============================
+  if (t.step === "WAIT_AMOUNT") {
+    if (!isPositiveIntString(text)) {
+      await bot.sendMessage(chatId, "❌ ပမာဏကို ကိန်းဂဏန်း (1,2,3...) နဲ့ပဲ ထည့်ပါ");
+      return;
+    }
+
+    t.amount = Number(text);
+
+    // price calc: let ui or prices module handle.
+    // We call ui to prepare preview and totals.
+    t.step = "PREVIEW";
+
+    // ui.sendOrderPreview should show:
+    // - Order ID (temp)
+    // - game, game_id, server_id
+    // - amount
+    // - total mmk
+    // - order time
+    // - inline buttons: confirm/cancel
+    await ui.sendOrderPreview(bot, chatId, t);
+    return;
+  }
+
+  // ===============================
+  // STEP: WAIT_RECEIPT (Tell user to send photo)
+  // (We DON'T accept text here except reminding)
+  // ===============================
+  if (t.step === "WAIT_RECEIPT") {
+    await bot.sendMessage(
+      chatId,
+      "📸 *ပြေစာ Screenshot ကို photo အနေနဲ့ ပို့ပါ*\n(Album မပို့ပါနဲ့—Photo တစ်ပုံချင်းပို့ပါ)",
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
+  // Otherwise: ignore
 }
 
-// ===============================
+// -------------------------------
 // PAYMENT PHOTO HANDLER
-// ===============================
+// -------------------------------
 async function onPaymentPhoto({ bot, msg, session, ADMIN_IDS }) {
-  const chatId = msg.chat.id.toString();
+  const chatId = getChatId(msg);
+  if (!chatId) return;
+
   const t = session[chatId];
 
-  if (!t || t.step !== "PAYMENT") return;
+  // Only accept receipt photo at correct step
+  if (!t || t.step !== "WAIT_RECEIPT") return;
 
   try {
+    // orders.createOrder should:
+    // - save order to DB
+    // - send user confirmation ("admin စစ်ဆေးနေပါသည်")
+    // - forward receipt + order details to admin chat with approve/decline buttons
     await orders.createOrder({
       bot,
       msg,
@@ -106,11 +184,11 @@ async function onPaymentPhoto({ bot, msg, session, ADMIN_IDS }) {
       ADMIN_IDS
     });
 
-    session[chatId] = null; // ✅ clear session
-
+    // Clear session after successful order creation
+    delete session[chatId];
   } catch (err) {
     console.error("❌ Payment photo error:", err);
-    await bot.sendMessage(chatId, "⚠️ Order failed. Try again.");
+    await bot.sendMessage(chatId, "⚠️ Order failed. Try again with /start");
   }
 }
 
