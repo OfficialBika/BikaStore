@@ -213,21 +213,22 @@ async function rejectOrder({ bot, orderId }) {
 
   if (!order) return;
 
-  // ❌ delete waiting message
+  // user waiting msg ဖျက် (ရှိရင်)
   if (order.waitMsgId) {
     try {
       await bot.deleteMessage(order.userId, order.waitMsgId);
     } catch (_) {}
   }
 
-  // notify user
-  await ui.notifyUserRejected(bot, order);
+  // user ကို reject စာပို့
+  try {
+    await ui.notifyUserRejected(bot, order);
+  } catch (e) {
+    console.error("notifyUserRejected failed:", e?.message || e);
+  }
 
-  // edit admin messages (safe)
-  const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
-    ? order.adminMessages
-    : [];
-
+  // admin message edit (multi admin)
+  const targets = Array.isArray(order.adminMessages) ? order.adminMessages : [];
   for (const m of targets) {
     try {
       await ui.updateAdminMessage(
