@@ -16,11 +16,30 @@ function getChatId(msg) {
   return msg?.chat?.id != null ? String(msg.chat.id) : null;
 }
 
+async function safeDelete(bot, chatId, messageId) {
+  if (!messageId) return;
+  try {
+    await bot.deleteMessage(chatId, messageId);
+  } catch (_) {}
+}
+
+function rememberMsg(t, key, messageObj) {
+  if (!t || !t.msg || !messageObj) return;
+  t.msg[key] = messageObj.message_id;
+  // keep stack too (optional)
+  if (Array.isArray(t.msg.stack)) t.msg.stack.push(messageObj.message_id);
+}
+
+
 function ensureSession(session, chatId) {
-  if (!session[chatId] || typeof session[chatId] !== "object") {
-    session[chatId] = {};
-  }
-  return session[chatId];
+  // inside ensureSession(session, chatId) BEFORE return session[chatId]
+if (!session[chatId].msg || typeof session[chatId].msg !== "object") {
+  session[chatId].msg = Object.create(null);
+}
+// optional stack for bulk delete
+if (!Array.isArray(session[chatId].msg.stack)) {
+  session[chatId].msg.stack = [];
+}
 }
 
 // Parse "id serverId" or "id|serverId" or "id,serverId" etc.
