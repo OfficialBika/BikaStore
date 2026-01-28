@@ -175,30 +175,23 @@ async function approveOrder({ bot, orderId }) {
 
   if (!order) return;
 
-  // ❌ delete waiting message
+  // delete waiting message
   if (order.waitMsgId) {
     try {
       await bot.deleteMessage(order.userId, order.waitMsgId);
     } catch (_) {}
   }
 
-  // notify user first (new message)
+  // notify user
   try {
-  await ui.notifyUserApproved(bot, order);
-  console.log("✅ user notified approved:", order.userId);
-} catch (e) {
-  console.error(
-    "❌ notifyUserApproved failed:",
-    order.userId,
-    e?.response?.body || e?.message || e
-  );
+    await ui.notifyUserApproved(bot, order);
+    console.log("✅ user notified approved:", order.userId);
+  } catch (e) {
+    console.error("❌ notifyUserApproved failed:", e);
   }
 
-  // edit admin messages (safe)
-  const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
-    ? order.adminMessages
-    : [];
-
+  // edit admin messages
+  const targets = Array.isArray(order.adminMessages) ? order.adminMessages : [];
   for (const m of targets) {
     try {
       await ui.updateAdminMessage(
@@ -207,10 +200,10 @@ async function approveOrder({ bot, orderId }) {
         "APPROVED"
       );
     } catch (e) {
-      console.error("Admin approve edit failed:", e?.message || e);
+      console.error("Admin approve edit failed:", e);
     }
   }
-} // ✅ END approveOrder
+} // ✅ ဒီ brace က အရမ်းအရေးကြီး// ✅ END approveOrder
 
 // ===============================
 // REJECT ORDER
@@ -256,7 +249,7 @@ async function rejectOrder({ bot, orderId }) {
       console.error("Admin reject edit failed:", e?.message || e);
     }
   }
-} // ✅ END rejectOrder
+}// ✅ END rejectOrder
 
 // ===============================
 // STATS
