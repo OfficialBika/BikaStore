@@ -48,9 +48,9 @@ const orderSchema = new mongoose.Schema(
       default: ""
     },
 
-    // Diamonds/UC Amount
+ // Diamonds / UC / WP amount (supports numeric & wp codes)
 amount: {
-  type: Number,
+  type: String,
   required: true
 },
     adminMessages: {
