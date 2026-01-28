@@ -1,124 +1,53 @@
 // ===============================
-// ADMIN HANDLERS (BIKA STORE - STABLE)
+// ADMIN HANDLERS (BIKA STORE - FINAL)
 // ===============================
 
-const orders = require("./orders");
 const ui = require("./ui");
+const orders = require("./orders");
 const { isAdmin, monthRange } = require("./helpers");
-const User = require("./models/User");
 
-// ===============================
-// ADMIN MESSAGE HANDLER
-// ===============================
+// Admin က message ပို့တဲ့အခါ text command style နဲ့ handle လုပ်ချင်ရင် ဒီမှာ
+// (commands.js က /status /top10 /myrank ကို register လုပ်ထားပြီးသား)
+// ဒီ admin.js ကို index.js မှာ adminHandlers.onMessage({...}) လို့ခေါ်ထားတဲ့အတွက်
+// အဓိကမှာ: admin chat ထဲက non-command message တွေကို friendly response ပေးထားမယ်။
+
 async function onMessage({ bot, msg, ADMIN_IDS }) {
-  const chatId = msg.chat.id.toString();
-  const text = (msg.text || "").trim();
+  const chatId = String(msg.chat.id);
+  const fromId = String(msg.from?.id || "");
 
-  // 🛑 admin only
-  if (!isAdmin(chatId, ADMIN_IDS)) return;
+  if (!isAdmin(fromId, ADMIN_IDS)) return;
 
-  try {
-    // ===============================
-    // /status
-    // ===============================
-    if (text === "/status") {
-      const stats = await orders.getStatusStats(true);
-      return bot.sendMessage(
-        chatId,
-        ui.statusUI(stats),
-        { parse_mode: "Markdown" }
-      );
-    }
+  const text = msg.text?.trim();
+  if (!text) return;
 
-    // ===============================
-    // /top10
-    // ===============================
-    if (text === "/top10") {
-      const { start, end } = monthRange();
-      const list = await orders.getTop10(start, end);
+  // Optional: extra admin text shortcuts
+  // "/month" -> top10 current month
+  if (/^\/month$/i.test(text)) {
+    const [start, end] = monthRange();
+    const list = await orders.getTop10(start, end);
+    return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
+  }
 
-      if (!list.length) {
-        return bot.sendMessage(chatId, "📭 ဒီလ Order မရှိသေးပါ");
-      }
-
-      return bot.sendMessage(
-        chatId,
-        ui.top10UI(list),
-        { parse_mode: "Markdown" }
-      );
-    }
-
-    // ===============================
-    // /myrank
-    // ===============================
-    if (text === "/myrank") {
-      const { start, end } = monthRange();
-      const rank = await orders.getUserRank(chatId, start, end);
-
-      if (!rank) {
-        return bot.sendMessage(chatId, "📭 ဒီလ Order မရှိသေးပါ");
-      }
-
-      return bot.sendMessage(
-        chatId,
-        ui.myRankUI(rank.rank, rank.total),
-        { parse_mode: "Markdown" }
-      );
-    }
-
-    // ===============================
-    // /broadcast <message>
-    // ===============================
-    if (text.startsWith("/broadcast")) {
-      const message = text.replace("/broadcast", "").trim();
-      if (!message) {
-        return bot.sendMessage(
-          chatId,
-          "❗ Usage:\n/broadcast Your message here"
-        );
-      }
-
-      const users = await User.find({}, { userId: 1 });
-
-      let success = 0;
-      let fail = 0;
-
-      for (const u of users) {
-        try {
-          await bot.sendMessage(
-            u.userId,
-            `📢 *Broadcast*
-━━━━━━━━━━━━━━━
-
-${message}`,
-            { parse_mode: "Markdown" }
-          );
-          success++;
-        } catch {
-          fail++;
-        }
-      }
-
-      return bot.sendMessage(
-        chatId,
-        `✅ *Broadcast Completed*
-━━━━━━━━━━━━━━━
-👥 Sent: ${success}
-🚫 Failed: ${fail}`,
-        { parse_mode: "Markdown" }
-      );
-    }
-
-  } catch (err) {
-    console.error("Admin handler error:", err);
-    await bot.sendMessage(
+  // Default help
+  if (/^\/help$/i.test(text) || /^help$/i.test(text)) {
+    return bot.sendMessage(
       chatId,
-      "⚠️ Admin command error occurred"
+      `👑 *Admin Commands*
+/status - bot status
+/top10 - top 10 users (this month)
+/myrank - your rank (this month)
+
+Approve/Reject ကိုတော့ order message အောက်က button နဲ့လုပ်ပါ ✅`,
+      { parse_mode: "Markdown" }
     );
+  }
+
+  // If admin types something else, just ignore or show hint
+  if (text.startsWith("/")) {
+    return bot.sendMessage(chatId, "⚠️ Unknown command. /help");
   }
 }
 
-// ===============================
 module.exports = {
   onMessage
 };
