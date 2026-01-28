@@ -166,6 +166,13 @@ async function approveOrder({ bot, orderId }) {
 
   if (!order) return;
 
+  // ❌ delete waiting message
+if (order.waitMsgId) {
+  try {
+    await bot.deleteMessage(order.userId, order.waitMsgId);
+  } catch (_) {}
+}
+
   await ui.notifyUserApproved(bot, order);
 
   for (const m of order.adminMessages || []) {
@@ -190,6 +197,13 @@ async function rejectOrder({ bot, orderId }) {
   );
 
   if (!order) return;
+
+  // ❌ delete waiting message
+if (order.waitMsgId) {
+  try {
+    await bot.deleteMessage(order.userId, order.waitMsgId);
+  } catch (_) {}
+}
 
   await ui.notifyUserRejected(bot, order);
 
