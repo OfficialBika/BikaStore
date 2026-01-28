@@ -84,7 +84,7 @@ async function sendPriceList(bot, chatId, productKey) {
     .map(i => `• ${esc(i.label)} — *${Number(i.price).toLocaleString()} ${esc(product.currency || "MMK")}*`)
     .join("\n");
 
-  await bot.sendMessage(
+  return bot.sendMessage(
     chatId,
     `📋 *${esc(product.name || productKey)} PRICE LIST*\n━━━━━━━━━━━━━━━\n${list || "_No prices found_"} `,
     { parse_mode: "Markdown" }
