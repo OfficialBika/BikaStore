@@ -222,6 +222,23 @@ async function onPaymentPhoto({ bot, msg, session, ADMIN_IDS }) {
   // Only accept receipt photo at correct step
   if (!t || t.step !== "WAIT_RECEIPT") return;
 
+  // ❌ delete payment info message
+try {
+  if (t.msg?.paymentInfoId) {
+    await bot.deleteMessage(chatId, t.msg.paymentInfoId);
+    delete t.msg.paymentInfoId;
+  }
+} catch (_) {}
+
+// ❌ delete preview message if still exists
+try {
+  if (t.msg?.previewId) {
+    await bot.deleteMessage(chatId, t.msg.previewId);
+    delete t.msg.previewId;
+  }
+} catch (_) {}
+  
+
   try {
     // orders.createOrder should:
     // - save order to DB
