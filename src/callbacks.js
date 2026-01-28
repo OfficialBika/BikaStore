@@ -25,28 +25,36 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // GAME SELECT (from /start keyboard)
       // callback_data: "GAME:MLBB" | "GAME:PUBG"
       // ===============================
-      if (data === "GAME:MLBB" || data === "GAME:PUBG") {
+     if (data === "GAME:MLBB" || data === "GAME:PUBG") {
   const game = data.split(":")[1]; // MLBB | PUBG
 
   session[chatId] = {
     step: "WAIT_GAME_ID",
     game,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    msg: Object.create(null) // ✅ message ids store
   };
+
+  const t = session[chatId];
 
   await ack();
 
-  // ✅ 1) Send price list first
-  await ui.sendPriceList(bot, chatId, game);
+  // ✅ 1) Send price list first (and remember id)
+  const priceMsg = await ui.sendPriceList(bot, chatId, game);
+  t.msg.priceListId = priceMsg?.message_id;
 
-  // ✅ 2) Then ask for ID + Server ID
-  return bot.sendMessage(
+  // ✅ 2) Then ask for ID + Server ID (and remember id)
+  const askIdMsg = await bot.sendMessage(
     chatId,
     game === "MLBB"
       ? "🆔 *MLBB ID + Server ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1234`"
       : "🆔 *PUBG ID (သို့) Character ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1`",
     { parse_mode: "Markdown" }
   );
+
+  t.msg.askIdId = askIdMsg?.message_id;
+
+  return;
 }
 
       // ===============================
