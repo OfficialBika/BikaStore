@@ -54,14 +54,17 @@ async function createOrder({ bot, msg, session, ADMIN_IDS }) {
   const product = t.game || t.product; // MLBB | PUBG
   const gameId = t.game_id || t.gameId || "";
   const serverId = t.server_id || t.serverId || "";
-  const amountRaw = t.amount ?? t.qty ?? null;
-const amount = amountRaw == null ? null : Number(amountRaw);
+  
+  const amount =
+  t.amount != null ? String(t.amount).trim()
+  : t.qty != null ? String(t.qty).trim()
+  : null;
 
-  if (!product || !gameId || amount == null) {
-    await bot.sendMessage(chatId, "❌ Order info မစုံပါ။ /start နဲ့ပြန်စပါ");
-    return null;
-  }
-
+if (!product || !gameId || !amount) {
+  await bot.sendMessage(chatId, "❌ Order info မစုံပါ။ /start နဲ့ပြန်စပါ");
+  return null;
+}
+  
   // 👤 user reference (optional)
   const user = await User.findOne({ userId: chatId });
 
