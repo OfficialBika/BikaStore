@@ -82,24 +82,28 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
   // /start (RESET FLOW)
   // ===============================
   if (text === "/start") {
-    session[chatId] = {
-      step: "CHOOSE_GAME"
-    };
+  session[chatId] = { step: "CHOOSE_GAME", msg: Object.create(null) };
 
-    await bot.sendMessage(
-      chatId,
-      "👋 *Welcome to BikaStore!*\n\n🎮 Game တစ်ခုကို ရွေးပါ ⬇️",
-      {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
-            [{ text: "🎯 PUBG UC", callback_data: "GAME:PUBG" }]
-          ]
-        }
+  // ✅ send start menu and remember message id
+  const m = await bot.sendMessage(
+    chatId,
+    "👋 *Welcome to BikaStore!*\n\n🎮 Game တစ်ခုကို ရွေးပါ ⬇️",
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
+          [{ text: "🎯 PUBG UC", callback_data: "GAME:PUBG" }]
+        ]
       }
-    );
-    return;
+    }
+  );
+
+  // remember message id in session
+  const t2 = ensureSession(session, chatId);
+  rememberMsg(t2, "startMenuId", m);
+
+  return;
   }
 
   // If user hasn't started, ignore or gently guide
