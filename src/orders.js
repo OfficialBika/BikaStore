@@ -54,24 +54,27 @@ async function createOrder({ bot, msg, session, ADMIN_IDS }) {
   const product = t.game || t.product; // MLBB | PUBG
   const gameId = t.game_id || t.gameId || "";
   const serverId = t.server_id || t.serverId || "";
-  
-  const amount =
-  t.amount != null ? String(t.amount).trim()
-  : t.qty != null ? String(t.qty).trim()
-  : null;
 
-if (!product || !gameId || !amount) {
-  await bot.sendMessage(chatId, "❌ Order info မစုံပါ။ /start နဲ့ပြန်စပါ");
-  return null;
-}
-  
+  // amount supports numeric and wp/wp1/wp2...
+  const amount =
+    t.amount != null ? String(t.amount).trim()
+    : t.qty != null ? String(t.qty).trim()
+    : null;
+
+  if (!product || !gameId || !amount) {
+    await bot.sendMessage(chatId, "❌ Order info မစုံပါ။ /start နဲ့ပြန်စပါ");
+    return null;
+  }
+
   // 👤 user reference (optional)
   const user = await User.findOne({ userId: chatId });
 
   // Username safe
   const usernameRaw = msg.from?.username || msg.from?.first_name || "";
   const username = String(usernameRaw).trim();
-  const usernameLabel = username ? `@${escapeMd(username)}` : escapeMd(msg.from?.first_name || "User");
+  const usernameLabel = username
+    ? `@${escapeMd(username)}`
+    : escapeMd(msg.from?.first_name || "User");
 
   // ===============================
   // CREATE ORDER
@@ -84,11 +87,11 @@ if (!product || !gameId || !amount) {
 
     username,
 
-    product,          // MLBB/PUBG
+    product, // MLBB/PUBG
     gameId,
     serverId,
 
-    amount,           // ✅ store amount for preview/notify
+    amount, // ✅ store amount for preview/notify
     items: t.items || [],
 
     totalPrice: t.totalPrice ?? 0,
@@ -171,31 +174,32 @@ async function approveOrder({ bot, orderId }) {
   if (!order) return;
 
   // ❌ delete waiting message
-if (order.waitMsgId) {
-  try {
-    await bot.deleteMessage(order.userId, order.waitMsgId);
-  } catch (_) {}
-}
+  if (order.waitMsgId) {
+    try {
+      await bot.deleteMessage(order.userId, order.waitMsgId);
+    } catch (_) {}
+  }
 
   // notify user first (new message)
-await ui.notifyUserApproved(bot, order);
+  await ui.notifyUserApproved(bot, order);
 
-// edit admin messages (safe)
-const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
-  ? order.adminMessages
-  : [];
+  // edit admin messages (safe)
+  const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
+    ? order.adminMessages
+    : [];
 
-for (const m of targets) {
-  try {
-    await ui.updateAdminMessage(
-      bot,
-      { adminChatId: m.chatId, adminMsgId: m.messageId },
-      "APPROVED"
-    );
-  } catch (e) {
-    console.error("Admin approve edit failed:", e?.message || e);
+  for (const m of targets) {
+    try {
+      await ui.updateAdminMessage(
+        bot,
+        { adminChatId: m.chatId, adminMsgId: m.messageId },
+        "APPROVED"
+      );
+    } catch (e) {
+      console.error("Admin approve edit failed:", e?.message || e);
+    }
   }
-}
+} // ✅ END approveOrder
 
 // ===============================
 // REJECT ORDER
@@ -210,31 +214,32 @@ async function rejectOrder({ bot, orderId }) {
   if (!order) return;
 
   // ❌ delete waiting message
-if (order.waitMsgId) {
-  try {
-    await bot.deleteMessage(order.userId, order.waitMsgId);
-  } catch (_) {}
-}
+  if (order.waitMsgId) {
+    try {
+      await bot.deleteMessage(order.userId, order.waitMsgId);
+    } catch (_) {}
+  }
 
   // notify user
-await ui.notifyUserRejected(bot, order);
+  await ui.notifyUserRejected(bot, order);
 
-// edit admin messages (safe)
-const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
-  ? order.adminMessages
-  : [];
+  // edit admin messages (safe)
+  const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
+    ? order.adminMessages
+    : [];
 
-for (const m of targets) {
-  try {
-    await ui.updateAdminMessage(
-      bot,
-      { adminChatId: m.chatId, adminMsgId: m.messageId },
-      "REJECTED"
-    );
-  } catch (e) {
-    console.error("Admin reject edit failed:", e?.message || e);
+  for (const m of targets) {
+    try {
+      await ui.updateAdminMessage(
+        bot,
+        { adminChatId: m.chatId, adminMsgId: m.messageId },
+        "REJECTED"
+      );
+    } catch (e) {
+      console.error("Admin reject edit failed:", e?.message || e);
+    }
   }
-}
+} // ✅ END rejectOrder
 
 // ===============================
 // STATS
