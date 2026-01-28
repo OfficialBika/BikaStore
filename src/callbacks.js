@@ -62,17 +62,30 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // callback_data: "CONFIRM"
       // ===============================
       if (data === "CONFIRM") {
-        const t = session[chatId];
-        if (!t) {
-          await ack();
-          return;
-        }
+  const t = session[chatId];
+  if (!t) {
+    await ack();
+    return;
+  }
 
-        // Next: choose payment method via inline keyboard
-        t.step = "PAY_METHOD";
+  // ✅ delete preview message
+  try {
+    if (t.msg?.previewId) {
+      await bot.deleteMessage(chatId, t.msg.previewId);
+      delete t.msg.previewId;
+    }
+  } catch (_) {}
 
-        await ack({ text: "✅ Confirmed" });
-        return ui.sendPaymentMethods(bot, chatId);
+  // next step
+  t.step = "PAY_METHOD";
+
+  await ack({ text: "✅ Confirmed" });
+
+  // ✅ send payment methods & remember id
+  const payMsg = await ui.sendPaymentMethods(bot, chatId);
+  if (t.msg) t.msg.paymentMethodsId = payMsg?.message_id;
+
+  return;
       }
 
       // ===============================
