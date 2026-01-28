@@ -1,37 +1,37 @@
 // ===============================
-// HELPERS (FINAL)
+// HELPERS (BIKA STORE - FINAL)
 // ===============================
 
-const ADMIN_CHAT_IDS = process.env.ADMIN_CHAT_IDS
-  ? process.env.ADMIN_CHAT_IDS.split(",").map(id => Number(id))
-  : [];
-
-/**
- * Check admin
- */
-function isAdmin(userId) {
-  return ADMIN_CHAT_IDS.includes(Number(userId));
+function isAdmin(userId, ADMIN_IDS = []) {
+  const id = String(userId || "").trim();
+  return (ADMIN_IDS || []).map(x => String(x).trim()).includes(id);
 }
 
-/**
- * Generate Order ID
- * BKS-20260127-4821
- */
-function generateOrderId() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `BKS-${date}-${rand}`;
+// Returns [startDate, endDateExclusive] for current month in Asia/Bangkok time basis.
+// Using JS Date in UTC is okay for aggregation range as long as both ends computed same way.
+function monthRange(baseDate = new Date()) {
+  const d = new Date(baseDate);
+  const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+  return [start, end];
 }
 
-/**
- * Format price
- */
-function formatMMK(amount) {
-  return Number(amount).toLocaleString("en-US") + " MMK";
+// Optional: today range
+function dayRange(baseDate = new Date()) {
+  const d = new Date(baseDate);
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+  return [start, end];
+}
+
+function safeInt(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
 module.exports = {
   isAdmin,
-  generateOrderId,
-  formatMMK
+  monthRange,
+  dayRange,
+  safeInt
 };
