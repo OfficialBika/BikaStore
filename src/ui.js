@@ -1,5 +1,5 @@
 // ===============================
-// UI TEMPLATES (BIKA STORE - FINAL)
+// UI TEMPLATES (BIKA STORE - STABLE)
 // ===============================
 
 const PRICES = require("./prices");
@@ -13,10 +13,10 @@ const PAYMENTS = {
 };
 
 // ===============================
-// UTILS
+// MARKDOWN SAFE
 // ===============================
 function esc(text = "") {
-  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
+  return String(text).replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
 }
 
 // ===============================
@@ -24,47 +24,44 @@ function esc(text = "") {
 // ===============================
 async function sendPriceList(bot, chatId, productKey) {
   const product = PRICES[productKey];
-  if (!product) return [];
+  if (!product) return;
 
-  const priceText = product.items
-    .map(i => `• ${i.label} = *${i.price.toLocaleString()} ${product.currency}*`)
+  const list = product.items
+    .map(i => `• ${esc(i.label)} — *${i.price.toLocaleString()} ${product.currency}*`)
     .join("\n");
 
-  const m1 = await bot.sendMessage(
+  await bot.sendMessage(
     chatId,
-    `📋 *${esc(product.name)} PRICE LIST*\n━━━━━━━━━━━━━━━\n${priceText}`,
+    `📋 *${esc(product.name)} PRICE LIST*\n━━━━━━━━━━━━━━━\n${list}`,
     { parse_mode: "Markdown" }
   );
 
-  const m2 = await bot.sendMessage(
+  await bot.sendMessage(
     chatId,
     productKey === "MLBB"
-      ? "🆔 *Game ID + Server ID*\n\n`11111111 2222`\n`11111111(2222)`"
+      ? "🆔 *Game ID + Server ID*\n\n`12345678 1234`"
       : "🆔 *PUBG Game ID ကို ထည့်ပါ*",
     { parse_mode: "Markdown" }
   );
-
-  return [m1.message_id, m2.message_id];
 }
 
 // ===============================
 // PAYMENT METHOD SELECT
 // ===============================
 async function sendPaymentMethods(bot, chatId) {
-  const m = await bot.sendMessage(
+  return bot.sendMessage(
     chatId,
     "💳 *Payment Method ရွေးပါ*",
     {
       parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [
-          [{ text: "💜 KPay",  callback_data: "PAY_KPay" }],
+          [{ text: "💜 KPay", callback_data: "PAY_KPay" }],
           [{ text: "💙 WavePay", callback_data: "PAY_WavePay" }]
         ]
       }
     }
   );
-  return m.message_id;
 }
 
 // ===============================
@@ -81,15 +78,15 @@ async function sendPaymentInfo(bot, chatId, method) {
 // ===============================
 // ORDER PREVIEW
 // ===============================
-async function sendOrderPreview(bot, chatId, order) {
-  const m = await bot.sendMessage(
+async function sendOrderPreview(bot, chatId, t) {
+  return bot.sendMessage(
     chatId,
     `📦 *ORDER PREVIEW*
 ━━━━━━━━━━━━━━━
-🆔 *Order ID:* ${esc(order.orderId)}
-🎮 *Game:* ${esc(order.product)}
-🆔 *ID:* ${esc(order.gameId)} (${esc(order.serverId)})
-💰 *Total:* ${order.totalPrice.toLocaleString()} MMK`,
+🆔 *Order ID:* ${esc(t.orderId)}
+🎮 *Game:* ${esc(t.product)}
+🆔 *ID:* ${esc(t.gameId)} (${esc(t.serverId)})
+💰 *Total:* ${t.totalPrice.toLocaleString()} MMK`,
     {
       parse_mode: "Markdown",
       reply_markup: {
@@ -99,8 +96,6 @@ async function sendOrderPreview(bot, chatId, order) {
       }
     }
   );
-
-  return m.message_id;
 }
 
 // ===============================
@@ -156,12 +151,12 @@ Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
 // ADMIN UPDATE
 // ===============================
 async function updateAdminMessage(bot, adminMsg, status) {
-  const text =
+  const caption =
     status === "APPROVED"
       ? "✅ ORDER COMPLETED"
       : "❌ ORDER REJECTED";
 
-  return bot.editMessageCaption(text, {
+  return bot.editMessageCaption(caption, {
     chat_id: adminMsg.adminChatId,
     message_id: adminMsg.adminMsgId
   });
@@ -182,9 +177,9 @@ function statusUI({ role, total, pending }) {
 // TOP 10 UI
 // ===============================
 function top10UI(list) {
-  let text = "🏆 *TOP 10 USERS (This Month)*\n━━━━━━━━━━━━━━━\n\n";
+  let text = "🏆 *TOP 10 USERS*\n━━━━━━━━━━━━━━━\n\n";
   list.forEach((u, i) => {
-    text += `${i + 1}. 👤 ${u.username || u._id}\n💰 ${u.total.toLocaleString()} MMK\n\n`;
+    text += `${i + 1}. 👤 ${u._id}\n💰 ${u.total.toLocaleString()} MMK\n\n`;
   });
   return text;
 }
