@@ -146,14 +146,18 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
 
     // If you want amount selection via inline buttons, do it in ui.
     // Here we ask as text input (safe fallback).
-    await bot.sendMessage(
-      chatId,
-      t.game === "MLBB"
-        ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: `86`)"
-        : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
-      { parse_mode: "Markdown" }
-    );
-    return;
+    const m = await bot.sendMessage(
+  chatId,
+  t.game === "MLBB"
+    ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: `86/အများဆို + သုံး 86+343`)"
+    : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
+  { parse_mode: "Markdown" }
+);
+
+// ✅ remember amount ask message id
+t.msg.askAmountId = m?.message_id;
+
+return;
   }
 
   // ===============================
