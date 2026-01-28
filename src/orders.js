@@ -54,7 +54,8 @@ async function createOrder({ bot, msg, session, ADMIN_IDS }) {
   const product = t.game || t.product; // MLBB | PUBG
   const gameId = t.game_id || t.gameId || "";
   const serverId = t.server_id || t.serverId || "";
-  const amount = t.amount ?? t.qty ?? null;
+  const amountRaw = t.amount ?? t.qty ?? null;
+const amount = amountRaw == null ? null : Number(amountRaw);
 
   if (!product || !gameId || amount == null) {
     await bot.sendMessage(chatId, "❌ Order info မစုံပါ။ /start နဲ့ပြန်စပါ");
