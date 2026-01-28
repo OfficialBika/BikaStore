@@ -3,7 +3,7 @@
 // ===============================
 
 const ui = require("./ui");
-const Order = require("./src/models/order");
+const Order = require("./models/order");
 const User  = require("./src/models/User");
 const { isAdmin } = require("./src/models/helpers");
 
