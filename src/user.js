@@ -32,14 +32,29 @@ function rememberMsg(t, key, messageObj) {
 
 
 function ensureSession(session, chatId) {
-  // inside ensureSession(session, chatId) BEFORE return session[chatId]
-if (!session[chatId].msg || typeof session[chatId].msg !== "object") {
-  session[chatId].msg = Object.create(null);
-}
-// optional stack for bulk delete
-if (!Array.isArray(session[chatId].msg.stack)) {
-  session[chatId].msg.stack = [];
-}
+  // 1) make sure container exists
+  if (!session || typeof session !== "object") {
+    throw new Error("session object is missing");
+  }
+
+  // 2) make sure this chat session exists
+  if (!session[chatId] || typeof session[chatId] !== "object") {
+    session[chatId] = {};
+  }
+
+  const t = session[chatId];
+
+  // 3) make sure msg container exists
+  if (!t.msg || typeof t.msg !== "object") {
+    t.msg = Object.create(null);
+  }
+
+  // 4) optional stack for bulk delete
+  if (!Array.isArray(t.msg.stack)) {
+    t.msg.stack = [];
+  }
+
+  return t;
 }
 
 // Parse "id serverId" or "id|serverId" or "id,serverId" etc.
