@@ -45,8 +45,17 @@ mongoose
 // ===============================
 // BOT & SERVER
 // ===============================
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(BOT_TOKEN);
 const app = express();
+app.use(express.json());
+// WEBHOOK //
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "bika_webhook";
+const WEBHOOK_PATH = `/telegram/${WEBHOOK_SECRET}`;
+
+app.post(WEBHOOK_PATH, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
 
 // ===============================
 // TEMP SESSION (GLOBAL)
@@ -143,12 +152,22 @@ app.get("/", (_, res) => {
   res.send("🚀 Bika Store Bot Running");
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🌐 Server running on port ${PORT}`);
+
+  const PUBLIC_URL = process.env.PUBLIC_URL;
+  if (!PUBLIC_URL) {
+    console.error("❌ Missing env: PUBLIC_URL (e.g. https://xxxx.onrender.com)");
+    return;
+  }
+
+  const url = `${PUBLIC_URL}${WEBHOOK_PATH}`;
+
+  try {
+    await bot.setWebHook(url);
+    console.log("✅ Webhook set:", url);
+  } catch (e) {
+    console.error("❌ setWebHook failed:", e?.message || e);
+  }
 });
 
-// ===============================
-// GRACEFUL SHUTDOWN (RENDER/PROD)
-// ===============================
-process.on("SIGINT", () => bot.stopPolling().finally(() => process.exit(0)));
-process.on("SIGTERM", () => bot.stopPolling().finally(() => process.exit(0)));
