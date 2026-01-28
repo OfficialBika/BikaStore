@@ -18,7 +18,9 @@ function escapeMd(text = "") {
 // CREATE ORDER (PAYMENT PHOTO)
 // ===============================
 async function createOrder({ bot, msg, session, ADMIN_IDS }) {
-  const chatId = String(msg.chat.id);
+const chatId = String(msg.chat.id);
+// ...
+userId: chatId,
   const t = session[chatId];
 
   if (!t) {
@@ -181,7 +183,16 @@ async function approveOrder({ bot, orderId }) {
   }
 
   // notify user first (new message)
+  try {
   await ui.notifyUserApproved(bot, order);
+  console.log("✅ user notified approved:", order.userId);
+} catch (e) {
+  console.error(
+    "❌ notifyUserApproved failed:",
+    order.userId,
+    e?.response?.body || e?.message || e
+  );
+  }
 
   // edit admin messages (safe)
   const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
@@ -222,10 +233,15 @@ async function rejectOrder({ bot, orderId }) {
 
   // user ကို reject စာပို့
   try {
-    await ui.notifyUserRejected(bot, order);
-  } catch (e) {
-    console.error("notifyUserRejected failed:", e?.message || e);
-  }
+  await ui.notifyUserRejected(bot, order);
+  console.log("✅ user notified rejected:", order.userId);
+} catch (e) {
+  console.error(
+    "❌ notifyUserRejected failed:",
+    order.userId,
+    e?.response?.body || e?.message || e
+  );
+}
 
   // admin message edit (multi admin)
   const targets = Array.isArray(order.adminMessages) ? order.adminMessages : [];
