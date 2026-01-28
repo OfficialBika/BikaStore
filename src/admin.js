@@ -1,19 +1,20 @@
 // ===============================
-// ADMIN HANDLERS (FINAL)
+// ADMIN HANDLERS (BIKA STORE - STABLE)
 // ===============================
 
 const orders = require("./orders");
 const ui = require("./ui");
-const { isAdmin, monthRange } = require("./src/models/helpers");
+const { isAdmin, monthRange } = require("./helpers");
+const User = require("./models/User");
 
 // ===============================
 // ADMIN MESSAGE HANDLER
 // ===============================
 async function onMessage({ bot, msg, ADMIN_IDS }) {
   const chatId = msg.chat.id.toString();
-  const text = msg.text || "";
+  const text = (msg.text || "").trim();
 
-  // admin only
+  // 🛑 admin only
   if (!isAdmin(chatId, ADMIN_IDS)) return;
 
   try {
@@ -22,9 +23,11 @@ async function onMessage({ bot, msg, ADMIN_IDS }) {
     // ===============================
     if (text === "/status") {
       const stats = await orders.getStatusStats(true);
-      return bot.sendMessage(chatId, ui.statusUI(stats), {
-        parse_mode: "Markdown"
-      });
+      return bot.sendMessage(
+        chatId,
+        ui.statusUI(stats),
+        { parse_mode: "Markdown" }
+      );
     }
 
     // ===============================
@@ -38,13 +41,15 @@ async function onMessage({ bot, msg, ADMIN_IDS }) {
         return bot.sendMessage(chatId, "📭 ဒီလ Order မရှိသေးပါ");
       }
 
-      return bot.sendMessage(chatId, ui.top10UI(list), {
-        parse_mode: "Markdown"
-      });
+      return bot.sendMessage(
+        chatId,
+        ui.top10UI(list),
+        { parse_mode: "Markdown" }
+      );
     }
 
     // ===============================
-    // /myrank (admin self rank)
+    // /myrank
     // ===============================
     if (text === "/myrank") {
       const { start, end } = monthRange();
@@ -64,37 +69,52 @@ async function onMessage({ bot, msg, ADMIN_IDS }) {
     // ===============================
     // /broadcast <message>
     // ===============================
-    if (text.startsWith("/broadcast ")) {
-      const message = text.replace("/broadcast ", "").trim();
-      if (!message) return;
+    if (text.startsWith("/broadcast")) {
+      const message = text.replace("/broadcast", "").trim();
+      if (!message) {
+        return bot.sendMessage(
+          chatId,
+          "❗ Usage:\n/broadcast Your message here"
+        );
+      }
 
-      const User = require("./src/models/User");
       const users = await User.find({}, { userId: 1 });
 
       let success = 0;
+      let fail = 0;
+
       for (const u of users) {
         try {
           await bot.sendMessage(
             u.userId,
-            `📢 *Broadcast*\n━━━━━━━━━━━━━━━\n\n${message}`,
+            `📢 *Broadcast*
+━━━━━━━━━━━━━━━
+
+${message}`,
             { parse_mode: "Markdown" }
           );
           success++;
         } catch {
-          // ignore blocked users
+          fail++;
         }
       }
 
       return bot.sendMessage(
         chatId,
-        `✅ Broadcast sent\n👥 Users: ${success}`,
+        `✅ *Broadcast Completed*
+━━━━━━━━━━━━━━━
+👥 Sent: ${success}
+🚫 Failed: ${fail}`,
         { parse_mode: "Markdown" }
       );
     }
 
   } catch (err) {
     console.error("Admin handler error:", err);
-    bot.sendMessage(chatId, "⚠️ Admin command error");
+    await bot.sendMessage(
+      chatId,
+      "⚠️ Admin command error occurred"
+    );
   }
 }
 
