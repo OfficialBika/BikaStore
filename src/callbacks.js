@@ -4,8 +4,8 @@
 // ===============================
 
 const ui = require("./ui");
-const orders = require("./orders");
-const { isAdmin } = require("./models/helpers"); // ✅ FIXED PATH
+const orders = require("./models/orders");
+const { isAdmin } = require("./helpers"); // ✅ FIXED PATH
 
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
 
