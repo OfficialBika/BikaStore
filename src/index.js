@@ -70,6 +70,7 @@ bot.on("message", async msg => {
     if (!msg.text) return;
 
     const chatId = msg.from?.id?.toString();
+    const chatId = msg.chat.id.toString();
 
     // ===============================
     // ADMIN MESSAGE
