@@ -164,27 +164,35 @@ return;
   // STEP: WAIT_AMOUNT (Diamonds/UC amount)
   // ===============================
   if (t.step === "WAIT_AMOUNT") {
-    if (!isPositiveIntString(text)) {
-      await bot.sendMessage(chatId, "❌ ပမာဏကို ကိန်းဂဏန်း (1,2,3...) နဲ့ပဲ ထည့်ပါ");
-      return;
-    }
-
-    t.amount = Number(text);
-
-    // price calc: let ui or prices module handle.
-    // We call ui to prepare preview and totals.
-    t.step = "PREVIEW";
-
-    // ui.sendOrderPreview should show:
-    // - Order ID (temp)
-    // - game, game_id, server_id
-    // - amount
-    // - total mmk
-    // - order time
-    // - inline buttons: confirm/cancel
-    await ui.sendOrderPreview(bot, chatId, t);
+  if (!isPositiveIntString(text)) {
+    await bot.sendMessage(chatId, "❌ ပမာဏကို ကိန်းဂဏန်း (1,2,3...) နဲ့ပဲ ထည့်ပါ");
     return;
   }
+
+  t.amount = Number(text);
+
+  // ✅ Delete old messages: price list + ask id + ask amount
+  await safeDelete(bot, chatId, t.msg?.priceListId);
+  await safeDelete(bot, chatId, t.msg?.askIdId);
+  await safeDelete(bot, chatId, t.msg?.askAmountId);
+
+  // (optional) clear them so you don't try deleting twice
+  if (t.msg) {
+    delete t.msg.priceListId;
+    delete t.msg.askIdId;
+    delete t.msg.askAmountId;
+  }
+
+  // Next step: preview
+  t.step = "PREVIEW";
+
+  // ✅ Send preview and remember preview message id
+  const previewMsg = await ui.sendOrderPreview(bot, chatId, t);
+  if (t.msg) t.msg.previewId = previewMsg?.message_id;
+
+  return;
+ }
+  
 
   // ===============================
   // STEP: WAIT_RECEIPT (Tell user to send photo)
