@@ -26,25 +26,28 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // callback_data: "GAME:MLBB" | "GAME:PUBG"
       // ===============================
       if (data === "GAME:MLBB" || data === "GAME:PUBG") {
-        const game = data.split(":")[1]; // MLBB | PUBG
+  const game = data.split(":")[1]; // MLBB | PUBG
 
-        session[chatId] = {
-          step: "WAIT_GAME_ID",
-          game,             // user.js expects t.game
-          createdAt: Date.now()
-        };
+  session[chatId] = {
+    step: "WAIT_GAME_ID",
+    game,
+    createdAt: Date.now()
+  };
 
-        await ack();
+  await ack();
 
-        // Ask ID + Server ID (for PUBG too, you can still accept "id server")
-        return bot.sendMessage(
-          chatId,
-          game === "MLBB"
-            ? "🆔 *MLBB ID + Server ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1234`"
-            : "🆔 *PUBG ID (သို့) Character ID ကို ထည့်ပါ*\n\n(လိုအပ်ရင် Server/Region ကိုလည်း ထည့်နိုင်)\nဥပမာ:\n`123456789 1`",
-          { parse_mode: "Markdown" }
-        );
-      }
+  // ✅ 1) Send price list first
+  await ui.sendPriceList(bot, chatId, game);
+
+  // ✅ 2) Then ask for ID + Server ID
+  return bot.sendMessage(
+    chatId,
+    game === "MLBB"
+      ? "🆔 *MLBB ID + Server ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1234`"
+      : "🆔 *PUBG ID (သို့) Character ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1`",
+    { parse_mode: "Markdown" }
+  );
+}
 
       // ===============================
       // CONFIRM ORDER (from preview)
