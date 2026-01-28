@@ -53,6 +53,15 @@ amount: {
   type: Number,
   required: true
 },
+    adminMessages: {
+  type: [
+    {
+      chatId: String,
+      messageId: Number
+    }
+  ],
+  default: []
+},
 
     // Selected items (from prices.js)
     items: {
