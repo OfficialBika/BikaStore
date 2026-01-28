@@ -177,16 +177,23 @@ if (order.waitMsgId) {
   } catch (_) {}
 }
 
-  await ui.notifyUserApproved(bot, order);
+  // notify user first (new message)
+await ui.notifyUserApproved(bot, order);
 
-  for (const m of order.adminMessages || []) {
-    try {
-      await ui.updateAdminMessage(
-        bot,
-        { adminChatId: m.chatId, adminMsgId: m.messageId },
-        "APPROVED"
-      );
-    } catch {}
+// edit admin messages (safe)
+const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
+  ? order.adminMessages
+  : [];
+
+for (const m of targets) {
+  try {
+    await ui.updateAdminMessage(
+      bot,
+      { adminChatId: m.chatId, adminMsgId: m.messageId },
+      "APPROVED"
+    );
+  } catch (e) {
+    console.error("Admin approve edit failed:", e?.message || e);
   }
 }
 
@@ -209,16 +216,23 @@ if (order.waitMsgId) {
   } catch (_) {}
 }
 
-  await ui.notifyUserRejected(bot, order);
+  // notify user
+await ui.notifyUserRejected(bot, order);
 
-  for (const m of order.adminMessages || []) {
-    try {
-      await ui.updateAdminMessage(
-        bot,
-        { adminChatId: m.chatId, adminMsgId: m.messageId },
-        "REJECTED"
-      );
-    } catch {}
+// edit admin messages (safe)
+const targets = Array.isArray(order.adminMessages) && order.adminMessages.length
+  ? order.adminMessages
+  : [];
+
+for (const m of targets) {
+  try {
+    await ui.updateAdminMessage(
+      bot,
+      { adminChatId: m.chatId, adminMsgId: m.messageId },
+      "REJECTED"
+    );
+  } catch (e) {
+    console.error("Admin reject edit failed:", e?.message || e);
   }
 }
 
