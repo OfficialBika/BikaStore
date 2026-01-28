@@ -2,37 +2,31 @@
 // ORDERS LOGIC (BIKA STORE - FINAL)
 // ===============================
 
-const fs = require("fs");
-console.log("MODELS DIR:", fs.readdirSync("./src/models"));
-
 const Order = require("./models/order");
 const User  = require("./models/User");
 const ui    = require("./ui");
 
 // ===============================
-// UTILS
+// ESCAPE MARKDOWN
 // ===============================
 function escapeMd(text = "") {
-  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
+  return text.replace(/[_*[\]()~`>#+=|{}.!]/g, "\\$&");
 }
 
 // ===============================
-// CREATE ORDER (after payment photo)
+// CREATE ORDER (PAYMENT PHOTO)
 // ===============================
-async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
+async function createOrder({ bot, msg, session, ADMIN_IDS }) {
   const chatId = msg.chat.id.toString();
-  const t = temp[chatId];
+  const t = session[chatId];
 
   if (!t) {
     await bot.sendMessage(chatId, "❌ Session expired. /start again");
     return null;
   }
 
-  // 🛑 Anti duplicate pending order
-  const exist = await Order.findOne({
-    userId: chatId,
-    status: "PENDING"
-  });
+  // ⛔ Prevent duplicate pending
+  const exist = await Order.findOne({ userId: chatId, status: "PENDING" });
   if (exist) {
     await bot.sendMessage(
       chatId,
@@ -42,18 +36,18 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
     return null;
   }
 
-  // 🖼 Payment photo safe check
-  const photo = msg.photo?.[msg.photo.length - 1];
+  // 🖼 Payment photo
+  const photo = msg.photo?.at(-1);
   if (!photo) {
     await bot.sendMessage(chatId, "❌ Payment screenshot မတွေ့ပါ");
     return null;
   }
 
-  // 🔗 user reference
+  // 👤 user reference
   const user = await User.findOne({ userId: chatId });
 
   // ===============================
-  // CREATE ORDER (DB)
+  // CREATE ORDER
   // ===============================
   const order = await Order.create({
     orderId: t.orderId,
@@ -63,7 +57,7 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
     product: t.product,
     gameId: t.gameId,
     serverId: t.serverId,
-    items: t.items,
+    items: t.items || [],
     totalPrice: t.totalPrice,
     paymentMethod: t.paymentMethod,
     paymentPhoto: photo.file_id,
@@ -73,13 +67,13 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
   });
 
   // ===============================
-  // USER UI (WAITING)
+  // USER WAITING MESSAGE
   // ===============================
   const waitMsg = await ui.sendWaiting(bot, chatId, order.orderId);
   order.waitMsgId = waitMsg.message_id;
 
   // ===============================
-  // ADMIN UI (MULTI ADMIN SAFE)
+  // ADMIN NOTIFY (MULTI ADMIN)
   // ===============================
   for (const adminId of ADMIN_IDS) {
     try {
@@ -112,45 +106,40 @@ async function createOrder({ bot, msg, temp, ADMIN_IDS }) {
         messageId: adminMsg.message_id
       });
     } catch (e) {
-      console.error("Admin send failed:", adminId);
+      console.error("Admin notify failed:", adminId);
     }
   }
 
   await order.save();
-  delete temp[chatId];
+  delete session[chatId];
   return order;
 }
 
 // ===============================
-// APPROVE ORDER (ATOMIC)
+// APPROVE ORDER
 // ===============================
 async function approveOrder({ bot, orderId }) {
   const order = await Order.findOneAndUpdate(
     { _id: orderId, status: "PENDING" },
     { status: "COMPLETED", approvedAt: new Date() },
     { new: true }
-  ).populate("userRef");
+  );
 
   if (!order) return;
 
-  // USER UI
-  try {
-    await ui.notifyUserApproved(bot, order);
-  } catch {}
+  await ui.notifyUserApproved(bot, order);
 
-  // ADMIN UI (ALL ADMINS)
   for (const m of order.adminMessages || []) {
-    try {
-      await ui.updateAdminMessage(bot, {
-        adminChatId: m.chatId,
-        adminMsgId: m.messageId
-      }, "APPROVED");
-    } catch {}
+    await ui.updateAdminMessage(
+      bot,
+      { adminChatId: m.chatId, adminMsgId: m.messageId },
+      "APPROVED"
+    );
   }
 }
 
 // ===============================
-// REJECT ORDER (ATOMIC)
+// REJECT ORDER
 // ===============================
 async function rejectOrder({ bot, orderId }) {
   const order = await Order.findOneAndUpdate(
@@ -161,19 +150,14 @@ async function rejectOrder({ bot, orderId }) {
 
   if (!order) return;
 
-  // USER UI
-  try {
-    await ui.notifyUserRejected(bot, order);
-  } catch {}
+  await ui.notifyUserRejected(bot, order);
 
-  // ADMIN UI
   for (const m of order.adminMessages || []) {
-    try {
-      await ui.updateAdminMessage(bot, {
-        adminChatId: m.chatId,
-        adminMsgId: m.messageId
-      }, "REJECTED");
-    } catch {}
+    await ui.updateAdminMessage(
+      bot,
+      { adminChatId: m.chatId, adminMsgId: m.messageId },
+      "REJECTED"
+    );
   }
 }
 
@@ -181,13 +165,10 @@ async function rejectOrder({ bot, orderId }) {
 // STATS
 // ===============================
 async function getStatusStats(isAdmin) {
-  const total = await Order.countDocuments();
-  const pending = await Order.countDocuments({ status: "PENDING" });
-
   return {
     role: isAdmin ? "👑 Admin" : "👤 User",
-    total,
-    pending
+    total: await Order.countDocuments(),
+    pending: await Order.countDocuments({ status: "PENDING" })
   };
 }
 
