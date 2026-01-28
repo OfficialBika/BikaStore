@@ -48,6 +48,12 @@ const orderSchema = new mongoose.Schema(
       default: ""
     },
 
+    // Diamonds/UC Amount
+amount: {
+  type: Number,
+  required: true
+},
+
     // Selected items (from prices.js)
     items: {
       type: Array,
