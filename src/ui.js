@@ -124,4 +124,159 @@ async function sendPaymentInfo(bot, chatId, method) {
 // ===============================
 // ORDER PREVIEW (Confirm/Cancel)
 // Expects t fields from user.js FINAL:
-// t.game ("MLBB"/"PUBG"),
+// t.game ("MLBB"/"PUBG"), t.game_id, t.server_id, t.amount
+// We also set t.totalPrice, t.orderTime here.
+// ===============================
+async function sendOrderPreview(bot, chatId, t) {
+  // Normalize keys (support older naming too)
+  const game = t.game || t.product;
+  const gameId = t.game_id || t.gameId || "";
+  const serverId = t.server_id || t.serverId || "";
+  const amount = t.amount ?? t.qty ?? "";
+
+  // ensure order id & time
+  const orderId = ensureOrderId(t);
+  t.orderTime = t.orderTime || formatBangkokTime(t.createdAt || Date.now());
+
+  // compute total
+  const total = computeTotalMMK(game, amount);
+  if (total == null) {
+    // If price not found, still show preview but mark unknown total
+    t.totalPrice = null;
+  } else {
+    t.totalPrice = total;
+  }
+
+  // Build preview text
+  const lines = [
+    `📦 *ORDER PREVIEW*`,
+    `━━━━━━━━━━━━━━━`,
+    `🆔 *Order ID:* ${esc(orderId)}`,
+    `🎮 *Game:* ${esc(game)}`,
+    `🆔 *ID:* ${esc(gameId)}${serverId ? ` (${esc(serverId)})` : ""}`,
+    `${game === "MLBB" ? "💎" : "🎯"} *Amount:* ${esc(String(amount))}`,
+    `💰 *Total:* ${t.totalPrice == null ? "_Price not found_" : `${Number(t.totalPrice).toLocaleString()} MMK`}`,
+    `🕒 *Order time:* ${esc(t.orderTime)}`
+  ].join("\n");
+
+  return bot.sendMessage(chatId, lines, {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Confirm", callback_data: "CONFIRM" },
+          { text: "❌ Cancel", callback_data: "CANCEL" }
+        ]
+      ]
+    }
+  });
+}
+
+// ===============================
+// USER WAITING
+// ===============================
+async function sendWaiting(bot, chatId, orderId) {
+  return bot.sendMessage(
+    chatId,
+    `⏳ *Admin စစ်ဆေးနေပါသည်...*\n\n🆔 Order ID: ${esc(orderId)}`,
+    { parse_mode: "Markdown" }
+  );
+}
+
+// ===============================
+// USER APPROVED
+// ===============================
+async function notifyUserApproved(bot, order) {
+  if (order.waitMsgId) {
+    try {
+      await bot.deleteMessage(order.userId, order.waitMsgId);
+    } catch {}
+  }
+
+  return bot.sendMessage(
+    order.userId,
+    `✅ *ORDER COMPLETED*
+━━━━━━━━━━━━━━━
+🎮 ${esc(order.product || order.game)}
+🆔 ${esc(order.gameId)}${order.serverId ? ` (${esc(order.serverId)})` : ""}
+${order.product === "MLBB" ? "💎" : "🎯"} ${esc(String(order.amount))}
+💰 ${Number(order.totalPrice).toLocaleString()} MMK
+
+🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်`,
+    { parse_mode: "Markdown" }
+  );
+}
+
+// ===============================
+// USER REJECTED
+// ===============================
+async function notifyUserRejected(bot, order) {
+  return bot.sendMessage(
+    order.userId,
+    `❌ *ORDER REJECTED*
+━━━━━━━━━━━━━━━
+🆔 Order ID: ${esc(order.orderId)}
+
+Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
+    { parse_mode: "Markdown" }
+  );
+}
+
+// ===============================
+// ADMIN UPDATE (optional)
+// ===============================
+async function updateAdminMessage(bot, adminMsg, status) {
+  const caption = status === "APPROVED" ? "✅ ORDER COMPLETED" : "❌ ORDER REJECTED";
+
+  return bot.editMessageCaption(caption, {
+    chat_id: adminMsg.adminChatId,
+    message_id: adminMsg.adminMsgId
+  });
+}
+
+// ===============================
+// STATUS UI
+// ===============================
+function statusUI({ role, total, pending }) {
+  return `🤖 *Bika Bot Status*
+━━━━━━━━━━━━━━━
+👤 Role: ${esc(role)}
+📦 Orders: ${Number(total).toLocaleString()}
+⏳ Pending: ${Number(pending).toLocaleString()}`;
+}
+
+// ===============================
+// TOP 10 UI
+// ===============================
+function top10UI(list) {
+  let text = "🏆 *TOP 10 USERS*\n━━━━━━━━━━━━━━━\n\n";
+  (list || []).forEach((u, i) => {
+    text += `${i + 1}. 👤 ${esc(u._id)}\n💰 ${Number(u.total).toLocaleString()} MMK\n\n`;
+  });
+  return text;
+}
+
+// ===============================
+// MY RANK UI
+// ===============================
+function myRankUI(rank, total) {
+  return `🏅 *YOUR RANK*
+━━━━━━━━━━━━━━━
+🥇 Rank: #${esc(rank)}
+💰 Total: ${Number(total).toLocaleString()} MMK`;
+}
+
+// ===============================
+module.exports = {
+  sendPriceList,
+  sendPaymentMethods,
+  sendPaymentInfo,
+  sendOrderPreview,
+  sendWaiting,
+  notifyUserApproved,
+  notifyUserRejected,
+  updateAdminMessage,
+  statusUI,
+  top10UI,
+  myRankUI
+};
