@@ -107,30 +107,35 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // callback_data: "PAY:KBZ" | "PAY:KPay" | "PAY:Wave" ... (UI decide)
       // ===============================
       if (data.startsWith("PAY:")) {
-        const t = session[chatId];
-        if (!t) {
-          await ack();
-          return;
-        }
+  const t = session[chatId];
+  if (!t) {
+    await ack();
+    return;
+  }
 
-        const method = data.replace("PAY:", "").trim();
-        t.paymentMethod = method;
+  const method = data.replace("PAY:", "").trim();
+  t.paymentMethod = method;
 
-        // After payment method selected, we should wait for receipt photo
-        t.step = "WAIT_RECEIPT";
+  // ❌ delete payment methods message
+  try {
+    if (t.msg?.paymentMethodsId) {
+      await bot.deleteMessage(chatId, t.msg.paymentMethodsId);
+      delete t.msg.paymentMethodsId;
+    }
+  } catch (_) {}
 
-        await ack({ text: `💳 ${method}` });
+  // next step: wait receipt
+  t.step = "WAIT_RECEIPT";
 
-        // send payment info (account/qr/etc) + ask receipt
-        await ui.sendPaymentInfo(bot, chatId, method);
+  await ack({ text: `💳 ${method}` });
 
-        // ensure user gets the instruction (even if ui doesn't include it)
-        return bot.sendMessage(
-          chatId,
-          "📸 *ငွေလွှဲပြီးပါက ပြေစာ Screenshot ကို photo အနေနဲ့ ပို့ပေးပါ*",
-          { parse_mode: "Markdown" }
-        );
+  // ✅ send payment info & remember id
+  const payInfoMsg = await ui.sendPaymentInfo(bot, chatId, method);
+  if (t.msg) t.msg.paymentInfoId = payInfoMsg?.message_id;
+
+  return;
       }
+    
 
       // ===============================
       // ADMIN APPROVE
