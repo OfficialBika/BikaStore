@@ -18,9 +18,7 @@ function escapeMd(text = "") {
 // CREATE ORDER (PAYMENT PHOTO)
 // ===============================
 async function createOrder({ bot, msg, session, ADMIN_IDS }) {
-const chatId = String(msg.chat.id);
-// ...
-userId: chatId,
+  const chatId = String(msg.chat.id);
   const t = session[chatId];
 
   if (!t) {
@@ -52,7 +50,7 @@ userId: chatId,
     return null;
   }
 
-  // Normalize fields from session (support both old/new keys)
+  // Normalize fields from session
   const product = t.game || t.product; // MLBB | PUBG
   const gameId = t.game_id || t.gameId || "";
   const serverId = t.server_id || t.serverId || "";
@@ -82,28 +80,26 @@ userId: chatId,
   // CREATE ORDER
   // ===============================
   const order = await Order.create({
-    // Use session orderId if exists, else fallback (ui ensures)
     orderId: t.orderId || t.order_id || `BK${Date.now()}`,
     userId: chatId,
     userRef: user?._id || null,
 
     username,
 
-    product, // MLBB/PUBG
+    product,
     gameId,
     serverId,
 
-    amount, // ✅ store amount for preview/notify
+    amount, // NOTE: ensure schema has this field (Step 2)
     items: t.items || [],
 
-    totalPrice: t.totalPrice ?? 0,
-    paymentMethod: t.paymentMethod || "",
+    totalPrice: Number(t.totalPrice ?? 0),
+    paymentMethod: String(t.paymentMethod || ""),
     paymentPhoto: photo.file_id,
 
     status: "PENDING",
     adminMessages: [],
 
-    createdAt: new Date(),
     expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   });
 
@@ -137,7 +133,6 @@ userId: chatId,
         reply_markup: {
           inline_keyboard: [
             [
-              // ✅ Must match callbacks.js FINAL: "APPROVE:<id>" / "REJECT:<id>"
               { text: "✅ Approve", callback_data: `APPROVE:${order._id}` },
               { text: "❌ Reject", callback_data: `REJECT:${order._id}` }
             ]
@@ -164,7 +159,6 @@ userId: chatId,
 
 // ===============================
 // APPROVE ORDER
-// orderId here is Mongo _id string
 // ===============================
 async function approveOrder({ bot, orderId }) {
   const order = await Order.findOneAndUpdate(
@@ -182,12 +176,16 @@ async function approveOrder({ bot, orderId }) {
     } catch (_) {}
   }
 
-  // notify user
+  // notify user (log)
   try {
     await ui.notifyUserApproved(bot, order);
     console.log("✅ user notified approved:", order.userId);
   } catch (e) {
-    console.error("❌ notifyUserApproved failed:", e);
+    console.error(
+      "❌ notifyUserApproved failed:",
+      order.userId,
+      e?.response?.body || e?.message || e
+    );
   }
 
   // edit admin messages
@@ -200,10 +198,10 @@ async function approveOrder({ bot, orderId }) {
         "APPROVED"
       );
     } catch (e) {
-      console.error("Admin approve edit failed:", e);
+      console.error("Admin approve edit failed:", e?.message || e);
     }
   }
-} // ✅ ဒီ brace က အရမ်းအရေးကြီး// ✅ END approveOrder
+}
 
 // ===============================
 // REJECT ORDER
@@ -217,26 +215,26 @@ async function rejectOrder({ bot, orderId }) {
 
   if (!order) return;
 
-  // user waiting msg ဖျက် (ရှိရင်)
+  // delete waiting message
   if (order.waitMsgId) {
     try {
       await bot.deleteMessage(order.userId, order.waitMsgId);
     } catch (_) {}
   }
 
-  // user ကို reject စာပို့
+  // notify user (log)
   try {
-  await ui.notifyUserRejected(bot, order);
-  console.log("✅ user notified rejected:", order.userId);
-} catch (e) {
-  console.error(
-    "❌ notifyUserRejected failed:",
-    order.userId,
-    e?.response?.body || e?.message || e
-  );
-}
+    await ui.notifyUserRejected(bot, order);
+    console.log("✅ user notified rejected:", order.userId);
+  } catch (e) {
+    console.error(
+      "❌ notifyUserRejected failed:",
+      order.userId,
+      e?.response?.body || e?.message || e
+    );
+  }
 
-  // admin message edit (multi admin)
+  // edit admin messages
   const targets = Array.isArray(order.adminMessages) ? order.adminMessages : [];
   for (const m of targets) {
     try {
@@ -249,7 +247,7 @@ async function rejectOrder({ bot, orderId }) {
       console.error("Admin reject edit failed:", e?.message || e);
     }
   }
-}// ✅ END rejectOrder
+}
 
 // ===============================
 // STATS
