@@ -271,11 +271,28 @@ async function getUserRank(userId, start, end) {
   return index === -1 ? null : { rank: index + 1, total: list[index].total };
 }
 
+// ===============================
+// STATUS HELPERS
+// ===============================
+async function getStatusSummary() {
+  const Order = require("./models/order");
+  const User = require("./models/User");
+
+  const totalUsers = await User.countDocuments();
+  const approvedOrders = await Order.countDocuments({ status: "COMPLETED" });
+
+  return {
+    totalUsers,
+    approvedOrders
+  };
+}
+
 module.exports = {
   createOrder,
   approveOrder,
   rejectOrder,
   getStatusStats,
   getTop10,
-  getUserRank
+  getUserRank,
+  getStatusSummary
 };
