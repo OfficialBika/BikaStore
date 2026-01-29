@@ -5,7 +5,7 @@
 const promo = {
   active: false,     // promo is running
   claimed: false,    // already claimed?
-
+title: "🎁 MLBB Free Diamonds Promo",
   winner: {
     chatId: null,
     username: null
