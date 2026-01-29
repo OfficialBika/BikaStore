@@ -8,6 +8,7 @@
 
 const ui = require("./ui");
 const orders = require("./orders");
+const Order = require("./models/order"); // ✅ move to top (avoid inside handler)
 
 // -------------------------------
 // Helpers
@@ -26,30 +27,24 @@ async function safeDelete(bot, chatId, messageId) {
 function rememberMsg(t, key, messageObj) {
   if (!t || !t.msg || !messageObj) return;
   t.msg[key] = messageObj.message_id;
-  // keep stack too (optional)
   if (Array.isArray(t.msg.stack)) t.msg.stack.push(messageObj.message_id);
 }
 
-
 function ensureSession(session, chatId) {
-  // 1) make sure container exists
   if (!session || typeof session !== "object") {
     throw new Error("session object is missing");
   }
 
-  // 2) make sure this chat session exists
   if (!session[chatId] || typeof session[chatId] !== "object") {
     session[chatId] = {};
   }
 
   const t = session[chatId];
 
-  // 3) make sure msg container exists
   if (!t.msg || typeof t.msg !== "object") {
     t.msg = Object.create(null);
   }
 
-  // 4) optional stack for bulk delete
   if (!Array.isArray(t.msg.stack)) {
     t.msg.stack = [];
   }
@@ -60,25 +55,14 @@ function ensureSession(session, chatId) {
 // Parse "id serverId" or "id|serverId" or "id,serverId" etc.
 function parseGameIdAndServer(input) {
   const raw = String(input || "").trim();
-  // allow separators: space, comma, |, /, -, :
   const parts = raw.split(/[\s,|\/\-:]+/).filter(Boolean);
-
   if (parts.length < 2) return null;
 
   const gameId = parts[0];
   const serverId = parts[1];
-
-  // simple sanity checks: numbers only is common, but allow alphanum just in case
   if (!gameId || !serverId) return null;
 
   return { gameId, serverId };
-}
-
-function isPositiveIntString(s) {
-  if (typeof s !== "string") return false;
-  if (!/^\d+$/.test(s)) return false;
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0;
 }
 
 // -------------------------------
@@ -97,55 +81,52 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
   // /start (RESET FLOW)
   // ===============================
   if (text === "/start") {
-  session[chatId] = { step: "CHOOSE_GAME", msg: Object.create(null) };
-
+    // make clean session container (keep msg holder)
+    session[chatId] = { step: "CHOOSE_GAME", msg: Object.create(null) };
+    const t0 = ensureSession(session, chatId);
 
     // ✅ If user already has pending orders, ask what to do
-const Order = require("./models/order"); // <-- put at TOP of file with other requires
+    const pendingCount = await Order.countDocuments({ userId: chatId, status: "PENDING" });
 
-const pendingCount = await Order.countDocuments({ userId: chatId, status: "PENDING" });
-if (pendingCount > 0) {
-  session[chatId] = { step: "PENDING_DECISION" };
+    if (pendingCount > 0) {
+      session[chatId] = { step: "PENDING_DECISION", msg: Object.create(null) };
 
-  return bot.sendMessage(
-    chatId,
-    `⛔ Pending order *${pendingCount}* ခု ရှိနေပါတယ်。\n\nဘာလုပ်ချင်ပါသလဲ?`,
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "✅ Pending ကိုဆက်လုပ်မယ်", callback_data: "PENDING_CONTINUE" }],
-          [{ text: "➕ အသစ်တင်မယ်", callback_data: "PENDING_NEW" }],
-          [{ text: "📦 My Orders", callback_data: "MYORDERS" }]
-        ]
-      }
+      return bot.sendMessage(
+        chatId,
+        `⛔ Pending order *${pendingCount}* ခု ရှိနေပါတယ်。\n\nဘာလုပ်ချင်ပါသလဲ?`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ Pending ကိုဆက်လုပ်မယ်", callback_data: "PENDING_CONTINUE" }],
+              [{ text: "➕ အသစ်တင်မယ်", callback_data: "PENDING_NEW" }],
+              [{ text: "📦 My Orders", callback_data: "MYORDERS" }]
+            ]
+          }
+        }
+      );
     }
-  );
-}
-    
-  // ✅ send start menu and remember message id
-  const m = await bot.sendMessage(
-    chatId,
-    "👋 *Welcome to BikaStore!*\n\n🎮 Game တစ်ခုကို ရွေးပါ ⬇️",
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
-          [{ text: "🎯 PUBG UC", callback_data: "GAME:PUBG" }]
-        ]
+
+    // ✅ send start menu and remember message id
+    const m = await bot.sendMessage(
+      chatId,
+      "👋 *Welcome to BikaStore!*\n\n🎮 Game တစ်ခုကို ရွေးပါ ⬇️",
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
+            [{ text: "🎯 PUBG UC", callback_data: "GAME:PUBG" }]
+          ]
+        }
       }
-    }
-  );
+    );
 
-  // remember message id in session
-  const t2 = ensureSession(session, chatId);
-  rememberMsg(t2, "startMenuId", m);
-
-  return;
+    rememberMsg(t0, "startMenuId", m);
+    return;
   }
 
-  // If user hasn't started, ignore or gently guide
+  // If user hasn't started, ignore
   if (!t.step) return;
 
   // ===============================
@@ -165,74 +146,68 @@ if (pendingCount > 0) {
     t.game_id = parsed.gameId;
     t.server_id = parsed.serverId;
 
-    // Next: ask amount (diamonds/UC)
+    // Next: ask amount
     t.step = "WAIT_AMOUNT";
 
-    // If you want amount selection via inline buttons, do it in ui.
-    // Here we ask as text input (safe fallback).
     const m = await bot.sendMessage(
-  chatId,
-  t.game === "MLBB"
-    ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: ` 86 / အများဆို + နဲ့သုံး wp+wp2 / 86+343`)"
-    : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
-  { parse_mode: "Markdown" }
-);
+      chatId,
+      t.game === "MLBB"
+        ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: `86` / အများဆို `wp+wp2` / `86+343` )"
+        : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
+      { parse_mode: "Markdown" }
+    );
 
-// ✅ remember amount ask message id
-t.msg.askAmountId = m?.message_id;
-
-return;
+    // remember
+    t.msg.askAmountId = m?.message_id;
+    return;
   }
 
   // ===============================
   // STEP: WAIT_AMOUNT (Diamonds/UC amount)
   // ===============================
-  // ✅ NEW – allow: 86, 86+343, wp, wp2+wp3, Wp+343
-const amountInput = text
-  .replace(/\s+/g, "")   // remove spaces
-  .replace(/^\//, "");   // allow "/wp2"
+  if (t.step === "WAIT_AMOUNT") {
+    // ✅ allow: 86, 86+343, wp, wp2+wp3, Wp+343, /wp2, "wp + 343"
+    const amountInput = String(text || "")
+      .trim()
+      .replace(/\s+/g, "")
+      .replace(/^\//, "");
 
-const isValidAmount = /^[a-zA-Z0-9+]+$/.test(amountInput);
+    const isValidAmount = /^[a-zA-Z0-9+]+$/.test(amountInput);
 
-if (!isValidAmount) {
-  await bot.sendMessage(
-    chatId,
-    "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86 | 86+343 | wp | wp+wp2"
-  );
-  return;
-}
+    if (!isValidAmount) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86 | 86+343 | wp | wp+wp2",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
 
-// save amount as STRING (important)
-t.amount = amountInput.toLowerCase();
+    // ✅ save amount as STRING (lowercase for wp/wp2 case-insensitive)
+    t.amount = amountInput.toLowerCase();
 
-  t.amount = String(text).trim().toLowerCase();
+    // ✅ delete old messages: price list + ask id + ask amount
+    await safeDelete(bot, chatId, t.msg?.priceListId);
+    await safeDelete(bot, chatId, t.msg?.askIdId);
+    await safeDelete(bot, chatId, t.msg?.askAmountId);
 
-  // ✅ Delete old messages: price list + ask id + ask amount
-  await safeDelete(bot, chatId, t.msg?.priceListId);
-  await safeDelete(bot, chatId, t.msg?.askIdId);
-  await safeDelete(bot, chatId, t.msg?.askAmountId);
+    if (t.msg) {
+      delete t.msg.priceListId;
+      delete t.msg.askIdId;
+      delete t.msg.askAmountId;
+    }
 
-  // (optional) clear them so you don't try deleting twice
-  if (t.msg) {
-    delete t.msg.priceListId;
-    delete t.msg.askIdId;
-    delete t.msg.askAmountId;
+    // Next step: preview
+    t.step = "PREVIEW";
+
+    const previewMsg = await ui.sendOrderPreview(bot, chatId, t);
+    if (t.msg) t.msg.previewId = previewMsg?.message_id;
+
+    return;
   }
-
-  // Next step: preview
-  t.step = "PREVIEW";
-
-  // ✅ Send preview and remember preview message id
-  const previewMsg = await ui.sendOrderPreview(bot, chatId, t);
-  if (t.msg) t.msg.previewId = previewMsg?.message_id;
-
-  return;
- }
-  
 
   // ===============================
   // STEP: WAIT_RECEIPT (Tell user to send photo)
-  // (We DON'T accept text here except reminding)
   // ===============================
   if (t.step === "WAIT_RECEIPT") {
     await bot.sendMessage(
@@ -259,27 +234,22 @@ async function onPaymentPhoto({ bot, msg, session, ADMIN_IDS }) {
   if (!t || t.step !== "WAIT_RECEIPT") return;
 
   // ❌ delete payment info message
-try {
-  if (t.msg?.paymentInfoId) {
-    await bot.deleteMessage(chatId, t.msg.paymentInfoId);
-    delete t.msg.paymentInfoId;
-  }
-} catch (_) {}
+  try {
+    if (t.msg?.paymentInfoId) {
+      await bot.deleteMessage(chatId, t.msg.paymentInfoId);
+      delete t.msg.paymentInfoId;
+    }
+  } catch (_) {}
 
-// ❌ delete preview message if still exists
-try {
-  if (t.msg?.previewId) {
-    await bot.deleteMessage(chatId, t.msg.previewId);
-    delete t.msg.previewId;
-  }
-} catch (_) {}
-  
+  // ❌ delete preview message if still exists
+  try {
+    if (t.msg?.previewId) {
+      await bot.deleteMessage(chatId, t.msg.previewId);
+      delete t.msg.previewId;
+    }
+  } catch (_) {}
 
   try {
-    // orders.createOrder should:
-    // - save order to DB
-    // - send user confirmation ("admin စစ်ဆေးနေပါသည်")
-    // - forward receipt + order details to admin chat with approve/decline buttons
     await orders.createOrder({
       bot,
       msg,
@@ -287,7 +257,6 @@ try {
       ADMIN_IDS
     });
 
-    // Clear session after successful order creation
     delete session[chatId];
   } catch (err) {
     console.error("❌ Payment photo error:", err);
