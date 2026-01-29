@@ -32,16 +32,7 @@ async function createOrder({ bot, msg, session, ADMIN_IDS }) {
     return null;
   }
 
-  // ⛔ Prevent duplicate pending
-  const exist = await Order.findOne({ userId: chatId, status: "PENDING" });
-  if (exist) {
-    await bot.sendMessage(
-      chatId,
-      "⛔ *Pending Order ရှိပြီးသားပါ*\nAdmin approve/reject ပြီးမှ အသစ်လုပ်နိုင်ပါတယ်",
-      { parse_mode: "Markdown" }
-    );
-    return null;
-  }
+
 
   // 🖼 Payment photo
   const photo = msg.photo?.at(-1);
