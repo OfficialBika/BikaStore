@@ -175,6 +175,49 @@ if (total == null) {
   return;
 }
 
+  // ===============================
+// MULTI AMOUNT SUPPORT
+// Examples: "86+343", "wp+wp2", "86+wp2"
+// ===============================
+
+function normalizeAmountToken(token) {
+  return String(token || "")
+    .trim()
+    .replace(/^\//, "")       // allow "/wp2"
+    .toLowerCase();           // allow "WP2", "wP2"
+}
+
+function splitAmounts(rawAmount) {
+  const raw = String(rawAmount || "").trim();
+  if (!raw) return [];
+
+  // allow separators: + and space
+  // "86 + 343" => ["86","343"]
+  return raw
+    .split("+")
+    .map(s => normalizeAmountToken(s))
+    .filter(Boolean);
+}
+
+function computeTotalMMKMulti(productKey, rawAmount) {
+  const parts = splitAmounts(rawAmount);
+  if (!parts.length) return null;
+
+  let total = 0;
+
+  for (const p of parts) {
+    // Find price item by:
+    // - exact i.amount field (string/number) OR
+    // - digits from label (existing logic)
+    const item = findPriceItem(productKey, p);
+    if (!item) return null;
+
+    total += Number(item.price || 0);
+  }
+
+  return Number.isFinite(total) ? total : null;
+}
+
 t.totalPrice = total;
 
   // Build preview text
