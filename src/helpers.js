@@ -29,9 +29,14 @@ function safeInt(v, fallback = 0) {
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
+function getMonthName(date = new Date()) {
+  return date.toLocaleString("en-US", { month: "long" });
+}
+
 module.exports = {
   isAdmin,
   monthRange,
   dayRange,
-  safeInt
+  safeInt,
+  getMonthName
 };
