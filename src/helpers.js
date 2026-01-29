@@ -33,6 +33,15 @@ function getMonthName(date = new Date()) {
   return date.toLocaleString("en-US", { month: "long" });
 }
 
+function splitAmounts(raw) {
+  if (!raw) return [];
+
+  return String(raw)
+    .split("+")
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
 module.exports = {
   isAdmin,
   monthRange,
