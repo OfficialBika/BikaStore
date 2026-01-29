@@ -79,7 +79,10 @@ function findPriceItem(productKey, amount) {
   if (!product || !Array.isArray(product.items)) return null;
 
   // 1) exact item.amount match (if exists)
-  const byField = product.items.find(i => i && Number(i.amount) === Number(amount));
+  const byField = product.items.find(i => {
+  if (!i.amount) return false;
+  return String(i.amount).toLowerCase() === String(amount).toLowerCase();
+});
   if (byField) return byField;
 
   // 2) match by digits in label (e.g. "86 Diamonds")
