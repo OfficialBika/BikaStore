@@ -59,8 +59,8 @@ bot.onText(/\/promo_create/, async (msg) => {
 
   if (!isAdmin(fromId, ADMIN_IDS)) {
     return bot.sendMessage(chatId, "⛔ Admin only");
-  }
-
+  }})
+};
   // reset old promo
   resetPromo();
 
