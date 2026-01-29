@@ -7,6 +7,7 @@ const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 const Order = require("./models/order"); // ✅ move require up (clean)
+const { promo } = require("./models/promo");
 
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
   bot.on("callback_query", async q => {
@@ -176,6 +177,53 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
 
         return;
       }
+
+      // ===============================
+// PROMO CLAIM
+// ===============================
+if (data === "PROMO_CLAIM") {
+  const userId = from.id.toString();
+  const username =
+    from.username
+      ? `@${from.username}`
+      : `[User](tg://user?id=${from.id})`;
+
+  // Promo inactive
+  if (!promo.active) {
+    return bot.answerCallbackQuery(callbackQuery.id, {
+      text: "❌ Promotion မရှိတော့ပါ"
+    });
+  }
+
+  // Already claimed
+  if (promo.claimed) {
+    return bot.answerCallbackQuery(callbackQuery.id, {
+      text: `❌ ဒီ Promotion ကို ${promo.winner.username} က ထုတ်ယူပြီးပါပြီ`,
+      show_alert: true
+    });
+  }
+
+  // ===============================
+  // FIRST WINNER
+  // ===============================
+  promo.claimed = true;
+  promo.winner = {
+    userId,
+    username
+  };
+
+  // Ask winner for ID + Server ID
+  await bot.sendMessage(
+    userId,
+    `🎉 *ဂုဏ်ယူပါတယ်!*\n\nသင် Promotion ကို အနိုင်ရရှိခဲ့ပါပြီ 🎁\n\n📩 *ကျေးဇူးပြု၍*\n👉 Game ID\n👉 Server ID\nကို ဒီ chat မှာပို့ပေးပါ`,
+    { parse_mode: "Markdown" }
+  );
+
+  return bot.answerCallbackQuery(callbackQuery.id, {
+    text: "🎉 Congratulations! You won!",
+    show_alert: true
+  });
+}
 
 // ===============================
 // ADMIN DASHBOARD ACTIONS
