@@ -273,27 +273,33 @@ function statusDashboardUI({ totalUsers, approvedOrders, uptimeHours }) {
 // ===============================
 // TOP 10 UI
 // ===============================
-function top10UI(list = []) {
-  const monthName = getMonthName();
+function top10UI(list = [], monthName = "") {
+  let text =
+    `🏆 *TOP 10 USERS — ${esc(monthName)}*\n` +
+    `━━━━━━━━━━━━━━━\n\n`;
 
-  const rows = list.map((u, i) => {
-    const name = formatUserDisplay(u);
-    const total = Number(u.total || 0).toLocaleString();
+  if (!list.length) {
+    return text + "No completed orders yet 🙏";
+  }
 
-    return (
-      `${i + 1}. ${name}\n` +
-      `   💰 ${total} MMK`
-    );
+  list.forEach((u, i) => {
+    const displayName = u.username
+      ? `@${esc(u.username)}`
+      : `[${esc(u.firstName || "User")}](tg://user?id=${u.userId})`;
+
+    const medal =
+      i === 0 ? "🥇" :
+      i === 1 ? "🥈" :
+      i === 2 ? "🥉" : "🏅";
+
+    text +=
+      `${medal} *#${i + 1}*\n` +
+      `👤 ${displayName}\n` +
+      `💰 ${Number(u.total).toLocaleString()} MMK\n\n`;
   });
 
-  return [
-    `🏆 *TOP 10 USERS*`,
-    `🗓 *Month:* ${monthName}`,
-    `━━━━━━━━━━━━━━━`,
-    rows.length ? rows.join("\n\n") : "_No data yet_"
-  ].join("\n");
+  return text;
 }
-
 // ===============================
 // MY RANK UI
 // ===============================
