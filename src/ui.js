@@ -258,7 +258,7 @@ async function sendWaiting(bot, chatId, orderId) {
 // ===============================
 async function notifyUserApproved(bot, order) {
   // order.createdAt may exist (mongoose timestamps)
-  const time = order.createdAt ? formatBangkokTime(order.createdAt) : formatBangkokTime();
+  const time = order.createdAt ? formatMyanmarTime(order.createdAt) : formatMyanmarTime();
 
   return bot.sendMessage(
     order.userId,
