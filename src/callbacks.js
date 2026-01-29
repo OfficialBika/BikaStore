@@ -6,30 +6,25 @@ const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 const Order = require("./models/order");
-const { promo, resetPromo } = require("./models/promo");
+const promo = require("./promo"); // ✅ SAME PROMO OBJECT
 const PromoHistory = require("./models/PromoHistory");
 
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
   bot.on("callback_query", async (q) => {
-    const chatId = q?.message?.chat?.id
-      ? String(q.message.chat.id)
-      : null;
-    const data = q?.data;
-    const from = q?.from;
+    const data = q.data;
+    const from = q.from;
+    const msg = q.message;
+    const chatId = msg?.chat?.id ? String(msg.chat.id) : null;
 
-    if (!chatId || !data || !from) {
-      try { await bot.answerCallbackQuery(q.id); } catch (_) {}
-      return;
-    }
-
-    // ACK helper
-    const ack = async (opts = {}) =>
+    const ack = (opts = {}) =>
       bot.answerCallbackQuery(q.id, opts).catch(() => null);
+
+    if (!data || !from) return ack();
 
     try {
 
       // ===============================
-      // MY PENDING / MY ORDERS
+      // MY ORDERS / PENDING
       // ===============================
       if (data === "PENDING_CONTINUE" || data === "MYORDERS") {
         await ack();
@@ -37,7 +32,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
         const list = await Order.find({
           userId: chatId,
           status: "PENDING"
-        }).sort({ createdAt: -1 }).limit(10);
+        }).sort({ createdAt: -1 });
 
         if (!list.length) {
           return bot.sendMessage(chatId, "✅ Pending order မရှိပါ");
@@ -49,8 +44,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
             `🆔 *${o.orderId}*\n` +
             `🎮 ${o.product}\n` +
             `🆔 ${o.gameId}${o.serverId ? ` (${o.serverId})` : ""}\n` +
-            `${o.product === "MLBB" ? "💎" : "🎯"} ${o.amount}\n` +
-            `💰 ${Number(o.totalPrice).toLocaleString()} MMK\n\n`;
+            `💰 ${o.amount}\n\n`;
         }
 
         return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
@@ -61,7 +55,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // ===============================
       if (data === "PENDING_NEW") {
         await ack();
-        session[chatId] = { step: "CHOOSE_GAME" };
+        session[chatId] = { step: "CHOOSE_GAME", msg: {} };
 
         return bot.sendMessage(chatId, "🎮 Game တစ်ခုရွေးပါ ⬇️", {
           reply_markup: {
@@ -86,18 +80,14 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
         };
 
         await ack();
+        await ui.sendPriceList(bot, chatId, game);
 
-        const priceMsg = await ui.sendPriceList(bot, chatId, game);
-        session[chatId].msg.priceListId = priceMsg?.message_id;
-
-        await bot.sendMessage(
+        return bot.sendMessage(
           chatId,
-          game === "MLBB"
-            ? "🆔 *MLBB ID + Server ID*\nဥပမာ: `123456789 1234`"
-            : "🆔 *PUBG ID + Server*\nဥပမာ: `123456789 1`",
-          { parse_mode: "Markdown" }
+          game === "PUBG"
+            ? "🆔 PUBG Game ID ကိုထည့်ပါ"
+            : "🆔 MLBB ID + Server ID\nဥပမာ: 12345678 4321"
         );
-        return;
       }
 
       // ===============================
@@ -110,8 +100,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
         t.step = "PAY_METHOD";
         await ack({ text: "✅ Confirmed" });
 
-        const payMsg = await ui.sendPaymentMethods(bot, chatId);
-        t.msg.paymentMethodsId = payMsg?.message_id;
+        await ui.sendPaymentMethods(bot, chatId);
         return;
       }
 
@@ -121,7 +110,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       if (data === "CANCEL") {
         delete session[chatId];
         await ack({ text: "❌ Cancelled" });
-        return bot.sendMessage(chatId, "အော်ဒါပယ်ဖျက်ပြီးပါပြီ /start ကိုနှိပ်ပါ");
+        return bot.sendMessage(chatId, "Order ကိုဖျက်ပြီးပါပြီ /start");
       }
 
       // ===============================
@@ -143,33 +132,27 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // PROMO CLAIM
       // ===============================
       if (data === "PROMO_CLAIM") {
-        const userId = from.id.toString();
-        const username = from.username
-          ? `@${from.username}`
-          : `[User](tg://user?id=${from.id})`;
-
         if (!promo.active) {
-          return ack({ text: "❌ Promotion မရှိတော့ပါ", show_alert: true });
+          return ack({ text: "Promo မရှိတော့ပါ", show_alert: true });
         }
 
         if (promo.claimed) {
           return ack({
-            text: `❌ ${promo.winner.username} က ထုတ်ယူပြီးပါပြီ`,
+            text: "Promo ကို တစ်ယောက်ထုတ်ပြီးပါပြီ",
             show_alert: true
           });
         }
 
         promo.claimed = true;
+        promo.waitingForId = true;
         promo.winner = {
-          userId,
-          username,
-          step: "WAIT_ID"
+          userId: from.id.toString(),
+          username: from.username ? `@${from.username}` : from.first_name
         };
 
         await bot.sendMessage(
-          userId,
-          `🎉 *ဂုဏ်ယူပါတယ်!*\n\nGame ID + Server ID ပို့ပါ\nဥပမာ: \`123456789 1234\``,
-          { parse_mode: "Markdown" }
+          promo.winner.userId,
+          "🎉 Promo အနိုင်ရပါသည်!\n\nGame ID + Server ID ပို့ပါ"
         );
 
         return ack({ text: "🎉 You won!", show_alert: true });
@@ -180,11 +163,11 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // ===============================
       if (data === "PROMO_APPROVE") {
         if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-          return ack({ text: "⛔ Admin only", show_alert: true });
+          return ack({ text: "Admin only", show_alert: true });
         }
 
         if (!promo.winner) {
-          return ack({ text: "Promo data not found", show_alert: true });
+          return ack({ text: "Promo data မရှိပါ", show_alert: true });
         }
 
         await PromoHistory.create({
@@ -198,10 +181,15 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
 
         await bot.sendMessage(
           promo.winner.userId,
-          "🎁 Promotion ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏"
+          "🎁 Promo ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏"
         );
 
-        resetPromo();
+        promo.reset();
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: msg.chat.id, message_id: msg.message_id }
+        );
+
         return ack({ text: "Promo approved 🎉" });
       }
 
@@ -210,13 +198,19 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // ===============================
       if (data.startsWith("APPROVE:")) {
         if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-          return ack({ text: "⛔ Admin only", show_alert: true });
+          return ack({ text: "Admin only", show_alert: true });
         }
 
         await orders.approveOrder({
           bot,
           orderId: data.replace("APPROVE:", "")
         });
+
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: msg.chat.id, message_id: msg.message_id }
+        );
+
         return ack({ text: "✅ Approved" });
       }
 
@@ -225,20 +219,26 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // ===============================
       if (data.startsWith("REJECT:")) {
         if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-          return ack({ text: "⛔ Admin only", show_alert: true });
+          return ack({ text: "Admin only", show_alert: true });
         }
 
         await orders.rejectOrder({
           bot,
           orderId: data.replace("REJECT:", "")
         });
+
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: msg.chat.id, message_id: msg.message_id }
+        );
+
         return ack({ text: "❌ Rejected" });
       }
 
       await ack();
     } catch (err) {
-      console.error("❌ Callback error:", err);
-      await ack({ text: "⚠️ Error occurred", show_alert: true });
+      console.error("Callback error:", err);
+      await ack({ text: "Error occurred", show_alert: true });
     }
   });
 };
