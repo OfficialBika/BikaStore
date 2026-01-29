@@ -335,6 +335,19 @@ function adminDashboardKeyboard() {
 }
 
 // ===============================
+// STATUS UI (for /status)
+// ===============================
+function statusUI({ totalUsers = 0, approved = 0, aliveHours = 0 }) {
+  return (
+    `🤖 *BIKA STORE — BOT STATUS*\n` +
+    `━━━━━━━━━━━━━━━\n\n` +
+    `👥 *Users:* ${Number(totalUsers).toLocaleString()}\n` +
+    `✅ *Approved Orders:* ${Number(approved).toLocaleString()}\n` +
+    `⏱ *Bot Alive:* ${aliveHours} hours`
+  );
+}
+
+// ===============================
 module.exports = {
   sendPriceList,
   sendPaymentMethods,
