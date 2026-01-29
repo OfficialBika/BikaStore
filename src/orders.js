@@ -151,9 +151,6 @@ async function createOrder({ bot, msg, session, ADMIN_IDS }) {
 // ===============================
 // APPROVE ORDER (FINAL)
 // ===============================
-const Order = require("./models/order");
-const ui = require("./ui");
-
 async function approveOrder({ bot, orderId }) {
   const order = await Order.findOneAndUpdate(
     { orderId, status: "PENDING" }, // ✅ orderId (not _id)
@@ -206,9 +203,6 @@ module.exports = {
 // ===============================
 // REJECT ORDER (FINAL - SAFE)
 // ===============================
-const Order = require("./models/order");
-const ui = require("./ui");
-
 async function notifyUserRejected(bot, order) {
   const text =
     "❌ Order Rejected\n\n" +
