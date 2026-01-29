@@ -42,6 +42,21 @@ function splitAmounts(raw) {
     .filter(Boolean);
 }
 
+function computeTotalMMKMulti(productKey, rawAmount) {
+  const parts = splitAmounts(rawAmount);
+  if (!parts.length) return null;
+
+  let total = 0;
+
+  for (const part of parts) {
+    const item = findPriceItem(productKey, part);
+    if (!item) return null; // ❌ one item fail = all fail
+    total += Number(item.price);
+  }
+
+  return total;
+}
+
 module.exports = {
   isAdmin,
   monthRange,
