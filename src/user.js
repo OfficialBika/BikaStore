@@ -193,7 +193,7 @@ return;
     return;
   }
 
-  t.amount = Number(text);
+  t.amount = String(text).trim().toLowerCase();
 
   // ✅ Delete old messages: price list + ask id + ask amount
   await safeDelete(bot, chatId, t.msg?.priceListId);
