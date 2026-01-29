@@ -7,7 +7,17 @@ const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 
+// ===============================
+
+
+if (data === "MYORDERS") {
+  await ack();
+  // just trigger /myorder like output (we'll add command in Step 5)
+  return bot.sendMessage(chatId, "📦 /myorder ကိုနှိပ်ပြီး pending order တွေကြည့်ပါ ✅");
+}
+
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
+ 
   bot.on("callback_query", async q => {
     const chatId = q?.message?.chat?.id != null ? String(q.message.chat.id) : null;
     const data = q?.data;
@@ -21,6 +31,93 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       // Helper: always ack quickly (avoid Telegram "loading..." stuck)
       const ack = async (opts) => bot.answerCallbackQuery(q.id, opts).catch(() => null);
 
+      // ===============================
+    // PENDING DECISION (from /start prompt)
+    // ===============================
+    if (data === "PENDING_CONTINUE") {
+      await ack();
+
+      // pending orders list ကို user ကိုပြ (commands.js မလိုဘဲ ဒီမှာတင်ပြ)
+      try {
+        const Order = require("./models/order");
+        const list = await Order.find({ userId: chatId, status: "PENDING" })
+          .sort({ createdAt: -1 })
+          .limit(10);
+
+        if (!list.length) {
+          return bot.sendMessage(chatId, "✅ Pending order မရှိပါ");
+        }
+
+        let text = "📦 *MY PENDING ORDERS*\n━━━━━━━━━━━━━━━\n\n";
+        for (const o of list) {
+          text +=
+            `🆔 *${o.orderId}*\n` +
+            `🎮 ${o.product}\n` +
+            `🆔 ${o.gameId}${o.serverId ? ` (${o.serverId})` : ""}\n` +
+            `${o.product === "MLBB" ? "💎" : "🎯"} ${String(o.amount)}\n` +
+            `💰 ${Number(o.totalPrice).toLocaleString()} MMK\n\n`;
+        }
+
+        return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+      } catch (e) {
+        console.error("pending_continue list error:", e);
+        return bot.sendMessage(chatId, "⚠️ Pending list error");
+      }
+    }
+
+    if (data === "PENDING_NEW") {
+      await ack();
+
+      // ✅ pending ရှိနေသေးပေမဲ့ order အသစ် flow ကို စမယ်
+      session[chatId] = { step: "CHOOSE_GAME" };
+
+      return bot.sendMessage(
+        chatId,
+        "🎮 Game တစ်ခုကို ရွေးပါ ⬇️",
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
+              [{ text: "🎯 PUBG UC", callback_data: "GAME:PUBG" }]
+            ]
+          }
+        }
+      );
+    }
+
+    if (data === "MYORDERS") {
+      await ack();
+
+      // same as continue (ပြသပဲပြ)
+      try {
+        const Order = require("./models/order");
+        const list = await Order.find({ userId: chatId, status: "PENDING" })
+          .sort({ createdAt: -1 })
+          .limit(10);
+
+        if (!list.length) {
+          return bot.sendMessage(chatId, "✅ Pending order မရှိပါ");
+        }
+
+        let text = "📦 *MY PENDING ORDERS*\n━━━━━━━━━━━━━━━\n\n";
+        for (const o of list) {
+          text +=
+            `🆔 *${o.orderId}*\n` +
+            `🎮 ${o.product}\n` +
+            `🆔 ${o.gameId}${o.serverId ? ` (${o.serverId})` : ""}\n` +
+            `${o.product === "MLBB" ? "💎" : "🎯"} ${String(o.amount)}\n` +
+            `💰 ${Number(o.totalPrice).toLocaleString()} MMK\n\n`;
+        }
+
+        return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+      } catch (e) {
+        console.error("myorders list error:", e);
+        return bot.sendMessage(chatId, "⚠️ MyOrders error");
+      }
+    }
+      
+    
       // ===============================
       // GAME SELECT (from /start keyboard)
       // callback_data: "GAME:MLBB" | "GAME:PUBG"
