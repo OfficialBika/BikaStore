@@ -177,6 +177,76 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
         return;
       }
 
+// ===============================
+// ADMIN DASHBOARD ACTIONS
+// ===============================
+if (data.startsWith("ADMIN:")) {
+  const fromId = q?.from?.id != null ? String(q.from.id) : "";
+  if (!isAdmin(fromId, ADMIN_IDS)) {
+    await ack({ text: "⛔ Admin only", show_alert: true });
+    return;
+  }
+
+  await ack();
+
+  const Order = require("./models/order");
+
+  // REFRESH dashboard (edit message)
+  if (data === "ADMIN:REFRESH") {
+    const total = await Order.countDocuments();
+    const pending = await Order.countDocuments({ status: "PENDING" });
+    const completed = await Order.countDocuments({ status: "COMPLETED" });
+    const rejected = await Order.countDocuments({ status: "REJECTED" });
+
+    const text = ui.adminDashboardUI({ total, pending, completed, rejected });
+
+    return bot.editMessageText(text, {
+      chat_id: chatId,
+      message_id: q.message.message_id,
+      parse_mode: "Markdown",
+      reply_markup: ui.adminDashboardKeyboard()
+    });
+  }
+
+  // PENDING list (send new message)
+  if (data === "ADMIN:PENDING") {
+    const list = await Order.find({ status: "PENDING" })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    if (!list.length) {
+      return bot.sendMessage(chatId, "✅ Pending order မရှိပါ");
+    }
+
+    let text = "⏳ *PENDING ORDERS (Latest 10)*\n━━━━━━━━━━━━━━━\n\n";
+    for (const o of list) {
+      text +=
+        `🆔 *${o.orderId}*\n` +
+        `👤 ${o.username ? `@${o.username}` : `[User](tg://user?id=${o.userId})`}\n` +
+        `🎮 ${o.product}\n` +
+        `${o.product === "MLBB" ? "💎" : "🎯"} ${String(o.amount)}\n` +
+        `💰 ${Number(o.totalPrice).toLocaleString()} MMK\n\n`;
+    }
+
+    return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+  }
+
+  // TOP10 month (send)
+  if (data === "ADMIN:TOP10_MONTH") {
+    const [start, end] = require("./helpers").monthRange();
+    const list = await orders.getTop10(start, end);
+    return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
+  }
+
+  // TOP10 today (send)
+  if (data === "ADMIN:TOP10_TODAY") {
+    const { dayRange } = require("./helpers");
+    const [start, end] = dayRange();
+    const list = await orders.getTop10(start, end);
+    return bot.sendMessage(chatId, ui.top10UI(list, { period: "Today" }), { parse_mode: "Markdown" });
+  }
+}
+
       // ===============================
       // ADMIN APPROVE
       // callback_data: "APPROVE:<orderId>"
