@@ -17,20 +17,34 @@ module.exports = function registerCommands({ bot, session, ADMIN_IDS }) {
   ]).catch(() => null);
 
   // ===============================
-  // /status (admin)
-  // ===============================
-  bot.onText(/^\/status(?:\s+.*)?$/i, async (msg) => {
-    const chatId = String(msg.chat.id);
-    const admin = isAdmin(msg.from?.id, ADMIN_IDS);
+// /status (admin) — PRO DASHBOARD
+// ===============================
+bot.onText(/^\/status(?:\s+.*)?$/i, async (msg) => {
+  const chatId = String(msg.chat.id);
+  const fromId = String(msg.from?.id || "");
 
-    try {
-      const stats = await orders.getStatusStats(admin);
-      return bot.sendMessage(chatId, ui.statusUI(stats), { parse_mode: "Markdown" });
-    } catch (err) {
-      console.error("status cmd error:", err);
-      return bot.sendMessage(chatId, "⚠️ status error");
-    }
-  });
+  if (!isAdmin(fromId, ADMIN_IDS)) {
+    return bot.sendMessage(chatId, "⛔ Admin only");
+  }
+
+  try {
+    const { totalUsers, approvedOrders } = await orders.getStatusSummary();
+
+    const uptimeMs = Date.now() - (global.BOT_START_TIME || Date.now());
+    const uptimeHours = Math.floor(uptimeMs / (1000 * 60 * 60));
+
+    const text = ui.statusDashboardUI({
+      totalUsers,
+      approvedOrders,
+      uptimeHours
+    });
+
+    return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+  } catch (err) {
+    console.error("status cmd error:", err);
+    return bot.sendMessage(chatId, "⚠️ status error");
+  }
+});
 
   // ===============================
   // /top10 (USER + ADMIN) - current month
