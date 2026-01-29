@@ -36,42 +36,70 @@ module.exports = function registerCommands({ bot, session, ADMIN_IDS }) {
   // /top10 (admin) - current month
   // ===============================
   bot.onText(/^\/top10(?:\s+.*)?$/i, async (msg) => {
-    const chatId = String(msg.chat.id);
-    const admin = isAdmin(msg.from?.id, ADMIN_IDS);
+  const chatId = String(msg.chat.id);
 
-    if (!admin) {
-      return bot.sendMessage(chatId, "⛔ Admin only");
-    }
+  try {
+    const [start, end] = monthRange();
+    const list = await orders.getTop10(start, end);
 
-    try {
-      const [start, end] = monthRange();
-      const list = await orders.getTop10(start, end);
-      return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
-    } catch (err) {
-      console.error("top10 cmd error:", err);
-      return bot.sendMessage(chatId, "⚠️ top10 error");
-    }
-  });
+    // ✅ UI already prints month name in Step 1
+    return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
+  } catch (err) {
+    console.error("top10 cmd error:", err);
+    return bot.sendMessage(chatId, "⚠️ top10 error");
+  }
+});
 
   // ===============================
   // /myrank - current month (user)
   // ===============================
   bot.onText(/^\/myrank(?:\s+.*)?$/i, async (msg) => {
-    const chatId = String(msg.chat.id);
-    const userId = String(msg.from?.id || msg.chat.id);
+  const chatId = String(msg.chat.id);
+  const userId = String(msg.from?.id || msg.chat.id);
 
-    try {
-      const [start, end] = monthRange();
-      const r = await orders.getUserRank(userId, start, end);
+  try {
+    const [start, end] = monthRange();
+    const r = await orders.getUserRank(userId, start, end);
 
-      if (!r) {
-        return bot.sendMessage(chatId, "ဒီလအတွင်း Completed order မရှိသေးပါ ✅");
-      }
-
-      return bot.sendMessage(chatId, ui.myRankUI(r.rank, r.total), { parse_mode: "Markdown" });
-    } catch (err) {
-      console.error("myrank cmd error:", err);
-      return bot.sendMessage(chatId, "⚠️ myrank error");
+    if (!r) {
+      return bot.sendMessage(chatId, "ဒီလအတွင်း Completed order မရှိသေးပါ ✅");
     }
-  });
-};
+
+    return bot.sendMessage(chatId, ui.myRankUI(r.rank, r.total), { parse_mode: "Markdown" });
+  } catch (err) {
+    console.error("myrank cmd error:", err);
+    return bot.sendMessage(chatId, "⚠️ myrank error");
+  }
+});
+
+   // ===============================
+  // /admin - Admin Dashboard  month (adminonly)
+  // ===============================
+
+bot.onText(/^\/admin(?:\s+.*)?$/i, async (msg) => {
+  const chatId = String(msg.chat.id);
+  const fromId = String(msg.from?.id || "");
+
+  if (!isAdmin(fromId, ADMIN_IDS)) {
+    return bot.sendMessage(chatId, "⛔ Admin only");
+  }
+
+  try {
+    const Order = require("./models/order");
+
+    const total = await Order.countDocuments();
+    const pending = await Order.countDocuments({ status: "PENDING" });
+    const completed = await Order.countDocuments({ status: "COMPLETED" });
+    const rejected = await Order.countDocuments({ status: "REJECTED" });
+
+    const text = ui.adminDashboardUI({ total, pending, completed, rejected });
+
+    return bot.sendMessage(chatId, text, {
+      parse_mode: "Markdown",
+      reply_markup: ui.adminDashboardKeyboard()
+    });
+  } catch (e) {
+    console.error("admin dashboard error:", e);
+    return bot.sendMessage(chatId, "⚠️ admin dashboard error");
+  }
+});
