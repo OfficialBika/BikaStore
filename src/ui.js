@@ -306,6 +306,25 @@ function myRankUI(rank, total) {
   ].join("\n");
 }
 
+ // ===============================
+  // /admin UI 
+  // ===============================
+
+function adminDashboardKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "🔄 Refresh", callback_data: "ADMIN:REFRESH" },
+        { text: "⏳ Pending", callback_data: "ADMIN:PENDING" }
+      ],
+      [
+        { text: "🏆 Top10 (Month)", callback_data: "ADMIN:TOP10_MONTH" },
+        { text: "🏆 Top10 (Today)", callback_data: "ADMIN:TOP10_TODAY" }
+      ]
+    ]
+  };
+}
+
 // ===============================
 module.exports = {
   sendPriceList,
