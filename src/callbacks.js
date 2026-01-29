@@ -9,6 +9,7 @@ const { isAdmin } = require("./helpers");
 const Order = require("./models/order"); // ✅ move require up (clean)
 const { promo } = require("./models/promo");
 const { promo, resetPromo } = require("./models/promo");
+const PromoHistory = require("./models/PromoHistory");
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
   bot.on("callback_query", async q => {
     const chatId = q?.message?.chat?.id != null ? String(q.message.chat.id) : null;
@@ -316,9 +317,19 @@ if (data === "PROMO_APPROVE") {
 
   const winner = promo.winner;
 
-  // Edit admin message (remove button)
+  // ✅ SAVE PROMO HISTORY
+  await PromoHistory.create({
+    promoTitle: promo.title,
+    winnerId: winner.userId,
+    winnerUsername: winner.username,
+    gameId: winner.gameId,
+    serverId: winner.serverId,
+    approvedBy: q.from.id.toString()
+  });
+
+  // Admin UI update
   await bot.editMessageText(
-    `🎁 *PROMOTION COMPLETED*\n━━━━━━━━━━━━━━━\n\n👤 Winner: ${winner.username}\n🆔 Game ID: \`${winner.gameId}\`\n🖥 Server ID: \`${winner.serverId}\`\n\n✅ ဒီဆုကို ထုတ်ပေးပြီးပါပြီ`,
+    `🎁 *PROMOTION COMPLETED*\n━━━━━━━━━━━━━━━\n\n👤 Winner: ${winner.username}\n🆔 Game ID: \`${winner.gameId}\`\n🖥 Server ID: \`${winner.serverId}\`\n\n📦 Promo history saved`,
     {
       chat_id: q.message.chat.id,
       message_id: q.message.message_id,
@@ -329,14 +340,12 @@ if (data === "PROMO_APPROVE") {
   // Notify winner
   await bot.sendMessage(
     winner.userId,
-    "🎉 *ဂုဏ်ယူပါတယ်!*\n━━━━━━━━━━━━━━━\n\nသင့်ရရှိတဲ့ ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏",
+    "🎉 *ဂုဏ်ယူပါတယ်!*\n━━━━━━━━━━━━━━━\n\nသင့်ရရှိတဲ့ Promotion ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏",
     { parse_mode: "Markdown" }
   );
 
-  // Reset promo
   resetPromo();
-
-  return bot.answerCallbackQuery(q.id, { text: "Approved 🎉" });
+  return bot.answerCallbackQuery(q.id, { text: "Promo completed 🎉" });
 }
 
       
