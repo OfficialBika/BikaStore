@@ -7,7 +7,6 @@ const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 const Order = require("./models/order"); // ✅ move require up (clean)
-const { promo } = require("./models/promo");
 const { promo, resetPromo } = require("./models/promo");
 const PromoHistory = require("./models/PromoHistory");
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
