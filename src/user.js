@@ -1,14 +1,10 @@
 // ===============================
-// USER HANDLER (FINAL)
-// Flow:
-// /start -> (callbacks: MLBB/PUBG) -> ask ID+ServerID -> ask Diamonds/UC amount
-// -> preview (callbacks: confirm/cancel) -> payment method (callbacks)
-// -> ask receipt photo -> photo upload -> create order (orders.createOrder)
+// USER HANDLER (FINAL - CLEAN)
 // ===============================
 
 const ui = require("./ui");
 const orders = require("./orders");
-const Order = require("./models/order"); // ✅ move to top (avoid inside handler)
+const Order = require("./models/order");
 
 // -------------------------------
 // Helpers
@@ -24,21 +20,8 @@ async function safeDelete(bot, chatId, messageId) {
   } catch (_) {}
 }
 
-function rememberMsg(t, key, messageObj) {
-  if (!t || !t.msg || !messageObj) return;
-  t.msg[key] = messageObj.message_id;
-  if (Array.isArray(t.msg.stack)) t.msg.stack.push(messageObj.message_id);
-}
-
 function ensureSession(session, chatId) {
-  if (!session || typeof session !== "object") {
-    throw new Error("session object is missing");
-  }
-
-  if (!session[chatId] || typeof session[chatId] !== "object") {
-    session[chatId] = {};
-  }
-
+  if (!session[chatId]) session[chatId] = {};
   const t = session[chatId];
 
   if (!t.msg || typeof t.msg !== "object") {
@@ -52,23 +35,28 @@ function ensureSession(session, chatId) {
   return t;
 }
 
-// Parse "id serverId" or "id|serverId" or "id,serverId" etc.
+function rememberMsg(t, key, m) {
+  if (!t?.msg || !m?.message_id) return;
+  t.msg[key] = m.message_id;
+  t.msg.stack.push(m.message_id);
+}
+
+// Parse "id server"
 function parseGameIdAndServer(input) {
   const raw = String(input || "").trim();
-  const parts = raw.split(/[\s,|\/\-:]+/).filter(Boolean);
+  const parts = raw.split(/[\s,|/:-]+/).filter(Boolean);
   if (parts.length < 2) return null;
 
-  const gameId = parts[0];
-  const serverId = parts[1];
-  if (!gameId || !serverId) return null;
-
-  return { gameId, serverId };
+  return {
+    gameId: parts[0],
+    serverId: parts[1]
+  };
 }
 
 // -------------------------------
 // USER TEXT HANDLER
 // -------------------------------
-async function onMessage({ bot, msg, session, ADMIN_IDS }) {
+async function onMessage({ bot, msg, session, ADMIN_IDS, promo }) {
   const chatId = getChatId(msg);
   if (!chatId) return;
 
@@ -81,15 +69,17 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
   // /start (RESET FLOW)
   // ===============================
   if (text === "/start") {
-    // make clean session container (keep msg holder)
-    session[chatId] = { step: "CHOOSE_GAME", msg: Object.create(null) };
-    const t0 = ensureSession(session, chatId);
+    // clean state (keep msg container)
+    t.msg = { stack: [] };
+    t.msg.step = "CHOOSE_GAME";
 
-    // ✅ If user already has pending orders, ask what to do
-    const pendingCount = await Order.countDocuments({ userId: chatId, status: "PENDING" });
+    const pendingCount = await Order.countDocuments({
+      userId: chatId,
+      status: "PENDING"
+    });
 
     if (pendingCount > 0) {
-      session[chatId] = { step: "PENDING_DECISION", msg: Object.create(null) };
+      t.msg.step = "PENDING_DECISION";
 
       return bot.sendMessage(
         chatId,
@@ -107,7 +97,6 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
       );
     }
 
-    // ✅ send start menu and remember message id
     const m = await bot.sendMessage(
       chatId,
       "👋 *Welcome to BikaStore!*\n\n🎮 Game တစ်ခုကို ရွေးပါ ⬇️",
@@ -122,160 +111,106 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
       }
     );
 
-    rememberMsg(t0, "startMenuId", m);
+    rememberMsg(t, "startMenuId", m);
     return;
   }
 
-// ===============================
-// PROMO WINNER ID INPUT
-// ===============================
-if (
-  promo.active &&
-  promo.claimed &&
-  promo.winner &&
-  chatId === promo.winner.userId &&
-  !promo.winner.gameId
-) {
-  const parts = text.trim().split(/\s+/);
-
-  if (parts.length < 2) {
-    return bot.sendMessage(
-      chatId,
-      "⚠️ Game ID နှင့် Server ID ကို space ခြားပြီးပို့ပါ\nဥပမာ: `12345678 4321`",
-      { parse_mode: "Markdown" }
-    );
-  }
-
-  const [gameId, serverId] = parts;
-
-  // Save winner info
-  promo.winner.gameId = gameId;
-  promo.winner.serverId = serverId;
-
-  // Confirm to user
-  await bot.sendMessage(
-    chatId,
-    "✅ သင့်ဆုလက်ဆောင်ကို Admin ထံ တင်ပြပြီးပါပြီ ⏳"
-  );
-
-  // Send to admin
-  for (const adminId of promo.adminIds) {
-    await bot.sendMessage(
-      adminId,
-      `🎁 *PROMOTION WINNER*\n━━━━━━━━━━━━━━━\n\n👤 Winner: ${promo.winner.username}\n🆔 Game ID: \`${gameId}\`\n🖥 Server ID: \`${serverId}\``,
-      {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "✅ Approve Reward",
-                callback_data: "PROMO_APPROVE"
-              }
-            ]
-          ]
-        }
-      }
-    );
-  }
-
-  return;
-}
-  
-
-  // If user hasn't started, ignore
-  if (!t.step) return;
-
   // ===============================
-  // STEP: WAIT_GAME_ID (ID + ServerID)
+  // PROMO WINNER INPUT (SAFE)
   // ===============================
-  if (t.step === "WAIT_GAME_ID") {
+  if (
+    promo &&
+    promo.active &&
+    promo.winner &&
+    chatId === promo.winner.userId &&
+    !promo.winner.gameId
+  ) {
     const parsed = parseGameIdAndServer(text);
     if (!parsed) {
-      await bot.sendMessage(
+      return bot.sendMessage(
         chatId,
-        "❌ *ID နဲ့ Server ID ကို မှန်အောင်ထည့်ပါ*\n\nဥပမာ:\n`123456789 1234`\n( space သို့မဟုတ် comma သို့မဟုတ် | နဲ့ခွဲလို့ရ )",
+        "⚠️ Game ID နှင့် Server ID ကို space ခြားပြီးပို့ပါ\nဥပမာ: `12345678 4321`",
         { parse_mode: "Markdown" }
       );
-      return;
     }
 
-    t.game_id = parsed.gameId;
-    t.server_id = parsed.serverId;
+    promo.winner.gameId = parsed.gameId;
+    promo.winner.serverId = parsed.serverId;
 
-    // Next: ask amount
-    t.step = "WAIT_AMOUNT";
+    await bot.sendMessage(chatId, "✅ ဆုလက်ဆောင်ကို Admin ထံပို့ပြီးပါပြီ ⏳");
+
+    for (const adminId of promo.adminIds || []) {
+      await bot.sendMessage(
+        adminId,
+        `🎁 *PROMO WINNER*\n\n👤 ${promo.winner.username}\n🆔 ${parsed.gameId}\n🖥 ${parsed.serverId}`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ Approve Reward", callback_data: "PROMO_APPROVE" }]
+            ]
+          }
+        }
+      );
+    }
+
+    return;
+  }
+
+  // -------------------------------
+  // FLOW STEPS
+  // -------------------------------
+  const step = t.msg.step;
+  if (!step) return;
+
+  // ===============================
+  // WAIT_GAME_ID
+  // ===============================
+  if (step === "WAIT_GAME_ID") {
+    const parsed = parseGameIdAndServer(text);
+    if (!parsed) {
+      return bot.sendMessage(
+        chatId,
+        "❌ ID & Server ID မှန်အောင်ထည့်ပါ\nဥပမာ: `123456789 1234`",
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    t.msg.game_id = parsed.gameId;
+    t.msg.server_id = parsed.serverId;
+    t.msg.step = "WAIT_AMOUNT";
 
     const m = await bot.sendMessage(
       chatId,
-      t.game === "MLBB"
-        ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: `86` / အများဆို `wp+wp2` / `86+343` )"
-        : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
+      t.msg.game === "MLBB"
+        ? "💎 Diamonds ပမာဏကို ထည့်ပါ (ဥပမာ: `86` / `wp+wp2`)"
+        : "🎯 UC ပမာဏကို ထည့်ပါ (ဥပမာ: `60`)",
       { parse_mode: "Markdown" }
     );
 
-    // remember
-    t.msg.askAmountId = m?.message_id;
+    rememberMsg(t, "askAmountId", m);
     return;
   }
 
   // ===============================
-  // STEP: WAIT_AMOUNT (Diamonds/UC amount)
+  // WAIT_AMOUNT
   // ===============================
-  if (t.step === "WAIT_AMOUNT") {
-    // ✅ allow: 86, 86+343, wp, wp2+wp3, Wp+343, /wp2, "wp + 343"
-    const amountInput = String(text || "")
-      .trim()
-      .replace(/\s+/g, "")
-      .replace(/^\//, "");
-
-    const isValidAmount = /^[a-zA-Z0-9+]+$/.test(amountInput);
-
-    if (!isValidAmount) {
-      await bot.sendMessage(
+  if (step === "WAIT_AMOUNT") {
+    const amount = text.replace(/\s+/g, "").replace(/^\//, "").toLowerCase();
+    if (!/^[a-z0-9+]+$/.test(amount)) {
+      return bot.sendMessage(
         chatId,
-        "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86 | 86+343 | wp | wp+wp2",
-        { parse_mode: "Markdown" }
+        "❌ Amount မမှန်ပါ\nဥပမာ: 86 | 86+343 | wp | wp+wp2"
       );
-      return;
     }
 
-    // ✅ save amount as STRING (lowercase for wp/wp2 case-insensitive)
-    t.amount = amountInput.toLowerCase();
+    t.msg.amount = amount;
+    t.msg.step = "PREVIEW";
 
-    // ✅ delete old messages: price list + ask id + ask amount
-    await safeDelete(bot, chatId, t.msg?.priceListId);
-    await safeDelete(bot, chatId, t.msg?.askIdId);
-    await safeDelete(bot, chatId, t.msg?.askAmountId);
-
-    if (t.msg) {
-      delete t.msg.priceListId;
-      delete t.msg.askIdId;
-      delete t.msg.askAmountId;
-    }
-
-    // Next step: preview
-    t.step = "PREVIEW";
-
-    const previewMsg = await ui.sendOrderPreview(bot, chatId, t);
-    if (t.msg) t.msg.previewId = previewMsg?.message_id;
-
+    const preview = await ui.sendOrderPreview(bot, chatId, t.msg);
+    rememberMsg(t, "previewId", preview);
     return;
   }
-
-  // ===============================
-  // STEP: WAIT_RECEIPT (Tell user to send photo)
-  // ===============================
-  if (t.step === "WAIT_RECEIPT") {
-    await bot.sendMessage(
-      chatId,
-      "📸 *ပြေစာ Screenshot ကို photo အနေနဲ့ ပို့ပါ*\n(Album မပို့ပါနဲ့—Photo တစ်ပုံချင်းပို့ပါ)",
-      { parse_mode: "Markdown" }
-    );
-    return;
-  }
-
-  // Otherwise: ignore
 }
 
 // -------------------------------
@@ -286,34 +221,10 @@ async function onPaymentPhoto({ bot, msg, session, ADMIN_IDS }) {
   if (!chatId) return;
 
   const t = session[chatId];
-
-  // Only accept receipt photo at correct step
-  if (!t || t.step !== "WAIT_RECEIPT") return;
-
-  // ❌ delete payment info message
-  try {
-    if (t.msg?.paymentInfoId) {
-      await bot.deleteMessage(chatId, t.msg.paymentInfoId);
-      delete t.msg.paymentInfoId;
-    }
-  } catch (_) {}
-
-  // ❌ delete preview message if still exists
-  try {
-    if (t.msg?.previewId) {
-      await bot.deleteMessage(chatId, t.msg.previewId);
-      delete t.msg.previewId;
-    }
-  } catch (_) {}
+  if (!t?.msg || t.msg.step !== "WAIT_RECEIPT") return;
 
   try {
-    await orders.createOrder({
-      bot,
-      msg,
-      session,
-      ADMIN_IDS
-    });
-
+    await orders.createOrder({ bot, msg, session, ADMIN_IDS });
     delete session[chatId];
   } catch (err) {
     console.error("❌ Payment photo error:", err);
