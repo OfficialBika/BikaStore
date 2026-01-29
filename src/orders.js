@@ -253,8 +253,30 @@ async function getStatusStats(isAdminFlag) {
 
 async function getTop10(start, end) {
   return Order.aggregate([
-    { $match: { status: "COMPLETED", approvedAt: { $gte: start, $lt: end } } },
-    { $group: { _id: "$userRef", total: { $sum: "$totalPrice" } } },
+    {
+      $match: {
+        status: "COMPLETED",
+        approvedAt: { $gte: start, $lt: end }
+      }
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "userRef",
+        foreignField: "_id",
+        as: "user"
+      }
+    },
+    { $unwind: "$user" },
+    {
+      $group: {
+        _id: "$user._id",
+        userId: { $first: "$user.userId" },
+        username: { $first: "$user.username" },
+        firstName: { $first: "$user.firstName" },
+        total: { $sum: "$totalPrice" }
+      }
+    },
     { $sort: { total: -1 } },
     { $limit: 10 }
   ]);
