@@ -1,38 +1,43 @@
 // ===============================
 // CALLBACK QUERY ROUTER (FINAL)
-// Matches user.js FINAL states & keys
 // ===============================
 
 const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
-const Order = require("./models/order"); // ✅ move require up (clean)
+const Order = require("./models/order");
 const { promo, resetPromo } = require("./models/promo");
 const PromoHistory = require("./models/PromoHistory");
-module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
-  bot.on("callback_query", async q => {
-    const chatId = q?.message?.chat?.id != null ? String(q.message.chat.id) : null;
-    const data = q?.data;
 
-    if (!chatId || !data) {
+module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
+  bot.on("callback_query", async (q) => {
+    const chatId = q?.message?.chat?.id
+      ? String(q.message.chat.id)
+      : null;
+    const data = q?.data;
+    const from = q?.from;
+
+    if (!chatId || !data || !from) {
       try { await bot.answerCallbackQuery(q.id); } catch (_) {}
       return;
     }
 
-    // ✅ ack helper (must be inside callback)
-    const ack = async (opts) =>
+    // ACK helper
+    const ack = async (opts = {}) =>
       bot.answerCallbackQuery(q.id, opts).catch(() => null);
 
     try {
+
       // ===============================
-      // PENDING DECISION (from /start prompt)
+      // MY PENDING / MY ORDERS
       // ===============================
       if (data === "PENDING_CONTINUE" || data === "MYORDERS") {
         await ack();
 
-        const list = await Order.find({ userId: chatId, status: "PENDING" })
-          .sort({ createdAt: -1 })
-          .limit(10);
+        const list = await Order.find({
+          userId: chatId,
+          status: "PENDING"
+        }).sort({ createdAt: -1 }).limit(10);
 
         if (!list.length) {
           return bot.sendMessage(chatId, "✅ Pending order မရှိပါ");
@@ -44,21 +49,21 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
             `🆔 *${o.orderId}*\n` +
             `🎮 ${o.product}\n` +
             `🆔 ${o.gameId}${o.serverId ? ` (${o.serverId})` : ""}\n` +
-            `${o.product === "MLBB" ? "💎" : "🎯"} ${String(o.amount ?? "")}\n` +
+            `${o.product === "MLBB" ? "💎" : "🎯"} ${o.amount}\n` +
             `💰 ${Number(o.totalPrice).toLocaleString()} MMK\n\n`;
         }
 
         return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
       }
 
+      // ===============================
+      // NEW ORDER
+      // ===============================
       if (data === "PENDING_NEW") {
         await ack();
-
-        // ✅ allow new order even if pending exists
         session[chatId] = { step: "CHOOSE_GAME" };
 
-        return bot.sendMessage(chatId, "🎮 Game တစ်ခုကို ရွေးပါ ⬇️", {
-          parse_mode: "Markdown",
+        return bot.sendMessage(chatId, "🎮 Game တစ်ခုရွေးပါ ⬇️", {
           reply_markup: {
             inline_keyboard: [
               [{ text: "💎 MLBB Diamonds", callback_data: "GAME:MLBB" }],
@@ -70,337 +75,170 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
 
       // ===============================
       // GAME SELECT
-      // callback_data: "GAME:MLBB" | "GAME:PUBG"
       // ===============================
-      if (data === "GAME:MLBB" || data === "GAME:PUBG") {
-        const game = data.split(":")[1]; // MLBB | PUBG
+      if (data.startsWith("GAME:")) {
+        const game = data.split(":")[1];
 
         session[chatId] = {
           step: "WAIT_GAME_ID",
           game,
-          createdAt: Date.now(),
-          msg: Object.create(null)
+          msg: {}
         };
-
-        const t = session[chatId];
 
         await ack();
 
-        // 1) price list
         const priceMsg = await ui.sendPriceList(bot, chatId, game);
-        t.msg.priceListId = priceMsg?.message_id;
+        session[chatId].msg.priceListId = priceMsg?.message_id;
 
-        // 2) ask id/svid
-        const askIdMsg = await bot.sendMessage(
+        await bot.sendMessage(
           chatId,
           game === "MLBB"
-            ? "🆔 *MLBB ID + Server ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1234`"
-            : "🆔 *PUBG ID (သို့) Character ID ကို ထည့်ပါ*\n\nဥပမာ:\n`123456789 1`",
+            ? "🆔 *MLBB ID + Server ID*\nဥပမာ: `123456789 1234`"
+            : "🆔 *PUBG ID + Server*\nဥပမာ: `123456789 1`",
           { parse_mode: "Markdown" }
         );
-        t.msg.askIdId = askIdMsg?.message_id;
-
         return;
       }
 
       // ===============================
-      // CONFIRM ORDER (from preview)
-      // callback_data: "CONFIRM"
+      // CONFIRM ORDER
       // ===============================
       if (data === "CONFIRM") {
         const t = session[chatId];
-        if (!t) {
-          await ack();
-          return;
-        }
-
-        // delete preview message (optional)
-        try {
-          if (t.msg?.previewId) {
-            await bot.deleteMessage(chatId, t.msg.previewId);
-            delete t.msg.previewId;
-          }
-        } catch (_) {}
+        if (!t) return ack();
 
         t.step = "PAY_METHOD";
-
         await ack({ text: "✅ Confirmed" });
 
         const payMsg = await ui.sendPaymentMethods(bot, chatId);
-        if (t.msg) t.msg.paymentMethodsId = payMsg?.message_id;
-
+        t.msg.paymentMethodsId = payMsg?.message_id;
         return;
       }
 
       // ===============================
       // CANCEL ORDER
-      // callback_data: "CANCEL"
       // ===============================
       if (data === "CANCEL") {
         delete session[chatId];
         await ack({ text: "❌ Cancelled" });
-
-        return bot.sendMessage(
-          chatId,
-          "အော်ဒါကို ပယ်ဖျက်ပြီးပါပြီ။ ပြန်စချင်ရင် /start ကိုနှိပ်ပါ ✅"
-        );
+        return bot.sendMessage(chatId, "အော်ဒါပယ်ဖျက်ပြီးပါပြီ /start ကိုနှိပ်ပါ");
       }
 
       // ===============================
-      // PAYMENT METHOD SELECT
-      // callback_data: "PAY:KPay" | "PAY:WavePay"
+      // PAYMENT METHOD
       // ===============================
       if (data.startsWith("PAY:")) {
         const t = session[chatId];
-        if (!t) {
-          await ack();
-          return;
-        }
+        if (!t) return ack();
 
-        const method = data.replace("PAY:", "").trim();
-        t.paymentMethod = method;
-
-        // delete payment methods message
-        try {
-          if (t.msg?.paymentMethodsId) {
-            await bot.deleteMessage(chatId, t.msg.paymentMethodsId);
-            delete t.msg.paymentMethodsId;
-          }
-        } catch (_) {}
-
+        t.paymentMethod = data.replace("PAY:", "");
         t.step = "WAIT_RECEIPT";
 
-        await ack({ text: `💳 ${method}` });
-
-        const payInfoMsg = await ui.sendPaymentInfo(bot, chatId, method);
-        if (t.msg) t.msg.paymentInfoId = payInfoMsg?.message_id;
-
+        await ack({ text: "💳 Payment Selected" });
+        await ui.sendPaymentInfo(bot, chatId, t.paymentMethod);
         return;
       }
 
-// ===============================
-// PROMO CLAIM
-// ===============================
-if (data === "PROMO_CLAIM") {
-  const userId = from.id.toString();
-  const username =
-    from.username
-      ? `@${from.username}`
-      : `[User](tg://user?id=${from.id})`;
-
-  // Promo inactive
-  if (!promo.active) {
-    return bot.answerCallbackQuery(callbackQuery.id, {
-      text: "❌ Promotion မရှိတော့ပါ"
-    });
-  }
-
-  // Already claimed
-  if (promo.claimed) {
-    return bot.answerCallbackQuery(callbackQuery.id, {
-      text: `❌ ဒီ Promotion ကို ${promo.winner.username} က ထုတ်ယူပြီးပါပြီ`,
-      show_alert: true
-    });
-  }
-
-  // ===============================
-  // FIRST WINNER
-  // ===============================
-  promo.claimed = true;
-  promo.winner = {
-    userId,
-    username
-  };
-
-  // Ask winner for ID + Server ID
-  await bot.sendMessage(
-    userId,
-    `🎉 *ဂုဏ်ယူပါတယ်!*\n\nသင် Promotion ကို အနိုင်ရရှိခဲ့ပါပြီ 🎁\n\n📩 *ကျေးဇူးပြု၍*\n👉 Game ID\n👉 Server ID\nကို ဒီ chat မှာပို့ပေးပါ`,
-    { parse_mode: "Markdown" }
-  );
-
-  return bot.answerCallbackQuery(callbackQuery.id, {
-    text: "🎉 Congratulations! You won!",
-    show_alert: true
-  });
-}
-
-// ===============================
-// ADMIN DASHBOARD ACTIONS
-// ===============================
-if (data.startsWith("ADMIN:")) {
-  const fromId = q?.from?.id != null ? String(q.from.id) : "";
-  if (!isAdmin(fromId, ADMIN_IDS)) {
-    await ack({ text: "⛔ Admin only", show_alert: true });
-    return;
-  }
-
-  await ack();
-
-  const Order = require("./models/order");
-
-  // REFRESH dashboard (edit message)
-  if (data === "ADMIN:REFRESH") {
-    const total = await Order.countDocuments();
-    const pending = await Order.countDocuments({ status: "PENDING" });
-    const completed = await Order.countDocuments({ status: "COMPLETED" });
-    const rejected = await Order.countDocuments({ status: "REJECTED" });
-
-    const text = ui.adminDashboardUI({ total, pending, completed, rejected });
-
-    return bot.editMessageText(text, {
-      chat_id: chatId,
-      message_id: q.message.message_id,
-      parse_mode: "Markdown",
-      reply_markup: ui.adminDashboardKeyboard()
-    });
-  }
-
-  // PENDING list (send new message)
-  if (data === "ADMIN:PENDING") {
-    const list = await Order.find({ status: "PENDING" })
-      .sort({ createdAt: -1 })
-      .limit(10);
-
-    if (!list.length) {
-      return bot.sendMessage(chatId, "✅ Pending order မရှိပါ");
-    }
-
-    let text = "⏳ *PENDING ORDERS (Latest 10)*\n━━━━━━━━━━━━━━━\n\n";
-    for (const o of list) {
-      text +=
-        `🆔 *${o.orderId}*\n` +
-        `👤 ${o.username ? `@${o.username}` : `[User](tg://user?id=${o.userId})`}\n` +
-        `🎮 ${o.product}\n` +
-        `${o.product === "MLBB" ? "💎" : "🎯"} ${String(o.amount)}\n` +
-        `💰 ${Number(o.totalPrice).toLocaleString()} MMK\n\n`;
-    }
-
-    return bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
-  }
-
-  // TOP10 month (send)
-  if (data === "ADMIN:TOP10_MONTH") {
-    const [start, end] = require("./helpers").monthRange();
-    const list = await orders.getTop10(start, end);
-    return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
-  }
-
-  // TOP10 today (send)
-  if (data === "ADMIN:TOP10_TODAY") {
-    const { dayRange } = require("./helpers");
-    const [start, end] = dayRange();
-    const list = await orders.getTop10(start, end);
-    return bot.sendMessage(chatId, ui.top10UI(list, { period: "Today" }), { parse_mode: "Markdown" });
-  }
-}
-
-
-// ===============================
-// PROMO APPROVE (ADMIN)
-// ===============================
-if (data === "PROMO_APPROVE") {
-  if (!isAdmin(q.from.id.toString(), ADMIN_IDS)) {
-    return bot.answerCallbackQuery(q.id, {
-      text: "⛔ Admin only",
-      show_alert: true
-    });
-  }
-
-  if (!promo.winner) {
-    return bot.answerCallbackQuery(q.id, {
-      text: "Promo data not found",
-      show_alert: true
-    });
-  }
-
-  const winner = promo.winner;
-
-  // ✅ SAVE PROMO HISTORY
-  await PromoHistory.create({
-    promoTitle: promo.title,
-    winnerId: winner.userId,
-    winnerUsername: winner.username,
-    gameId: winner.gameId,
-    serverId: winner.serverId,
-    approvedBy: q.from.id.toString()
-  });
-
-  // Admin UI update
-  await bot.editMessageText(
-    `🎁 *PROMOTION COMPLETED*\n━━━━━━━━━━━━━━━\n\n👤 Winner: ${winner.username}\n🆔 Game ID: \`${winner.gameId}\`\n🖥 Server ID: \`${winner.serverId}\`\n\n📦 Promo history saved`,
-    {
-      chat_id: q.message.chat.id,
-      message_id: q.message.message_id,
-      parse_mode: "Markdown"
-    }
-  );
-
-  // Notify winner
-  await bot.sendMessage(
-    winner.userId,
-    "🎉 *ဂုဏ်ယူပါတယ်!*\n━━━━━━━━━━━━━━━\n\nသင့်ရရှိတဲ့ Promotion ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏",
-    { parse_mode: "Markdown" }
-  );
-
-  resetPromo();
-  return bot.answerCallbackQuery(q.id, { text: "Promo completed 🎉" });
-}
-
-      
       // ===============================
-      // ADMIN APPROVE
-      // callback_data: "APPROVE:<orderId>"
+      // PROMO CLAIM
+      // ===============================
+      if (data === "PROMO_CLAIM") {
+        const userId = from.id.toString();
+        const username = from.username
+          ? `@${from.username}`
+          : `[User](tg://user?id=${from.id})`;
+
+        if (!promo.active) {
+          return ack({ text: "❌ Promotion မရှိတော့ပါ", show_alert: true });
+        }
+
+        if (promo.claimed) {
+          return ack({
+            text: `❌ ${promo.winner.username} က ထုတ်ယူပြီးပါပြီ`,
+            show_alert: true
+          });
+        }
+
+        promo.claimed = true;
+        promo.winner = {
+          userId,
+          username,
+          step: "WAIT_ID"
+        };
+
+        await bot.sendMessage(
+          userId,
+          `🎉 *ဂုဏ်ယူပါတယ်!*\n\nGame ID + Server ID ပို့ပါ\nဥပမာ: \`123456789 1234\``,
+          { parse_mode: "Markdown" }
+        );
+
+        return ack({ text: "🎉 You won!", show_alert: true });
+      }
+
+      // ===============================
+      // ADMIN PROMO APPROVE
+      // ===============================
+      if (data === "PROMO_APPROVE") {
+        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+          return ack({ text: "⛔ Admin only", show_alert: true });
+        }
+
+        if (!promo.winner) {
+          return ack({ text: "Promo data not found", show_alert: true });
+        }
+
+        await PromoHistory.create({
+          promoTitle: promo.title,
+          winnerId: promo.winner.userId,
+          winnerUsername: promo.winner.username,
+          gameId: promo.winner.gameId,
+          serverId: promo.winner.serverId,
+          approvedBy: from.id.toString()
+        });
+
+        await bot.sendMessage(
+          promo.winner.userId,
+          "🎁 Promotion ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏"
+        );
+
+        resetPromo();
+        return ack({ text: "Promo approved 🎉" });
+      }
+
+      // ===============================
+      // ADMIN APPROVE ORDER
       // ===============================
       if (data.startsWith("APPROVE:")) {
-        const fromId = q?.from?.id != null ? String(q.from.id) : "";
-        if (!isAdmin(fromId, ADMIN_IDS)) {
-          await ack({ text: "⛔ Admin only", show_alert: true });
-          return;
+        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+          return ack({ text: "⛔ Admin only", show_alert: true });
         }
 
-        const orderId = data.replace("APPROVE:", "").trim();
-        if (!orderId) {
-          await ack();
-          return;
-        }
-
-        await orders.approveOrder({ bot, orderId });
-        await ack({ text: "✅ Approved" });
-        return;
+        await orders.approveOrder({
+          bot,
+          orderId: data.replace("APPROVE:", "")
+        });
+        return ack({ text: "✅ Approved" });
       }
 
       // ===============================
-      // ADMIN REJECT
-      // callback_data: "REJECT:<orderId>"
+      // ADMIN REJECT ORDER
       // ===============================
       if (data.startsWith("REJECT:")) {
-        const fromId = q?.from?.id != null ? String(q.from.id) : "";
-        if (!isAdmin(fromId, ADMIN_IDS)) {
-          await ack({ text: "⛔ Admin only", show_alert: true });
-          return;
+        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+          return ack({ text: "⛔ Admin only", show_alert: true });
         }
 
-        const orderId = data.replace("REJECT:", "").trim();
-        if (!orderId) {
-          await ack();
-          return;
-        }
-
-        await orders.rejectOrder({ bot, orderId });
-        await ack({ text: "❌ Rejected" });
-        return;
+        await orders.rejectOrder({
+          bot,
+          orderId: data.replace("REJECT:", "")
+        });
+        return ack({ text: "❌ Rejected" });
       }
 
       await ack();
     } catch (err) {
       console.error("❌ Callback error:", err);
-      try {
-        await bot.answerCallbackQuery(q.id, {
-          text: "⚠️ Error occurred",
-          show_alert: true
-        });
-      } catch (_) {}
+      await ack({ text: "⚠️ Error occurred", show_alert: true });
     }
   });
 };
