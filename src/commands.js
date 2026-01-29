@@ -49,14 +49,13 @@ bot.onText(/^\/status(?:\s+.*)?$/i, async (msg) => {
 
 
   // ===============================
-  // /promo (ADMIN ONLY)
+  // /promo (User Cmd)
   // ===============================
   bot.onText(/\/promo/, async (msg) => {
     const chatId = msg.from.id.toString();
 
-    // Admin check
-    if (!ADMIN_IDS.includes(chatId)) {
-      return bot.sendMessage(chatId, "⛔ Admin only command");
+    if (!promo.active) {
+    return bot.sendMessage(chatId, "❌ Promotion မရှိသေးပါ");
     }
 
     // Reset & activate promo
