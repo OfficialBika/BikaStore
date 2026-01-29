@@ -8,7 +8,7 @@ const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 const Order = require("./models/order"); // ✅ move require up (clean)
 const { promo } = require("./models/promo");
-
+const { promo, resetPromo } = require("./models/promo");
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
   bot.on("callback_query", async q => {
     const chatId = q?.message?.chat?.id != null ? String(q.message.chat.id) : null;
@@ -178,7 +178,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
         return;
       }
 
-      // ===============================
+// ===============================
 // PROMO CLAIM
 // ===============================
 if (data === "PROMO_CLAIM") {
@@ -295,6 +295,51 @@ if (data.startsWith("ADMIN:")) {
   }
 }
 
+
+// ===============================
+// PROMO APPROVE (ADMIN)
+// ===============================
+if (data === "PROMO_APPROVE") {
+  if (!isAdmin(q.from.id.toString(), ADMIN_IDS)) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "⛔ Admin only",
+      show_alert: true
+    });
+  }
+
+  if (!promo.winner) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "Promo data not found",
+      show_alert: true
+    });
+  }
+
+  const winner = promo.winner;
+
+  // Edit admin message (remove button)
+  await bot.editMessageText(
+    `🎁 *PROMOTION COMPLETED*\n━━━━━━━━━━━━━━━\n\n👤 Winner: ${winner.username}\n🆔 Game ID: \`${winner.gameId}\`\n🖥 Server ID: \`${winner.serverId}\`\n\n✅ ဒီဆုကို ထုတ်ပေးပြီးပါပြီ`,
+    {
+      chat_id: q.message.chat.id,
+      message_id: q.message.message_id,
+      parse_mode: "Markdown"
+    }
+  );
+
+  // Notify winner
+  await bot.sendMessage(
+    winner.userId,
+    "🎉 *ဂုဏ်ယူပါတယ်!*\n━━━━━━━━━━━━━━━\n\nသင့်ရရှိတဲ့ ဆုကို ထုတ်ပေးပြီးပါပြီ 🙏",
+    { parse_mode: "Markdown" }
+  );
+
+  // Reset promo
+  resetPromo();
+
+  return bot.answerCallbackQuery(q.id, { text: "Approved 🎉" });
+}
+
+      
       // ===============================
       // ADMIN APPROVE
       // callback_data: "APPROVE:<orderId>"
