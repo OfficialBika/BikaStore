@@ -97,94 +97,23 @@ bot.on("message", async msg => {
   try {
     if (!msg || !msg.text) return;
 
-    const text = msg.text.trim();
     const chatId = getChatId(msg);
     if (!chatId) return;
 
-    // ===============================
-    // PROMO WINNER ID INPUT (FIRST)
-    // ===============================
-    const promo = session.promo; // ← promo ကို session ထဲက ယူ
-
-    if (
-      promo?.active &&
-      promo?.waitingForId &&
-      promo?.winner &&
-      String(promo.winner.userId) === chatId
-    ) {
-      // Accept:
-      // 123456789 1234
-      // 123456789(1234)
-      // 123456789 (1234)
-      const match = text.match(/(\d+)\s*\(?\s*(\d+)\s*\)?/);
-
-      if (!match) {
-        await bot.sendMessage(
-          chatId,
-          "❌ Format မမှန်ပါ\n\nဥပမာ:\n123456789 1234\n123456789(1234)"
-        );
-        return;
-      }
-
-      const gameId = match[1];
-      const serverId = match[2];
-
-      promo.winner.gameId = gameId;
-      promo.winner.serverId = serverId;
-      promo.waitingForId = false;
-
-      await bot.sendMessage(
-        chatId,
-        "✅ ID လက်ခံပြီးပါပြီ\n\nကို Bika အတည်ပြုပေးမည်ကို စောင့်ပါ "
-      );
-
-      // Notify admin
-      for (const adminId of ADMIN_IDS) {
-        await bot.sendMessage(
-          adminId,
-          `🎁 *PROMO WINNER*\n━━━━━━━━━━━━━━━\n\n👤 ${promo.winner.username}\n🆔 Game ID: \`${gameId}\`\n🖥 Server ID: \`${serverId}\``,
-          {
-            parse_mode: "Markdown",
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: "✅ Approve Promo", callback_data: "PROMO_APPROVE" }]
-              ]
-            }
-          }
-        );
-      }
-
-      return; // promo handle ပြီးရင် stop
-    }
-
-    // ===============================
-    // ADMIN MESSAGE
-    // ===============================
+    // ADMIN
     if (ADMIN_IDS.includes(chatId)) {
-      await adminHandlers.onMessage({
-        bot,
-        msg,
-        session,
-        ADMIN_IDS
-      });
+      await adminHandlers.onMessage({ bot, msg, session, ADMIN_IDS });
       return;
     }
 
-    // ===============================
-    // USER MESSAGE
-    // ===============================
-    await userHandlers.onMessage({
-      bot,
-      msg,
-      session,
-      ADMIN_IDS
-    });
+    // USER (promo, order, everything)
+    await userHandlers.onMessage({ bot, msg, session, ADMIN_IDS });
 
   } catch (err) {
     console.error("Message handler error:", err);
   }
 });
-
+         
 // ===============================
 // PAYMENT PHOTO HANDLER (USER)
 // ===============================
