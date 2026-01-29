@@ -173,7 +173,7 @@ if (pendingCount > 0) {
     const m = await bot.sendMessage(
   chatId,
   t.game === "MLBB"
-    ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: `86/အများဆို + သုံး 86+343`)"
+    ? "💎 *Diamonds ပမာဏကို ထည့်ပါ* (ဥပမာ: ` 86 / အများဆို + နဲ့သုံး wp+wp2 / 86+343`)"
     : "🎯 *UC ပမာဏကို ထည့်ပါ* (ဥပမာ: `60`)",
   { parse_mode: "Markdown" }
 );
@@ -187,11 +187,23 @@ return;
   // ===============================
   // STEP: WAIT_AMOUNT (Diamonds/UC amount)
   // ===============================
-  if (t.step === "WAIT_AMOUNT") {
-  if (!isPositiveIntString(text)) {
-    await bot.sendMessage(chatId, "❌ ပမာဏကို ကိန်းဂဏန်း (1,2,3...) နဲ့ပဲ ထည့်ပါ");
-    return;
-  }
+  // ✅ NEW – allow: 86, 86+343, wp, wp2+wp3, Wp+343
+const amountInput = text
+  .replace(/\s+/g, "")   // remove spaces
+  .replace(/^\//, "");   // allow "/wp2"
+
+const isValidAmount = /^[a-zA-Z0-9+]+$/.test(amountInput);
+
+if (!isValidAmount) {
+  await bot.sendMessage(
+    chatId,
+    "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86 | 86+343 | wp | wp+wp2"
+  );
+  return;
+}
+
+// save amount as STRING (important)
+t.amount = amountInput.toLowerCase();
 
   t.amount = String(text).trim().toLowerCase();
 
