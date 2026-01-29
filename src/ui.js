@@ -29,13 +29,22 @@ function getMonthName(date = new Date()) {
 }
 
 // ===============================
-// TIME (Asia/Bangkok)
+// TIME (Myanmar / Yangon, 12-hour AM/PM)
 // ===============================
-function formatBangkokTime(ts = Date.now()) {
+function formatMyanmarTime(ts = Date.now()) {
   try {
-    return new Date(ts).toLocaleString("en-GB", { timeZone: "Asia/Bangkok" });
+    return new Date(ts).toLocaleString("en-US", {
+      timeZone: "Asia/Yangon",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
   } catch {
-    return new Date(ts).toLocaleString();
+    return new Date(ts).toLocaleString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
   }
 }
 
