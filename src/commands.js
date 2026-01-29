@@ -49,19 +49,29 @@ bot.onText(/^\/status(?:\s+.*)?$/i, async (msg) => {
   // ===============================
   // /top10 (USER + ADMIN) - current month
   // ===============================
-  bot.onText(/^\/top10(?:\s+.*)?$/i, async (msg) => {
-    const chatId = String(msg.chat.id);
+bot.onText(/^\/top10(?:\s+.*)?$/i, async (msg) => {
+  const chatId = String(msg.chat.id);
 
-    try {
-      const [start, end] = monthRange();
-      const list = await orders.getTop10(start, end);
+  try {
+    const [start, end] = monthRange();
+    const list = await orders.getTop10(start, end);
 
-      return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
-    } catch (err) {
-      console.error("top10 cmd error:", err);
-      return bot.sendMessage(chatId, "⚠️ top10 error");
-    }
-  });
+    const { getMonthName } = require("./helpers");
+    const monthName = getMonthName(start);
+
+    return bot.sendMessage(
+      chatId,
+      ui.top10UI(list, monthName),
+      {
+        parse_mode: "Markdown",
+        disable_web_page_preview: true
+      }
+    );
+  } catch (err) {
+    console.error("top10 cmd error:", err);
+    return bot.sendMessage(chatId, "⚠️ top10 error");
+  }
+});
 
   // ===============================
   // /myrank (user) - current month
