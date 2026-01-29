@@ -5,6 +5,7 @@
 const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin, monthRange } = require("./helpers");
+const PromoHistory = require("./models/PromoHistory");
 
 // Admin က message ပို့တဲ့အခါ text command style နဲ့ handle လုပ်ချင်ရင် ဒီမှာ
 // (commands.js က /status /top10 /myrank ကို register လုပ်ထားပြီးသား)
@@ -26,6 +27,25 @@ async function onMessage({ bot, msg, ADMIN_IDS }) {
     const [start, end] = monthRange();
     const list = await orders.getTop10(start, end);
     return bot.sendMessage(chatId, ui.top10UI(list), { parse_mode: "Markdown" });
+  }
+
+  if (text === "/lastpromo") {
+  const last = await PromoHistory.findOne().sort({ approvedAt: -1 });
+
+  if (!last) {
+    return bot.sendMessage(chatId, "📭 Promo history မရှိသေးပါ");
+  }
+
+  return bot.sendMessage(
+    chatId,
+    `🎁 *LAST PROMOTION*
+━━━━━━━━━━━━━━━
+🏷 ${last.promoTitle}
+👤 ${last.winnerUsername}
+🆔 ${last.gameId} (${last.serverId})
+🕒 ${last.approvedAt.toLocaleString()}`,
+    { parse_mode: "Markdown" }
+  );
   }
 
   // Default help
