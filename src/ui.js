@@ -257,14 +257,17 @@ async function updateAdminMessage(bot, adminMsg, status) {
 }
 
 // ===============================
-// STATUS UI
+// STATUS UI (PRO)
 // ===============================
-function statusUI({ role, total, pending }) {
-  return `🤖 *Bika Bot Status*
-━━━━━━━━━━━━━━━
-👤 Role: ${esc(role)}
-📦 Orders: ${Number(total).toLocaleString()}
-⏳ Pending: ${Number(pending).toLocaleString()}`;
+function statusDashboardUI({ totalUsers, approvedOrders, uptimeHours }) {
+  return (
+    `🤖 *BIKA STORE — BOT STATUS*\n` +
+    `━━━━━━━━━━━━━━━\n\n` +
+    `👥 *Users:* ${totalUsers.toLocaleString()}\n` +
+    `✅ *Approved Orders:* ${approvedOrders.toLocaleString()}\n` +
+    `⏱ *Bot Alive:* ${uptimeHours} hours\n\n` +
+    `🟢 Status: *ONLINE*`
+  );
 }
 
 // ===============================
@@ -337,5 +340,6 @@ module.exports = {
   updateAdminMessage,
   statusUI,
   top10UI,
-  myRankUI
+  myRankUI,
+  statusDashboardUI
 };
