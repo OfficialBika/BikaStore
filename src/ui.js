@@ -20,6 +20,11 @@ function esc(text = "") {
   return String(text).replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
 }
 
+function getMonthName(date = new Date()) {
+  return date.toLocaleString("en-US", { month: "long" });
+}
+
+
 // ===============================
 // TIME (Asia/Bangkok)
 // ===============================
@@ -47,6 +52,23 @@ function ensureOrderId(t) {
 // PRICES.MLBB = { name, currency, items:[ {label, price, ...} ] }
 // We try to match by amount from item.amount OR digits in label.
 // ===============================
+
+function formatUserDisplay(u) {
+  // 1️⃣ username ရှိရင် @username
+  if (u?.username) {
+    return `@${esc(u.username)}`;
+  }
+
+  // 2️⃣ username မရှိရင် Telegram mention
+  if (u?.telegramId || u?._id) {
+    const id = u.telegramId || u._id;
+    return `[User](tg://user?id=${id})`;
+  }
+
+  return "Unknown";
+}
+
+
 function extractAmountFromLabel(label) {
   const m = String(label || "").match(/(\d+)/);
   return m ? Number(m[1]) : null;
@@ -248,22 +270,40 @@ function statusUI({ role, total, pending }) {
 // ===============================
 // TOP 10 UI
 // ===============================
-function top10UI(list) {
-  let text = "🏆 *TOP 10 USERS*\n━━━━━━━━━━━━━━━\n\n";
-  (list || []).forEach((u, i) => {
-    text += `${i + 1}. 👤 ${esc(u._id)}\n💰 ${Number(u.total).toLocaleString()} MMK\n\n`;
+function top10UI(list = []) {
+  const monthName = getMonthName();
+
+  const rows = list.map((u, i) => {
+    const name = formatUserDisplay(u);
+    const total = Number(u.total || 0).toLocaleString();
+
+    return (
+      `${i + 1}. ${name}\n` +
+      `   💰 ${total} MMK`
+    );
   });
-  return text;
+
+  return [
+    `🏆 *TOP 10 USERS*`,
+    `🗓 *Month:* ${monthName}`,
+    `━━━━━━━━━━━━━━━`,
+    rows.length ? rows.join("\n\n") : "_No data yet_"
+  ].join("\n");
 }
 
 // ===============================
 // MY RANK UI
 // ===============================
 function myRankUI(rank, total) {
-  return `🏅 *YOUR RANK*
-━━━━━━━━━━━━━━━
-🥇 Rank: #${esc(rank)}
-💰 Total: ${Number(total).toLocaleString()} MMK`;
+  const monthName = getMonthName();
+
+  return [
+    `🎯 *YOUR RANK*`,
+    `🗓 *Month:* ${monthName}`,
+    `━━━━━━━━━━━━━━━`,
+    `🏅 *Rank:* #${esc(rank)}`,
+    `💰 *Total Spent:* ${Number(total || 0).toLocaleString()} MMK`
+  ].join("\n");
 }
 
 // ===============================
