@@ -14,6 +14,11 @@ const adminHandlers = require("./admin");
 const userHandlers = require("./user");
 
 // ===============================
+// BOT START TIME (UPTIME)
+// ===============================
+global.BOT_START_TIME = Date.now();
+
+// ===============================
 // ENV
 // ===============================
 const BOT_TOKEN = process.env.BOT_TOKEN;
