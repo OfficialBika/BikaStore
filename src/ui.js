@@ -163,14 +163,19 @@ async function sendOrderPreview(bot, chatId, t) {
   const orderId = ensureOrderId(t);
   t.orderTime = t.orderTime || formatBangkokTime(t.createdAt || Date.now());
 
-  // compute total
-  const total = computeTotalMMK(game, amount);
-  if (total == null) {
-    // If price not found, still show preview but mark unknown total
-    t.totalPrice = null;
-  } else {
-    t.totalPrice = total;
-  }
+  
+ // compute total (support "86+343" / "wp+wp2")
+const total = computeTotalMMKMulti(game, amount);
+
+if (total == null) {
+  await bot.sendMessage(
+    chatId,
+    "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86+343 / wp+wp2"
+  );
+  return;
+}
+
+t.totalPrice = total;
 
   // Build preview text
   const lines = [
