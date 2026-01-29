@@ -263,9 +263,13 @@ function statusDashboardUI({ totalUsers, approvedOrders, uptimeHours }) {
   return (
     `🤖 *BIKA STORE — BOT STATUS*\n` +
     `━━━━━━━━━━━━━━━\n\n` +
+    
     `👥 *Users:* ${totalUsers.toLocaleString()}\n` +
+    
     `✅ *Approved Orders:* ${approvedOrders.toLocaleString()}\n` +
+    
     `⏱ *Bot Alive:* ${uptimeHours} hours\n\n` +
+    
     `🟢 Status: *ONLINE*`
   );
 }
