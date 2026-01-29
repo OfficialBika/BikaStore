@@ -95,8 +95,8 @@ function getChatId(msg) {
 // ===============================
 bot.on("message", async msg => {
   try {
+    const text = msg.text?.trim();
     if (!msg || !msg.text) return;
-
     const chatId = getChatId(msg);
     if (!chatId) return;
 
@@ -126,6 +126,59 @@ bot.on("message", async msg => {
     console.error("Message handler error:", err);
   }
 });
+
+  // ===============================
+  // PROMO WINNER ID INPUT
+  // ===============================
+  if (
+    promo.active &&
+    promo.waitingForId &&
+    promo.winner &&
+    promo.winner.userId === chatId
+  ) {
+    // Accept formats:
+    // 123456789 1234
+    // 123456789(1234)
+    // 123456789 (1234)
+    const match = text.match(/(\d+)\s*\(?\s*(\d+)\s*\)?/);
+
+    if (!match) {
+      return bot.sendMessage(
+        chatId,
+        "❌ Format မမှန်ပါ\n\nဥပမာ:\n123456789 1234\n123456789(1234)"
+      );
+    }
+
+    const gameId = match[1];
+    const serverId = match[2];
+
+    promo.winner.gameId = gameId;
+    promo.winner.serverId = serverId;
+    promo.waitingForId = false;
+
+    await bot.sendMessage(
+      chatId,
+      "✅ ID လက်ခံပြီးပါပြီ\n\nAdmin မှ အတည်ပြုပေးမည်ကို စောင့်ပါ 🙏"
+    );
+
+    // Notify admin
+    for (const adminId of ADMIN_IDS) {
+      await bot.sendMessage(
+        adminId,
+        `🎁 *PROMO WINNER*\n━━━━━━━━━━━━━━━\n\n👤 ${promo.winner.username}\n🆔 Game ID: \`${gameId}\`\n🖥 Server ID: \`${serverId}\``,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ Approve Promo", callback_data: "PROMO_APPROVE" }]
+            ]
+          }
+        }
+      );
+    }
+  }
+});
+
 
 // ===============================
 // PAYMENT PHOTO HANDLER (USER)
