@@ -126,6 +126,63 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
     return;
   }
 
+// ===============================
+// PROMO WINNER ID INPUT
+// ===============================
+if (
+  promo.active &&
+  promo.claimed &&
+  promo.winner &&
+  chatId === promo.winner.userId &&
+  !promo.winner.gameId
+) {
+  const parts = text.trim().split(/\s+/);
+
+  if (parts.length < 2) {
+    return bot.sendMessage(
+      chatId,
+      "⚠️ Game ID နှင့် Server ID ကို space ခြားပြီးပို့ပါ\nဥပမာ: `12345678 4321`",
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  const [gameId, serverId] = parts;
+
+  // Save winner info
+  promo.winner.gameId = gameId;
+  promo.winner.serverId = serverId;
+
+  // Confirm to user
+  await bot.sendMessage(
+    chatId,
+    "✅ သင့်ဆုလက်ဆောင်ကို Admin ထံ တင်ပြပြီးပါပြီ ⏳"
+  );
+
+  // Send to admin
+  for (const adminId of promo.adminIds) {
+    await bot.sendMessage(
+      adminId,
+      `🎁 *PROMOTION WINNER*\n━━━━━━━━━━━━━━━\n\n👤 Winner: ${promo.winner.username}\n🆔 Game ID: \`${gameId}\`\n🖥 Server ID: \`${serverId}\``,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "✅ Approve Reward",
+                callback_data: "PROMO_APPROVE"
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  return;
+}
+  
+
   // If user hasn't started, ignore
   if (!t.step) return;
 
