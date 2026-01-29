@@ -5,7 +5,6 @@
 const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin, monthRange } = require("./helpers");
-const { promo, resetPromo } = require("./models/promo");
 
 module.exports = function registerCommands({ bot, session, ADMIN_IDS }) {
   // Bot command list
@@ -49,42 +48,91 @@ bot.onText(/^\/status(?:\s+.*)?$/i, async (msg) => {
 
 
   // ===============================
-  // /promo (User Cmd)
+  // /promo create (Admin Cmd)
   // ===============================
   bot.onText(/\/promo/, async (msg) => {
-    const chatId = msg.from.id.toString();
+  const { promo, resetPromo } = require("./models/promo");
 
-    if (!promo.active) {
-    return bot.sendMessage(chatId, "❌ Promotion မရှိသေးပါ");
+bot.onText(/\/promo_create/, async (msg) => {
+  const chatId = msg.chat.id;
+  const fromId = msg.from.id.toString();
+
+  if (!isAdmin(fromId, ADMIN_IDS)) {
+    return bot.sendMessage(chatId, "⛔ Admin only");
+  }
+
+  // reset old promo
+  resetPromo();
+
+  promo.active = true;
+  promo.title = "🎁 BIKA STORE PROMOTION";
+  promo.message =
+    "🎉 *PROMOTION TIME!*\n\n" +
+    "ပထမဆုံး Claim လုပ်တဲ့သူကို 💎 Diamonds လက်ဆောင်ပေးပါမယ်!\n\n" +
+    "👇 အောက်က Button ကို နှိပ်ပါ";
+
+  await bot.sendMessage(chatId, "✅ Promotion created successfully");
+
+  // optional: broadcast preview to admin
+  await bot.sendMessage(chatId, promo.message, {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎁 Claim Promo", callback_data: "PROMO_CLAIM" }]
+      ]
     }
-
-    // Reset & activate promo
-    resetPromo();
-    promo.active = true;
-
-    const promoText = `
-🎁 *Bika Store Promotion*
-
-🔥 ပထမဆုံးနှိပ်တဲ့ ၁ ယောက်သာ ဆုရမယ်!
-⚡ လက်မလွတ်စေနဲ့!
-
-👇 အောက်က button ကိုနှိပ်ပါ
-`;
-
-    await bot.sendMessage(chatId, promoText, {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "🎯 Claim Promotion",
-              callback_data: "PROMO_CLAIM"
-            }
-          ]
-        ]
-      }
-    });
   });
+});
+bot.onText(/\/promo_create/, async (msg) => {
+  const chatId = msg.chat.id;
+  const fromId = msg.from.id.toString();
+
+  if (!isAdmin(fromId, ADMIN_IDS)) {
+    return bot.sendMessage(chatId, "⛔ Admin only");
+  }
+
+  // reset old promo
+  resetPromo();
+
+  promo.active = true;
+  promo.title = "🎁 BIKA STORE PROMOTION";
+  promo.message =
+    "🎉 *PROMOTION TIME!*\n\n" +
+    "ပထမဆုံး Claim လုပ်တဲ့သူက 💎 Diamonds Surprise လက်ဆောင်ရပါမယ်!\n\n" +
+    "👇 အောက်က Button ကို နှိပ်ပါ";
+
+  await bot.sendMessage(chatId, "✅ Promotion created successfully");
+
+  // optional: broadcast preview to admin
+  await bot.sendMessage(chatId, promo.message, {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎁 Claim Promo", callback_data: "PROMO_CLAIM" }]
+      ]
+    }
+  });
+});
+  // ===============================
+  // /promo  (User Cmd)
+  // ===============================
+
+    bot.onText(/\/promo/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  if (!promo.active) {
+    return bot.sendMessage(chatId, "❌ Promotion မရှိသေးပါ");
+  }
+
+  return bot.sendMessage(chatId, promo.message, {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎁 Claim Promo", callback_data: "PROMO_CLAIM" }]
+      ]
+    }
+  });
+});
 
   // ===============================
   // /top10 (USER + ADMIN) - current month
