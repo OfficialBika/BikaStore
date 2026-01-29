@@ -270,7 +270,7 @@ ${order.product === "MLBB" ? "💎" : "🎯"} ${esc(String(order.amount))}
 💰 ${Number(order.totalPrice).toLocaleString()} MMK
 🕒 *Order time:* ${esc(time)}
 
-`🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်`,
+🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်`,
     { parse_mode: "Markdown" }
   );
 }
@@ -285,7 +285,7 @@ async function notifyUserRejected(bot, order) {
 ━━━━━━━━━━━━━━━
 🆔 Order ID: ${esc(order.orderId)}
 
-`တစ်ခုခု အမှားရှိရင် Bot Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
+တစ်ခုခု အမှားရှိရင် Bot Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
     { parse_mode: "Markdown" }
   );
 }
