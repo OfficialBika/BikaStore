@@ -278,6 +278,7 @@ async function notifyUserApproved(bot, order) {
 🆔 ${esc(order.gameId)}${order.serverId ? ` (${esc(order.serverId)})` : ""}
 ${order.product === "MLBB" ? "💎" : "🎯"} ${esc(String(order.amount))}
 💰 ${Number(order.totalPrice).toLocaleString()} MMK
+`🕒 *Order time:* ${esc(t.orderTime)}`
 
 🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်`,
     { parse_mode: "Markdown" }
