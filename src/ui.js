@@ -193,7 +193,7 @@ async function sendOrderPreview(bot, chatId, t) {
   const amount = t.amount ?? t.qty ?? "";
 
   const orderId = ensureOrderId(t);
-  t.orderTime = t.orderTime || formatBangkokTime(t.createdAt || Date.now());
+  t.orderTime = t.orderTime || formatMyanmarTime(t.createdAt || Date.now());
 
   // ✅ multi compute
   const multi = computeTotalMMKMulti(game, amount);
