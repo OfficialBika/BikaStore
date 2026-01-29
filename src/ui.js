@@ -17,9 +17,8 @@ const PAYMENTS = {
 // MARKDOWN SAFE (Markdown v1 safe enough)
 // ===============================
 function esc(text = "") {
-  return String(text).replace(/[_*[\]()~`>#+=|{}.!-]/g, "\\$&");
+  return String(text).replace(/[-_*[\]()~`>#+=|{}.!]/g, "\\$&");
 }
-
 function getMonthName(date = new Date()) {
   try {
     return date.toLocaleString("en-US", { month: "long" });
