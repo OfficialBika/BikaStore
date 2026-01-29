@@ -31,7 +31,13 @@ module.exports = {
       { id: "MLBB_1669", label: "💎 1669 Diamonds", diamonds: 1669, price: 94000 },
       { id: "MLBB_2195", label: "💎 2195 Diamonds", diamonds: 2195, price: 118900 },
       { id: "MLBB_3158", label: "💎 3158 Diamonds", diamonds: 3158, price: 172000 },
-      { id: "MLBB_3688", label: "💎 3688 Diamonds", diamonds: 3688, price: 202000 }
+      { id: "MLBB_3688", label: "💎 3688 Diamonds", diamonds: 3688, price: 202000 },
+      // ===== WP PACKAGES =====
+      { id: "MLBB_WP",  label: "✨ wp1",  amount: "wp",  price: 5900 },
+      { id: "MLBB_WP2", label: "✨ wp2", amount: "wp2", price: 11800 },
+      { id: "MLBB_WP3", label: "✨ wp3", amount: "wp3", price: 17700 },
+      { id: "MLBB_WP4", label: "✨ wp4", amount: "wp4", price: 23600 },
+      { id: "MLBB_WP5", label: "✨ wp5", amount: "wp5", price: 29500 }
     ]
   },
 
