@@ -149,25 +149,28 @@ async function createOrder({ bot, msg, session, ADMIN_IDS }) {
 }
 
 // ===============================
-// APPROVE ORDER
+// APPROVE ORDER (FINAL)
 // ===============================
+const Order = require("./models/order");
+const ui = require("./ui");
+
 async function approveOrder({ bot, orderId }) {
   const order = await Order.findOneAndUpdate(
-    { _id: orderId, status: "PENDING" },
+    { orderId, status: "PENDING" }, // ✅ orderId (not _id)
     { status: "COMPLETED", approvedAt: new Date() },
     { new: true }
   );
 
   if (!order) return;
 
-  // delete waiting message
+  // 1️⃣ delete waiting message (user side)
   if (order.waitMsgId) {
     try {
       await bot.deleteMessage(order.userId, order.waitMsgId);
     } catch (_) {}
   }
 
-  // notify user (log)
+  // 2️⃣ notify user (plain text only)
   try {
     await ui.notifyUserApproved(bot, order);
     console.log("✅ user notified approved:", order.userId);
@@ -175,67 +178,84 @@ async function approveOrder({ bot, orderId }) {
     console.error(
       "❌ notifyUserApproved failed:",
       order.userId,
-      e?.response?.body || e?.message || e
+      e?.message || e
     );
   }
 
-  // edit admin messages
-  const targets = Array.isArray(order.adminMessages) ? order.adminMessages : [];
+  // 3️⃣ REMOVE admin buttons ONLY (keep order info)
+  const targets = Array.isArray(order.adminMessages)
+    ? order.adminMessages
+    : [];
+
   for (const m of targets) {
     try {
-      await ui.updateAdminMessage(
-        bot,
-        { adminChatId: m.chatId, adminMsgId: m.messageId },
-        "APPROVED"
-      );
+      await ui.removeAdminButtons(bot, {
+        adminChatId: m.chatId,
+        adminMsgId: m.messageId
+      });
     } catch (e) {
-      console.error("Admin approve edit failed:", e?.message || e);
+      console.error("❌ Admin approve button remove failed:", e?.message || e);
     }
   }
 }
 
+module.exports = {
+  approveOrder
+};
+
 // ===============================
-// REJECT ORDER
+// REJECT ORDER (FINAL - SAFE)
 // ===============================
+const Order = require("./models/order");
+const ui = require("./ui");
+
+async function notifyUserRejected(bot, order) {
+  const text =
+    "❌ Order Rejected\n\n" +
+    "🆔 Order ID: " + order.orderId + "\n" +
+    "🎮 Game: " + order.product + "\n" +
+    "💬 Reason: Admin rejected this order\n\n" +
+    "📞 Bot Owner @Official_Bika ကို ဆက်သွယ်ပါ";
+
+  // ✅ NO Markdown (100% safe)
+  await bot.sendMessage(order.userId, text);
+}
+
 async function rejectOrder({ bot, orderId }) {
-  const order = await Order.findOneAndUpdate(
-    { _id: orderId, status: "PENDING" },
-    { status: "REJECTED" },
-    { new: true }
-  );
-
-  if (!order) return;
-
-  // delete waiting message
-  if (order.waitMsgId) {
-    try {
-      await bot.deleteMessage(order.userId, order.waitMsgId);
-    } catch (_) {}
+  // 1️⃣ find order
+  const order = await Order.findOne({ orderId });
+  if (!order) {
+    throw new Error("Order not found: " + orderId);
   }
 
-  // notify user (log)
+  // 2️⃣ update status
+  order.status = "REJECTED";
+  await order.save();
+
+  // 3️⃣ notify user
   try {
-    await ui.notifyUserRejected(bot, order);
-    console.log("✅ user notified rejected:", order.userId);
+    await notifyUserRejected(bot, order);
   } catch (e) {
-    console.error(
-      "❌ notifyUserRejected failed:",
-      order.userId,
-      e?.response?.body || e?.message || e
-    );
+    console.error("❌ notifyUserRejected failed:", e?.message || e);
   }
 
-  // edit admin messages
-  const targets = Array.isArray(order.adminMessages) ? order.adminMessages : [];
+  // 4️⃣ update admin messages
+  const targets = Array.isArray(order.adminMessages)
+    ? order.adminMessages
+    : [];
+
   for (const m of targets) {
     try {
       await ui.updateAdminMessage(
         bot,
-        { adminChatId: m.chatId, adminMsgId: m.messageId },
+        {
+          adminChatId: m.chatId,
+          adminMsgId: m.messageId
+        },
         "REJECTED"
       );
     } catch (e) {
-      console.error("Admin reject edit failed:", e?.message || e);
+      console.error("❌ Admin reject edit failed:", e?.message || e);
     }
   }
 }
