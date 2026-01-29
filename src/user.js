@@ -99,6 +99,30 @@ async function onMessage({ bot, msg, session, ADMIN_IDS }) {
   if (text === "/start") {
   session[chatId] = { step: "CHOOSE_GAME", msg: Object.create(null) };
 
+
+    // ✅ If user already has pending orders, ask what to do
+const Order = require("./models/order"); // <-- put at TOP of file with other requires
+
+const pendingCount = await Order.countDocuments({ userId: chatId, status: "PENDING" });
+if (pendingCount > 0) {
+  session[chatId] = { step: "PENDING_DECISION" };
+
+  return bot.sendMessage(
+    chatId,
+    `⛔ Pending order *${pendingCount}* ခု ရှိနေပါတယ်。\n\nဘာလုပ်ချင်ပါသလဲ?`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Pending ကိုဆက်လုပ်မယ်", callback_data: "PENDING_CONTINUE" }],
+          [{ text: "➕ အသစ်တင်မယ်", callback_data: "PENDING_NEW" }],
+          [{ text: "📦 My Orders", callback_data: "MYORDERS" }]
+        ]
+      }
+    }
+  );
+}
+    
   // ✅ send start menu and remember message id
   const m = await bot.sendMessage(
     chatId,
