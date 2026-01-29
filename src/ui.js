@@ -21,9 +21,12 @@ function esc(text = "") {
 }
 
 function getMonthName(date = new Date()) {
-  return date.toLocaleString("en-US", { month: "long" });
+  try {
+    return date.toLocaleString("en-US", { month: "long" });
+  } catch {
+    return "This Month";
+  }
 }
-
 
 // ===============================
 // TIME (Asia/Bangkok)
@@ -48,62 +51,88 @@ function ensureOrderId(t) {
 
 // ===============================
 // PRICE HELPERS
-// PRICES expected like:
-// PRICES.MLBB = { name, currency, items:[ {label, price, ...} ] }
-// We try to match by amount from item.amount OR digits in label.
 // ===============================
-
-function formatUserDisplay(u) {
-  // 1️⃣ username ရှိရင် @username
-  if (u?.username) {
-    return `@${esc(u.username)}`;
-  }
-
-  // 2️⃣ username မရှိရင် Telegram mention
-  if (u?.telegramId || u?._id) {
-    const id = u.telegramId || u._id;
-    return `[User](tg://user?id=${id})`;
-  }
-
-  return "Unknown";
-}
-
-
 function extractAmountFromLabel(label) {
   const m = String(label || "").match(/(\d+)/);
   return m ? Number(m[1]) : null;
 }
 
+// findPriceItem supports:
+// - i.amount exact match (string/number) case-insensitive
+// - digits in label match (e.g. "86 Diamonds")
 function findPriceItem(productKey, amount) {
   const product = PRICES[productKey];
   if (!product || !Array.isArray(product.items)) return null;
 
-  // 1) exact item.amount match (if exists)
+  const a = amount == null ? "" : String(amount).trim();
+
+  // 1) exact item.amount match (case-insensitive)
   const byField = product.items.find(i => {
-  if (!i.amount) return false;
-  return String(i.amount).toLowerCase() === String(amount).toLowerCase();
-});
+    if (!i) return false;
+    if (i.amount == null) return false;
+    return String(i.amount).trim().toLowerCase() === a.toLowerCase();
+  });
   if (byField) return byField;
 
-  // 2) match by digits in label (e.g. "86 Diamonds")
-  const byLabel = product.items.find(i => extractAmountFromLabel(i?.label) === Number(amount));
-  if (byLabel) return byLabel;
+  // 2) match by digits in label (only if amount is numeric-like)
+  const n = Number(a);
+  if (Number.isFinite(n)) {
+    const byLabel = product.items.find(i => extractAmountFromLabel(i?.label) === n);
+    if (byLabel) return byLabel;
+  }
 
   return null;
 }
 
-function computeTotalMMK(productKey, amount) {
-  const item = findPriceItem(productKey, amount);
-  if (!item) return null;
-  return Number(item.price);
+// ===============================
+// MULTI AMOUNT SUPPORT (86+343 / wp+wp2 / wp+343)
+// returns: { total:number, breakdown:[{label, price}] } or null
+// ===============================
+function normalizeAmountToken(token) {
+  return String(token || "")
+    .trim()
+    .replace(/^\//, "") // allow "/wp2"
+    .toLowerCase(); // allow "WP2", "wP2"
+}
+
+function splitAmountParts(input) {
+  const s = String(input || "").trim();
+  if (!s) return [];
+  return s
+    .replace(/\s+/g, "") // remove spaces
+    .split("+")
+    .map(x => normalizeAmountToken(x))
+    .filter(Boolean);
+}
+
+function computeTotalMMKMulti(productKey, amountInput) {
+  const parts = splitAmountParts(amountInput);
+  if (!parts.length) return null;
+
+  let total = 0;
+  const breakdown = [];
+
+  for (const p of parts) {
+    const item = findPriceItem(productKey, p);
+    if (!item) return null;
+
+    const label = item.label || p;
+    const price = Number(item.price || 0);
+
+    total += price;
+    breakdown.push({ label, price });
+  }
+
+  if (!Number.isFinite(total)) return null;
+  return { total, breakdown };
 }
 
 // ===============================
-// PRICE LIST (optional utility)
+// PRICE LIST
 // ===============================
 async function sendPriceList(bot, chatId, productKey) {
   const product = PRICES[productKey];
-  if (!product) return;
+  if (!product) return null;
 
   const list = (product.items || [])
     .map(i => `• ${esc(i.label)} — *${Number(i.price).toLocaleString()} ${esc(product.currency || "MMK")}*`)
@@ -118,7 +147,6 @@ async function sendPriceList(bot, chatId, productKey) {
 
 // ===============================
 // PAYMENT METHOD SELECT
-// callback_data MUST MATCH callbacks.js FINAL: "PAY:KPay", "PAY:WavePay"
 // ===============================
 async function sendPaymentMethods(bot, chatId) {
   return bot.sendMessage(chatId, "💳 *Payment Method ရွေးပါ*", {
@@ -148,83 +176,39 @@ async function sendPaymentInfo(bot, chatId, method) {
 
 // ===============================
 // ORDER PREVIEW (Confirm/Cancel)
-// Expects t fields from user.js FINAL:
-// t.game ("MLBB"/"PUBG"), t.game_id, t.server_id, t.amount
-// We also set t.totalPrice, t.orderTime here.
 // ===============================
 async function sendOrderPreview(bot, chatId, t) {
-  // Normalize keys (support older naming too)
   const game = t.game || t.product;
   const gameId = t.game_id || t.gameId || "";
   const serverId = t.server_id || t.serverId || "";
   const amount = t.amount ?? t.qty ?? "";
 
-  // ensure order id & time
   const orderId = ensureOrderId(t);
   t.orderTime = t.orderTime || formatBangkokTime(t.createdAt || Date.now());
 
-  
- // compute total (support "86+343" / "wp+wp2")
-const multi = computeTotalMMKMulti(game, amount);
+  // ✅ multi compute
+  const multi = computeTotalMMKMulti(game, amount);
 
-if (!multi) {
-  await bot.sendMessage(
-    chatId,
-    "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86+343 / wp+wp2"
-  );
-  return;
-}
-
-// ✅ save to session
-t.totalPrice = multi.total;
-t.breakdown = multi.breakdown || [];
-
-  // ===============================
-// MULTI AMOUNT SUPPORT
-// Examples: "86+343", "wp+wp2", "86+wp2"
-// ===============================
-
-function normalizeAmountToken(token) {
-  return String(token || "")
-    .trim()
-    .replace(/^\//, "")       // allow "/wp2"
-    .toLowerCase();           // allow "WP2", "wP2"
-}
-
-function splitAmounts(rawAmount) {
-  const raw = String(rawAmount || "").trim();
-  if (!raw) return [];
-
-  // allow separators: + and space
-  // "86 + 343" => ["86","343"]
-  return raw
-    .split("+")
-    .map(s => normalizeAmountToken(s))
-    .filter(Boolean);
-}
-
-function computeTotalMMKMulti(productKey, rawAmount) {
-  const parts = splitAmounts(rawAmount);
-  if (!parts.length) return null;
-
-  let total = 0;
-
-  for (const p of parts) {
-    // Find price item by:
-    // - exact i.amount field (string/number) OR
-    // - digits from label (existing logic)
-    const item = findPriceItem(productKey, p);
-    if (!item) return null;
-
-    total += Number(item.price || 0);
+  if (!multi) {
+    await bot.sendMessage(
+      chatId,
+      "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86+343 / wp+wp2",
+      { parse_mode: "Markdown" }
+    );
+    return null;
   }
 
-  return Number.isFinite(total) ? total : null;
-}
+  // ✅ save
+  t.totalPrice = multi.total;
+  t.breakdown = multi.breakdown || [];
 
-t.totalPrice = total;
+  // breakdown text
+  const breakdownText =
+    t.breakdown.length > 1
+      ? "\n\n🧾 *Breakdown*\n" +
+        t.breakdown.map(b => `• ${esc(b.label)} — *${Number(b.price).toLocaleString()} MMK*`).join("\n")
+      : "";
 
-  // Build preview text
   const lines = [
     `📦 *ORDER PREVIEW*`,
     `━━━━━━━━━━━━━━━`,
@@ -232,8 +216,8 @@ t.totalPrice = total;
     `🎮 *Game:* ${esc(game)}`,
     `🆔 *ID:* ${esc(gameId)}${serverId ? ` (${esc(serverId)})` : ""}`,
     `${game === "MLBB" ? "💎" : "🎯"} *Amount:* ${esc(String(amount))}`,
-    `💰 *Total:* ${t.totalPrice == null ? "_Price not found_" : `${Number(t.totalPrice).toLocaleString()} MMK`}`,
-    `🕒 *Order time:* ${esc(t.orderTime)}`
+    `💰 *Total:* ${Number(t.totalPrice).toLocaleString()} MMK`,
+    `🕒 *Order time:* ${esc(t.orderTime)}${breakdownText}`
   ].join("\n");
 
   return bot.sendMessage(chatId, lines, {
@@ -264,11 +248,8 @@ async function sendWaiting(bot, chatId, orderId) {
 // USER APPROVED
 // ===============================
 async function notifyUserApproved(bot, order) {
-  if (order.waitMsgId) {
-    try {
-      await bot.deleteMessage(order.userId, order.waitMsgId);
-    } catch {}
-  }
+  // order.createdAt may exist (mongoose timestamps)
+  const time = order.createdAt ? formatBangkokTime(order.createdAt) : formatBangkokTime();
 
   return bot.sendMessage(
     order.userId,
@@ -278,7 +259,7 @@ async function notifyUserApproved(bot, order) {
 🆔 ${esc(order.gameId)}${order.serverId ? ` (${esc(order.serverId)})` : ""}
 ${order.product === "MLBB" ? "💎" : "🎯"} ${esc(String(order.amount))}
 💰 ${Number(order.totalPrice).toLocaleString()} MMK
-`🕒 *Order time:* ${esc(t.orderTime)}`
+🕒 *Order time:* ${esc(time)}
 
 🙏 ဝယ်ယူအားပေးမှုအတွက် ကျေးဇူးတင်ပါတယ်`,
     { parse_mode: "Markdown" }
@@ -301,7 +282,7 @@ Owner @Official_Bika ကို ဆက်သွယ်ပါ`,
 }
 
 // ===============================
-// ADMIN UPDATE (optional)
+// ADMIN UPDATE (edit caption)
 // ===============================
 async function updateAdminMessage(bot, adminMsg, status) {
   const caption = status === "APPROVED" ? "✅ ORDER COMPLETED" : "❌ ORDER REJECTED";
@@ -313,71 +294,76 @@ async function updateAdminMessage(bot, adminMsg, status) {
 }
 
 // ===============================
-// STATUS UI (PRO)
+// STATUS UI (for /status) — PRO
 // ===============================
-function statusDashboardUI({ totalUsers, approvedOrders, uptimeHours }) {
+function statusUI({ totalUsers = 0, approved = 0, aliveHours = 0 }) {
   return (
     `🤖 *BIKA STORE — BOT STATUS*\n` +
     `━━━━━━━━━━━━━━━\n\n` +
-    
-    `👥 *Users:* ${totalUsers.toLocaleString()}\n` +
-    
-    `✅ *Approved Orders:* ${approvedOrders.toLocaleString()}\n` +
-    
-    `⏱ *Bot Alive:* ${uptimeHours} hours\n\n` +
-    
-    `🟢 Status: *ONLINE*`
+    `👥 *Users:* ${Number(totalUsers).toLocaleString()}\n` +
+    `✅ *Approved Orders:* ${Number(approved).toLocaleString()}\n` +
+    `⏱ *Bot Alive:* ${Number(aliveHours).toLocaleString()} hours`
   );
 }
 
 // ===============================
-// TOP 10 UI
+// TOP 10 UI (robust)
+// list item may be: { username, userId, firstName, total } OR aggregate style
 // ===============================
 function top10UI(list = [], monthName = "") {
-  let text =
-    `🏆 *TOP 10 USERS — ${esc(monthName)}*\n` +
-    `━━━━━━━━━━━━━━━\n\n`;
+  const m = monthName || getMonthName();
 
-  if (!list.length) {
-    return text + "No completed orders yet 🙏";
-  }
+  let text = `🏆 *TOP 10 USERS — ${esc(m)}*\n━━━━━━━━━━━━━━━\n\n`;
+  if (!list.length) return text + "No completed orders yet 🙏";
 
   list.forEach((u, i) => {
-    const displayName = u.username
-      ? `@${esc(u.username)}`
-      : `[${esc(u.firstName || "User")}](tg://user?id=${u.userId})`;
+    // best-effort display
+    const name =
+      u?.username
+        ? `@${esc(u.username)}`
+        : u?.userId
+          ? `[User](tg://user?id=${u.userId})`
+          : u?._id
+            ? `[User](tg://user?id=${u._id})`
+            : "User";
 
-    const medal =
-      i === 0 ? "🥇" :
-      i === 1 ? "🥈" :
-      i === 2 ? "🥉" : "🏅";
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🏅";
+    const total = Number(u.total || 0);
 
-    text +=
-      `${medal} *#${i + 1}*\n` +
-      `👤 ${displayName}\n` +
-      `💰 ${Number(u.total).toLocaleString()} MMK\n\n`;
+    text += `${medal} *#${i + 1}*\n👤 ${name}\n💰 ${total.toLocaleString()} MMK\n\n`;
   });
 
   return text;
 }
+
 // ===============================
 // MY RANK UI
 // ===============================
 function myRankUI(rank, total) {
   const monthName = getMonthName();
-
   return [
     `🎯 *YOUR RANK*`,
-    `🗓 *Month:* ${monthName}`,
+    `🗓 *Month:* ${esc(monthName)}`,
     `━━━━━━━━━━━━━━━`,
     `🏅 *Rank:* #${esc(rank)}`,
     `💰 *Total Spent:* ${Number(total || 0).toLocaleString()} MMK`
   ].join("\n");
 }
 
- // ===============================
-  // /admin UI 
-  // ===============================
+// ===============================
+// ADMIN DASHBOARD UI + KEYBOARD
+// (commands.js မှာ ui.adminDashboardUI() ခေါ်မယ်ဆို ဒီ function လိုတယ်)
+// ===============================
+function adminDashboardUI({ total = 0, pending = 0, completed = 0, rejected = 0 }) {
+  return (
+    `👑 *ADMIN DASHBOARD*\n` +
+    `━━━━━━━━━━━━━━━\n\n` +
+    `📦 *Total Orders:* ${Number(total).toLocaleString()}\n` +
+    `⏳ *Pending:* ${Number(pending).toLocaleString()}\n` +
+    `✅ *Completed:* ${Number(completed).toLocaleString()}\n` +
+    `❌ *Rejected:* ${Number(rejected).toLocaleString()}`
+  );
+}
 
 function adminDashboardKeyboard() {
   return {
@@ -395,30 +381,26 @@ function adminDashboardKeyboard() {
 }
 
 // ===============================
-// STATUS UI (for /status)
-// ===============================
-function statusUI({ totalUsers = 0, approved = 0, aliveHours = 0 }) {
-  return (
-    `🤖 *BIKA STORE — BOT STATUS*\n` +
-    `━━━━━━━━━━━━━━━\n\n` +
-    `👥 *Users:* ${Number(totalUsers).toLocaleString()}\n` +
-    `✅ *Approved Orders:* ${Number(approved).toLocaleString()}\n` +
-    `⏱ *Bot Alive:* ${aliveHours} hours`
-  );
-}
-
-// ===============================
 module.exports = {
+  // price / payment
   sendPriceList,
   sendPaymentMethods,
   sendPaymentInfo,
+
+  // order flow
   sendOrderPreview,
   sendWaiting,
   notifyUserApproved,
   notifyUserRejected,
   updateAdminMessage,
+
+  // dashboards / commands
   statusUI,
   top10UI,
   myRankUI,
-  statusDashboardUI
+  adminDashboardUI,
+  adminDashboardKeyboard,
+
+  // helpers (optional export if you need elsewhere)
+  computeTotalMMKMulti
 };
