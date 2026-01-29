@@ -288,6 +288,18 @@ async function notifyUserRejected(bot, order) {
     { parse_mode: "Markdown" }
   );
 }
+// ===============================
+// REMOVE ADMIN BUTTONS ONLY
+// ===============================
+async function removeAdminButtons(bot, { adminChatId, adminMsgId }) {
+  return bot.editMessageReplyMarkup(
+    { inline_keyboard: [] }, // ❌ buttons removed
+    {
+      chat_id: adminChatId,
+      message_id: adminMsgId
+    }
+  );
+}
 
 // ===============================
 // ADMIN UPDATE (edit caption)
@@ -400,6 +412,7 @@ module.exports = {
   sendWaiting,
   notifyUserApproved,
   notifyUserRejected,
+  removeAdminButtons,
   updateAdminMessage,
 
   // dashboards / commands
