@@ -5,6 +5,7 @@
 const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin, monthRange } = require("./helpers");
+const { promo, resetPromo } = require("./models/promo");
 
 module.exports = function registerCommands({ bot, session, ADMIN_IDS }) {
   // Bot command list
@@ -45,6 +46,46 @@ bot.onText(/^\/status(?:\s+.*)?$/i, async (msg) => {
     return bot.sendMessage(chatId, "⚠️ status error");
   }
 });
+
+
+  // ===============================
+  // /promo (ADMIN ONLY)
+  // ===============================
+  bot.onText(/\/promo/, async (msg) => {
+    const chatId = msg.from.id.toString();
+
+    // Admin check
+    if (!ADMIN_IDS.includes(chatId)) {
+      return bot.sendMessage(chatId, "⛔ Admin only command");
+    }
+
+    // Reset & activate promo
+    resetPromo();
+    promo.active = true;
+
+    const promoText = `
+🎁 *Bika Store Promotion*
+
+🔥 ပထမဆုံးနှိပ်တဲ့ ၁ ယောက်သာ ဆုရမယ်!
+⚡ လက်မလွတ်စေနဲ့!
+
+👇 အောက်က button ကိုနှိပ်ပါ
+`;
+
+    await bot.sendMessage(chatId, promoText, {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🎯 Claim Promotion",
+              callback_data: "PROMO_CLAIM"
+            }
+          ]
+        ]
+      }
+    });
+  });
 
   // ===============================
   // /top10 (USER + ADMIN) - current month
