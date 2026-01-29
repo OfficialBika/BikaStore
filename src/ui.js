@@ -165,15 +165,19 @@ async function sendOrderPreview(bot, chatId, t) {
 
   
  // compute total (support "86+343" / "wp+wp2")
-const total = computeTotalMMKMulti(game, amount);
+const multi = computeTotalMMKMulti(game, amount);
 
-if (total == null) {
+if (!multi) {
   await bot.sendMessage(
     chatId,
     "❌ Diamonds / Package ကို မသိပါ\nဥပမာ: 86+343 / wp+wp2"
   );
   return;
 }
+
+// ✅ save to session
+t.totalPrice = multi.total;
+t.breakdown = multi.breakdown || [];
 
   // ===============================
 // MULTI AMOUNT SUPPORT
