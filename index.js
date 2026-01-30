@@ -1,10 +1,7 @@
 // ===================================
-// BIKA STORE — PRODUCTION BOT (v2)
-// MLBB + PUBG
-// Order Preview + Confirm/Cancel
-// Receipt submit -> Admin Approve/Reject (edit captions)
-// Auto-delete old bot prompt messages (except editable important ones)
-// Webhook on Render + MongoDB
+// BIKA STORE — PRODUCTION BOT (v3)
+// Orders + Top10 + Admin Dashboard + Rank + Promo Giveaway + Broadcast
+// Webhook (Render) + MongoDB
 // ===================================
 
 const TelegramBot = require("node-telegram-bot-api");
@@ -43,8 +40,34 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.error("❌ MongoDB error:", err));
 
-// ===== MODELS =====
-const OrderSchema = new mongoose.Schema({
+// ===================================
+// DB MODELS
+// ===================================
+
+const User = mongoose.model("User", new mongoose.Schema({
+  userId: { type: String, unique: true },
+  username: String,
+  firstName: String,
+  lastName: String,
+  startedAt: { type: Date, default: Date.now },
+  lastSeenAt: { type: Date, default: Date.now },
+}, { timestamps: true }));
+
+const Chat = mongoose.model("Chat", new mongoose.Schema({
+  chatId: { type: String, unique: true },
+  type: String, // private, group, supergroup, channel
+  title: String,
+  username: String,
+  addedAt: { type: Date, default: Date.now },
+  lastSeenAt: { type: Date, default: Date.now },
+}, { timestamps: true }));
+
+const Counter = mongoose.model("Counter", new mongoose.Schema({
+  name: { type: String, unique: true },
+  seq: { type: Number, default: 0 }
+}));
+
+const Order = mongoose.model("Order", new mongoose.Schema({
   orderId: String,         // BKS-0000001
   orderNo: Number,         // 1,2,3...
   orderDateText: String,   // 31/1/2026 10:45 PM
@@ -65,31 +88,34 @@ const OrderSchema = new mongoose.Schema({
 
   status: { type: String, default: "PENDING" },
 
-  // For editing messages on approve/reject
-  userOrderMessageId: Number, // message id in user chat (photo with caption)
-  adminMessageId: Number,     // message id in admin chat (photo with caption)
-  adminChatId: String         // which admin received (first admin we sent to or group chat id if you set)
-}, { timestamps: true });
+  // for editing messages on approve/reject
+  userOrderMessageId: Number,
+  adminMessageId: Number,
+  adminChatId: String
+}, { timestamps: true }));
 
-const Order = mongoose.model("Order", OrderSchema);
+const Promo = mongoose.model("Promo", new mongoose.Schema({
+  active: { type: Boolean, default: true },
+  title: String, // text shown
+  createdAt: { type: Date, default: Date.now },
 
-// Counter for sequential order numbers
-const Counter = mongoose.model("Counter", new mongoose.Schema({
-  name: { type: String, unique: true },
-  seq: { type: Number, default: 0 }
-}));
+  claimed: { type: Boolean, default: false },
+  claimedAt: Date,
 
-async function nextOrderNo() {
-  const c = await Counter.findOneAndUpdate(
-    { name: "order" },
-    { $inc: { seq: 1 } },
-    { upsert: true, new: true }
-  );
-  return c.seq;
-}
+  winnerUserId: String,
+  winnerChatId: String,
+  winnerUsername: String,
+  winnerFirstName: String,
 
-// ===== PRICE TABLES =====
-// Normalize keys to lowercase (we will parse user input -> lowercase)
+  winnerGameId: String,
+  winnerServerId: String,
+
+  stage: { type: String, default: "CLAIM" }, // CLAIM -> WAIT_ID -> WAIT_APPROVE -> DONE
+}, { timestamps: true }));
+
+// ===================================
+// PRICES
+// ===================================
 const MLBB_PRICES = {
   "11": 800,
   "22": 1600,
@@ -138,32 +164,30 @@ const PUBG_PRICES = {
   "primeplus": 39500,
 };
 
-function formatMMK(n) {
-  try {
-    return Number(n).toLocaleString("en-US");
-  } catch {
-    return String(n);
-  }
-}
+// ===================================
+// SESSION (in-memory)
+// ===================================
+const session = {}; // order flow + promo flow
 
-// ===== SESSION (in-memory) =====
-// NOTE: Render restart => session reset. Orders are safe in DB.
-// If you want "resume after restart", we can store sessions in DB later.
-const session = {}; // { [chatId]: { step, game, gameId, serverId, items, totalPrice, ... } }
-
-// ===== HELPERS =====
+// ===================================
+// HELPERS
+// ===================================
 const isAdmin = (id) => ADMIN_IDS.includes(String(id));
-
-function mentionUserHTML(user) {
-  const name = user.first_name || user.username || "User";
-  return `<a href="tg://user?id=${user.id}">${escapeHTML(name)}</a>`;
-}
 
 function escapeHTML(s) {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function mentionUserHTML(user) {
+  const name = user.first_name || user.username || "User";
+  return `<a href="tg://user?id=${user.id}">${escapeHTML(name)}</a>`;
+}
+
+function formatMMK(n) {
+  try { return Number(n).toLocaleString("en-US"); } catch { return String(n); }
 }
 
 function nowDateText() {
@@ -178,9 +202,34 @@ function nowDateText() {
   return `${day}/${mon}/${yr}  ${hr}:${min} ${ampm}`;
 }
 
+function uptimeText() {
+  const s = Math.floor(process.uptime());
+  const days = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const parts = [];
+  if (days) parts.push(`${days} days`);
+  if (hours) parts.push(`${hours} hours`);
+  if (mins) parts.push(`${mins} minutes`);
+  parts.push(`${secs} seconds`);
+  return parts.join(" ");
+}
+
+async function deleteIfPossible(chatId, messageId) {
+  if (!chatId || !messageId) return;
+  try { await bot.deleteMessage(chatId, messageId); } catch (_) {}
+}
+
+async function sendPrompt(chatId, s, html, extra = {}) {
+  if (s?.lastPromptMessageId) await deleteIfPossible(chatId, s.lastPromptMessageId);
+  const sent = await bot.sendMessage(chatId, html, { parse_mode: "HTML", ...extra });
+  s.lastPromptMessageId = sent.message_id;
+  return sent;
+}
+
 function buildPriceListText(game) {
   if (game === "MLBB") {
-    // Keep it readable (not too huge). You can shorten anytime.
     return (
 `<b>MLBB Price List</b>
 11 = 800 ks
@@ -234,7 +283,6 @@ Prime1m = 4500 Ks
 Primeplus = 39500 Ks`
     );
   }
-
   return "";
 }
 
@@ -252,51 +300,24 @@ function buildOrderPreviewHTML(s) {
   );
 }
 
-// Delete old bot prompt messages (best-effort)
-async function deleteIfPossible(chatId, messageId) {
-  if (!chatId || !messageId) return;
-  try { await bot.deleteMessage(chatId, messageId); } catch (_) {}
-}
-
-// In many steps we want to delete the previous bot prompt and send a new one.
-async function sendPrompt(chatId, s, html, extra = {}) {
-  // Do NOT delete important messages that we later edit (preview, userOrder)
-  if (s?.lastPromptMessageId) {
-    await deleteIfPossible(chatId, s.lastPromptMessageId);
-  }
-  const sent = await bot.sendMessage(chatId, html, { parse_mode: "HTML", ...extra });
-  s.lastPromptMessageId = sent.message_id;
-  return sent;
-}
-
-// ===== INPUT PARSERS =====
-
-// Parse MLBB ID + SV variants:
-// 486679424 (2463) / 486679424 2463 / 486679424(2463)
+// Parse MLBB/PUBG ID + SV variants
 function parseGameIdAndServer(text) {
   const t = String(text || "").trim();
-  // pick first digits as id and optional second digits as server
-  const m = t.match(/(\d{5,})(?:\D+(\d{2,}))?/); // id >= 5 digits, server >= 2 digits
+  const m = t.match(/(\d{5,})(?:\D+(\d{2,}))?/);
   if (!m) return null;
   return { gameId: m[1], serverId: m[2] || "" };
 }
 
-// Parse amount line: allow plus/space, case-insensitive, wp1/wp 1/wp 1 +343+ wP2 etc
+// Parse items like: wp 1 +343+ Wp2 + wP 3
 function parseItems(text) {
   let t = String(text || "").trim();
   if (!t) return [];
-
-  // normalize: wp 1 -> wp1
   t = t.replace(/wp\s*(\d)/gi, "wp$1");
-  // replace + with space
   t = t.replace(/[+]/g, " ");
-  // remove weird emojis/symbols except letters/digits/space
-  t = t.replace(/[^\w\s]/g, " "); // will remove 🤩 etc
+  t = t.replace(/[^\w\s]/g, " ");
   t = t.toLowerCase();
-
   const parts = t.split(/\s+/).map(x => x.trim()).filter(Boolean);
 
-  // Also handle "wp" "1" separated by space in some cases
   const items = [];
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
@@ -320,12 +341,8 @@ function validateAndSum(game, items) {
 
   for (const it of items) {
     const key = String(it).toLowerCase();
-    if (!priceMap[key]) {
-      bad.push(it);
-    } else {
-      normalized.push(key);
-      total += priceMap[key];
-    }
+    if (!priceMap[key]) bad.push(it);
+    else { normalized.push(key); total += priceMap[key]; }
   }
 
   if (bad.length) {
@@ -336,15 +353,90 @@ function validateAndSum(game, items) {
       normalizedItems: []
     };
   }
-
-  // Pretty display: keep "wp1" as "wp1", others as digits
-  const pretty = normalized.map(x => x);
-  return { ok: true, total, normalizedItems: pretty };
+  return { ok: true, total, normalizedItems: normalized };
 }
 
-// ===== /START =====
+async function nextOrderNo() {
+  const c = await Counter.findOneAndUpdate(
+    { name: "order" },
+    { $inc: { seq: 1 } },
+    { upsert: true, new: true }
+  );
+  return c.seq;
+}
+
+// Track users + chats
+async function touchUser(from) {
+  if (!from || from.is_bot) return;
+  const userId = String(from.id);
+  await User.findOneAndUpdate(
+    { userId },
+    {
+      $setOnInsert: {
+        userId,
+        startedAt: new Date(),
+      },
+      $set: {
+        username: from.username || "",
+        firstName: from.first_name || "",
+        lastName: from.last_name || "",
+        lastSeenAt: new Date(),
+      }
+    },
+    { upsert: true, new: true }
+  );
+}
+
+async function touchChat(chat) {
+  if (!chat) return;
+  const chatId = String(chat.id);
+  await Chat.findOneAndUpdate(
+    { chatId },
+    {
+      $setOnInsert: {
+        chatId,
+        type: chat.type,
+        addedAt: new Date(),
+      },
+      $set: {
+        type: chat.type,
+        title: chat.title || "",
+        username: chat.username || "",
+        lastSeenAt: new Date(),
+      }
+    },
+    { upsert: true, new: true }
+  );
+}
+
+// ===================================
+// COMMANDS (Telegram "/" menu)
+// ===================================
+async function setupCommands() {
+  try {
+    await bot.setMyCommands([
+      { command: "start", description: "စတင်ရန်" },
+      { command: "top10", description: "6လ Top 10 Spend List" },
+      { command: "myrank", description: "သင့် Level / Rank" },
+      { command: "promo", description: "Giveaway ကြည့်ရန်" },
+      { command: "admin", description: "Admin Dashboard (Admin only)" },
+      { command: "promocreate", description: "Promo Create (Admin only)" },
+      { command: "broadcast", description: "Broadcast (Admin only)" },
+    ]);
+  } catch (e) {
+    console.error("❌ setMyCommands error:", e?.message || e);
+  }
+}
+
+// ===================================
+// /START (Order flow entry)
+// ===================================
 bot.onText(/\/start/, async (msg) => {
   const cid = msg.chat.id;
+
+  await touchUser(msg.from);
+  await touchChat(msg.chat);
+
   const s = session[cid] || (session[cid] = {});
   s.step = "GAME_SELECT";
   s.game = null;
@@ -355,7 +447,7 @@ bot.onText(/\/start/, async (msg) => {
   s.orderId = null;
   s.orderNo = null;
   s.orderDateText = null;
-
+  s.paymentMethod = null;
   s.userMentionHTML = mentionUserHTML(msg.from);
 
   const startText =
@@ -376,209 +468,369 @@ Bika Store မှ ကြိုဆိုပါတယ်ဗျ
   });
 });
 
-// ===== CALLBACK HANDLER =====
-bot.on("callback_query", async (q) => {
-  const cid = q.message.chat.id;
-  const data = q.data;
-  const s = session[cid] || (session[cid] = {});
+// ===================================
+// /TOP10 (6 months) — any chat
+// ===================================
+bot.onText(/\/top10/, async (msg) => {
+  await touchUser(msg.from);
+  await touchChat(msg.chat);
 
-  // Always answer callback to avoid "loading..."
-  try { await bot.answerCallbackQuery(q.id); } catch (_) {}
+  const cid = msg.chat.id;
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  // ===== GAME SELECT =====
-  if (data === "GAME_MLBB" || data === "GAME_PUBG") {
-    s.game = data === "GAME_MLBB" ? "MLBB" : "PUBG";
-    s.step = "WAIT_ID";
-    s.userMentionHTML = s.userMentionHTML || mentionUserHTML(q.from);
-
-    const askId =
-`🆔 <b>${escapeHTML(s.game)}</b> ID + SV ID ပို့ပါ
-ဥပမာ: <b>486679424 (2463)</b> / <b>486679424 2463</b> / <b>486679424(2463)</b>`;
-
-    await sendPrompt(cid, s, askId);
-    return;
-  }
-
-  // ===== CONFIRM / CANCEL (Order Preview) =====
-  if (data === "ORDER_CANCEL") {
-    // delete preview message (the message where buttons exist)
-    if (s.previewMessageId) {
-      await deleteIfPossible(cid, s.previewMessageId);
-    }
-    // also delete last prompt if any (not necessary but clean)
-    if (s.lastPromptMessageId) {
-      await deleteIfPossible(cid, s.lastPromptMessageId);
-      s.lastPromptMessageId = null;
-    }
-
-    // Send cancel notice (this one can remain; next prompt will auto-delete it)
-    const sent = await bot.sendMessage(cid, "✅ သင့်order ရုတ်သိမ်းလိုက်ပါပြီ။", { parse_mode: "HTML" });
-    s.lastPromptMessageId = sent.message_id;
-
-    // reset session
-    delete session[cid];
-    return;
-  }
-
-  if (data === "ORDER_CONFIRM") {
-    if (!s.orderId) return;
-
-    s.step = "PAY_SELECT";
-    const payText =
-`💳 Payment နည်းလမ်း ရွေးချယ်ပေးပါ 👇`;
-
-    await sendPrompt(cid, s, payText, {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "KPay", callback_data: "PAY_KPAY" }],
-          [{ text: "WavePay", callback_data: "PAY_WAVEPAY" }]
-        ]
+  const rows = await Order.aggregate([
+    { $match: { status: "COMPLETED", createdAt: { $gte: sixMonthsAgo } } },
+    {
+      $group: {
+        _id: "$userId",
+        total: { $sum: "$totalPrice" },
+        username: { $last: "$username" },
+        firstName: { $last: "$firstName" },
+        orders: { $sum: 1 },
       }
-    });
-    return;
+    },
+    { $sort: { total: -1 } },
+    { $limit: 10 }
+  ]);
+
+  if (!rows.length) {
+    return bot.sendMessage(cid, "📭 6လအတွင်း Completed Order မရှိသေးပါ။", { parse_mode: "HTML" });
   }
 
-  // ===== PAYMENT SELECT =====
-  if (data === "PAY_KPAY" || data === "PAY_WAVEPAY") {
-    if (!s.orderId) return;
+  const lines = rows.map((r, i) => {
+    const rank = i + 1;
+    const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "🏅";
+    const name = r.username ? `@${escapeHTML(r.username)}` : `<b>${escapeHTML(r.firstName || "User")}</b>`;
+    return `${medal} <b>#${rank}</b>  ${name}\n   💰 <b>${formatMMK(r.total)} MMK</b>  •  📦 ${r.orders} orders`;
+  }).join("\n\n");
 
-    s.paymentMethod = data === "PAY_KPAY" ? "KPAY" : "WAVEPAY";
-    s.step = "WAIT_RECEIPT";
+  const text =
+`🏆 <b>TOP 10 BIG SPENDERS</b>
+<i>(Last 6 Months • Completed Orders)</i>
 
-    const payInfo = s.paymentMethod === "KPAY"
-      ? `KPay: <b>Name</b> - Shine Htet Aung\n<b>Phone</b> - 09264202637`
-      : `WavePay: <b>Name</b> - Shine Htet Aung\n<b>Phone</b> - 09264202637`;
+${lines}`;
 
-    const askReceipt =
-`${payInfo}
-
-📸 ငွေလွှဲပြေစာ <b>ဓာတ်ပုံ</b> ပို့ပေးပါ
-🆔 Order ID: <b>${escapeHTML(s.orderId)}</b>`;
-
-    await sendPrompt(cid, s, askReceipt);
-    return;
-  }
-
-  // ===== ADMIN APPROVE / REJECT =====
-  if (data.startsWith("APPROVE_") || data.startsWith("REJECT_")) {
-    if (!isAdmin(cid)) {
-      try { await bot.answerCallbackQuery(q.id, { text: "Not allowed" }); } catch (_) {}
-      return;
-    }
-
-    const orderId = data.split("_")[1];
-    const approve = data.startsWith("APPROVE_");
-    const newStatus = approve ? "COMPLETED" : "REJECTED";
-
-    const order = await Order.findOneAndUpdate(
-      { orderId },
-      { status: newStatus },
-      { new: true }
-    );
-
-    if (!order) return;
-
-    // Build captions (keep preview same; only replace the headline text)
-    const headline = approve ? "✅ Order Complete" : "❌ Order ပယ်ဖျက်ပြီးပါပြီ";
-    const adminCaption =
-`<b>${headline}</b>
-
-${buildOrderPreviewHTML({
-  userMentionHTML: order.username
-    ? `@${escapeHTML(order.username)}`
-    : `<a href="tg://user?id=${escapeHTML(order.userId)}">${escapeHTML(order.firstName || "User")}</a>`,
-  orderId: order.orderId,
-  orderDateText: order.orderDateText,
-  game: order.game,
-  gameId: order.gameId,
-  serverId: order.serverId,
-  items: order.items,
-  totalPrice: order.totalPrice
-})}`;
-
-    // Edit admin message caption (do NOT delete rest)
-    try {
-      await bot.editMessageCaption(adminCaption, {
-        chat_id: order.adminChatId,
-        message_id: order.adminMessageId,
-        parse_mode: "HTML",
-        reply_markup: { inline_keyboard: [] } // remove buttons to prevent double-tap
-      });
-    } catch (_) {
-      // ignore
-    }
-
-    // Edit user message caption: only change the last line text (we keep everything in one caption)
-    const userHeadline = approve
-      ? "🎉 သင့် Order အောင်မြင်စွာပြီးဆုံးသွားပါပြီ။ ဝယ်ယူအားပေးမူ့အတွက် ကျေးဇူးအထူးပါ။"
-      : "❌ သင့်အော်ဒါကို Owner မှ ပယ်ချလိုက်ပါသည်။ အမှားအယွင်းရှိပါက Bot Owner @Official_Bika ထံသို့ ဆက်သွယ်ပါ။";
-
-    const userCaption =
-`<b>${userHeadline}</b>
-
-${buildOrderPreviewHTML({
-  userMentionHTML: order.username
-    ? `@${escapeHTML(order.username)}`
-    : `<a href="tg://user?id=${escapeHTML(order.userId)}">${escapeHTML(order.firstName || "User")}</a>`,
-  orderId: order.orderId,
-  orderDateText: order.orderDateText,
-  game: order.game,
-  gameId: order.gameId,
-  serverId: order.serverId,
-  items: order.items,
-  totalPrice: order.totalPrice
-})}`;
-
-    try {
-      await bot.editMessageCaption(userCaption, {
-        chat_id: order.userId,
-        message_id: order.userOrderMessageId,
-        parse_mode: "HTML",
-      });
-    } catch (_) {
-      // ignore
-    }
-
-    return;
-  }
+  await bot.sendMessage(cid, text, { parse_mode: "HTML", disable_web_page_preview: true });
 });
 
-// ===== MESSAGE FLOW (TEXT) =====
-bot.on("message", async (msg) => {
-  const cid = msg.chat.id;
-  if (isAdmin(cid)) return;
+// ===================================
+// /ADMIN — Admin only dashboard
+// ===================================
+bot.onText(/\/admin/, async (msg) => {
+  await touchUser(msg.from);
+  await touchChat(msg.chat);
 
-  // ignore commands (handled by /start)
-  if (msg.text && msg.text.startsWith("/")) return;
+  const cid = msg.chat.id;
+  if (!isAdmin(cid)) return;
+
+  const [usersCount, completedCount, rejectedCount] = await Promise.all([
+    User.countDocuments({}),
+    Order.countDocuments({ status: "COMPLETED" }),
+    Order.countDocuments({ status: "REJECTED" }),
+  ]);
+
+  const revAgg = await Order.aggregate([
+    { $match: { status: "COMPLETED" } },
+    { $group: { _id: null, total: { $sum: "$totalPrice" } } }
+  ]);
+  const revenue = revAgg?.[0]?.total || 0;
+
+  const text =
+`📊 <b>BIKA STORE — ADMIN DASHBOARD</b>
+
+👥 <b>Total Users (Start)</b>: <b>${formatMMK(usersCount)}</b>
+✅ <b>Completed Orders</b>: <b>${formatMMK(completedCount)}</b>
+❌ <b>Rejected Orders</b>: <b>${formatMMK(rejectedCount)}</b>
+
+💰 <b>Total Revenue (Completed)</b>
+<b>${formatMMK(revenue)} MMK</b>
+
+⏱ <b>Bot Alive Time</b>
+<b>${escapeHTML(uptimeText())}</b>`;
+
+  await bot.sendMessage(cid, text, { parse_mode: "HTML" });
+});
+
+// ===================================
+// /MYRANK — user level by total spend
+// ===================================
+const RANKS = [
+  { name: "BRONZE", min: 50000 },
+  { name: "SILVER", min: 200000 },
+  { name: "GOLD", min: 500000 },
+  { name: "PLATINUM", min: 1000000 },
+  { name: "DIAMOND", min: 3000000 },
+];
+
+function getRank(total) {
+  let current = RANKS[0];
+  for (const r of RANKS) if (total >= r.min) current = r;
+  const idx = RANKS.findIndex(x => x.name === current.name);
+  const next = idx < RANKS.length - 1 ? RANKS[idx + 1] : null;
+  return { current, next };
+}
+
+bot.onText(/\/myrank/, async (msg) => {
+  await touchUser(msg.from);
+  await touchChat(msg.chat);
+
+  const cid = msg.chat.id;
+  const uid = String(msg.from.id);
+
+  const agg = await Order.aggregate([
+    { $match: { status: "COMPLETED", userId: uid } },
+    { $group: { _id: null, total: { $sum: "$totalPrice" }, orders: { $sum: 1 } } }
+  ]);
+  const total = agg?.[0]?.total || 0;
+  const orders = agg?.[0]?.orders || 0;
+
+  const { current, next } = getRank(total);
+  const remaining = next ? Math.max(0, next.min - total) : 0;
+
+  const text =
+`🎖 <b>Your Rank — BIKA STORE</b>
+
+👤 User: ${mentionUserHTML(msg.from)}
+📦 Completed Orders: <b>${formatMMK(orders)}</b>
+💰 Total Spend: <b>${formatMMK(total)} MMK</b>
+
+🏅 Current Level: <b>${escapeHTML(current.name)}</b>
+${next
+  ? `🚀 Next Level: <b>${escapeHTML(next.name)}</b>\n⏳ Remaining: <b>${formatMMK(remaining)} MMK</b>`
+  : `👑 Status: <b>MAX LEVEL</b>`}`;
+
+  await bot.sendMessage(cid, text, { parse_mode: "HTML", disable_web_page_preview: true });
+});
+
+// ===================================
+// /PROMOCREATE — Admin only
+// ===================================
+bot.onText(/\/promocreate(?:\s+(.+))?/, async (msg, match) => {
+  await touchUser(msg.from);
+  await touchChat(msg.chat);
+
+  const cid = msg.chat.id;
+  if (!isAdmin(cid)) return;
+
+  // deactivate old active promos
+  await Promo.updateMany({ active: true }, { $set: { active: false, stage: "DONE" } });
+
+  const customTitle = (match?.[1] || "").trim();
+  const title = customTitle || "MLBB Diamonds Free Giveaway ပါ";
+
+  const promo = await Promo.create({
+    active: true,
+    title,
+    claimed: false,
+    stage: "CLAIM",
+  });
+
+  const text =
+`✅ <b>Promo Created</b>
+
+🎁 Title: <b>${escapeHTML(title)}</b>
+🆔 Promo ID: <code>${promo._id}</code>
+
+User တွေ <b>/promo</b> နဲ့ Claim လုပ်နိုင်ပြီ။`;
+
+  await bot.sendMessage(cid, text, { parse_mode: "HTML" });
+});
+
+// ===================================
+// /PROMO — user private only
+// ===================================
+bot.onText(/\/promo/, async (msg) => {
+  await touchUser(msg.from);
+  await touchChat(msg.chat);
+
+  const cid = msg.chat.id;
+
+  // only private chat
+  if (msg.chat.type !== "private") {
+    return bot.sendMessage(cid, "ℹ️ /promo ကို User Private Chat မှာပဲ သုံးနိုင်ပါတယ်။", { parse_mode: "HTML" });
+  }
+
+  const active = await Promo.findOne({ active: true }).sort({ createdAt: -1 });
+  if (!active) {
+    return bot.sendMessage(cid, "😎 Giveaway မရှိဘူးကွ အားတိုင်း promo ပဲနှိပ်မနေနဲ့ 😎", { parse_mode: "HTML" });
+  }
+
+  // If already claimed, show winner info
+  if (active.claimed) {
+    const winnerName = active.winnerUsername
+      ? `@${escapeHTML(active.winnerUsername)}`
+      : `<b>${escapeHTML(active.winnerFirstName || "Winner")}</b>`;
+    return bot.sendMessage(
+      cid,
+      `🎁 <b>${escapeHTML(active.title)}</b>\n\n❌ ဒီ Giveaway ကို ${winnerName} က အရင်ဦးစွာ ထုတ်ယူသွားပါပြီ။`,
+      { parse_mode: "HTML" }
+    );
+  }
+
+  // Send promo UI with Claim button
+  const promoText =
+`🎁 <b>${escapeHTML(active.title)}</b>
+
+🥇 <b>အရင်ဆုံး Claim နှိပ်သူရပါမယ်</b>
+⚠️ <i>Winner ၁ ယောက်ထဲသာရှိပါမယ်</i>
+
+👇 <b>Claim Now</b>`;
+
+  const sent = await bot.sendMessage(cid, promoText, {
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎉 CLAIM", callback_data: `PROMO_CLAIM_${active._id}` }]
+      ]
+    }
+  });
+
+  // remember last promo message so we can auto delete on winner claim
+  const s = session[cid] || (session[cid] = {});
+  s.lastPromoMessageId = sent.message_id;
+});
+
+// ===================================
+// /BROADCAST — Admin only (text or photo)
+// Usage: /broadcast hello
+// Or send photo with caption starting with /broadcast hello
+// ===================================
+async function broadcastToAll({ text, photoFileId, captionHTML }) {
+  const users = await User.find({}, { userId: 1 }).lean();
+  const chats = await Chat.find({ type: { $in: ["group", "supergroup"] } }, { chatId: 1 }).lean();
+
+  const targets = [
+    ...users.map(u => ({ chatId: u.userId, kind: "user" })),
+    ...chats.map(c => ({ chatId: c.chatId, kind: "group" })),
+  ];
+
+  let ok = 0, fail = 0;
+
+  for (const t of targets) {
+    try {
+      if (photoFileId) {
+        await bot.sendPhoto(t.chatId, photoFileId, {
+          caption: captionHTML || "",
+          parse_mode: "HTML",
+        });
+      } else {
+        await bot.sendMessage(t.chatId, text, { parse_mode: "HTML", disable_web_page_preview: true });
+      }
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+
+  return { ok, fail, total: targets.length };
+}
+
+bot.on("message", async (msg) => {
+  // always track
+  await touchChat(msg.chat);
+  if (msg.from) await touchUser(msg.from);
+
+  const cid = msg.chat.id;
+
+  // Track groups automatically when bot sees messages
+  // (Already done via touchChat)
+
+  // ===== ADMIN BROADCAST (text) =====
+  if (msg.text && msg.text.startsWith("/broadcast")) {
+    if (!isAdmin(cid)) return;
+
+    const body = msg.text.replace(/^\/broadcast\s*/i, "").trim();
+    if (!body) {
+      return bot.sendMessage(cid, "Usage: <code>/broadcast Hello everyone</code>", { parse_mode: "HTML" });
+    }
+
+    const status = await bot.sendMessage(cid, "📣 Broadcasting…", { parse_mode: "HTML" });
+    const res = await broadcastToAll({ text: body });
+    await bot.editMessageText(
+      `✅ Broadcast Done\n\n📤 Sent: <b>${formatMMK(res.ok)}</b>\n❌ Failed: <b>${formatMMK(res.fail)}</b>\n👥 Total: <b>${formatMMK(res.total)}</b>`,
+      { chat_id: cid, message_id: status.message_id, parse_mode: "HTML" }
+    );
+    return;
+  }
+
+  // ===== ORDER FLOW TEXT STEPS =====
+  if (msg.text && msg.text.startsWith("/")) return; // other commands handled elsewhere
+
+  if (isAdmin(cid)) return;
 
   const s = session[cid] || (session[cid] = {});
   s.userMentionHTML = s.userMentionHTML || mentionUserHTML(msg.from);
 
-  // Step must exist
-  if (!s.step) {
-    s.step = "GAME_SELECT";
-    await sendPrompt(cid, s, "ကျေးဇူးပြု၍ /start နှိပ်ပြီး စတင်ပါ။");
-    return;
-  }
-
-  // ===== WAIT_ID =====
-  if (s.step === "WAIT_ID") {
-    if (!msg.text) return;
-
+  // Promo winner ID/SV waiting
+  if (s.promoWaitId === true && msg.text && msg.chat.type === "private") {
     const parsed = parseGameIdAndServer(msg.text);
     if (!parsed) {
       await sendPrompt(cid, s, "⚠️ ID ပုံစံမမှန်ပါ။ ဥပမာ: <b>486679424 (2463)</b>");
       return;
     }
 
-    s.gameId = parsed.gameId;
-    s.serverId = parsed.serverId;
+    const active = await Promo.findOne({ active: true, claimed: true, winnerUserId: String(msg.from.id), stage: "WAIT_ID" });
+    if (!active) {
+      s.promoWaitId = false;
+      return bot.sendMessage(cid, "ℹ️ Promo မတွေ့ပါ။ /promo ကိုပြန်စစ်ပါ။", { parse_mode: "HTML" });
+    }
 
+    active.winnerGameId = parsed.gameId;
+    active.winnerServerId = parsed.serverId || "";
+    active.stage = "WAIT_APPROVE";
+    await active.save();
+
+    // inform winner
+    s.promoWaitId = false;
+    await bot.sendMessage(
+      cid,
+      "✅ သင့်ဆုမဲကို ကို Bika ထံ ပေးပို့တင်ပြထားတယ်။ မကြာခင် Dia ထည့်ပေးပါလိမ့်မယ်။",
+      { parse_mode: "HTML" }
+    );
+
+    // notify admins
+    const winnerMention = mentionUserHTML(msg.from);
+    const adminText =
+`🏆 <b>Giveaway Winner</b>
+
+👤 Winner: ${winnerMention}
+🎮 MLBB ID: <b>${escapeHTML(active.winnerGameId)}</b>${active.winnerServerId ? ` (<b>${escapeHTML(active.winnerServerId)}</b>)` : ""}
+
+👇 Approve`;
+
+    for (const adminId of ADMIN_IDS) {
+      try {
+        await bot.sendMessage(String(adminId), adminText, {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ Approve Giveaway", callback_data: `PROMO_APPROVE_${active._id}` }]
+            ]
+          }
+        });
+      } catch (_) {}
+    }
+    return;
+  }
+
+  // If no step, encourage /start
+  if (!s.step) return;
+
+  // WAIT_ID
+  if (s.step === "WAIT_ID") {
+    if (!msg.text) return;
+    const parsed = parseGameIdAndServer(msg.text);
+    if (!parsed) {
+      await sendPrompt(cid, s, "⚠️ ID ပုံစံမမှန်ပါ။ ဥပမာ: <b>486679424 (2463)</b>");
+      return;
+    }
+    s.gameId = parsed.gameId;
+    s.serverId = parsed.serverId || "";
     s.step = "WAIT_ITEMS";
-    const priceList = buildPriceListText(s.game);
 
     const askItems =
-`${priceList}
+`${buildPriceListText(s.game)}
 
 🛒 ဝယ်ယူမဲ့ Amount ကို ရိုက်ထည့်ပါ
 (single လဲရ / အများလဲရ, space/ + နဲ့ ခြားလို့ရ)
@@ -591,10 +843,9 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  // ===== WAIT_ITEMS =====
+  // WAIT_ITEMS
   if (s.step === "WAIT_ITEMS") {
     if (!msg.text) return;
-
     const items = parseItems(msg.text);
     if (!items.length) {
       await sendPrompt(cid, s, "⚠️ Amount မတွေ့ပါ။ ဥပမာ: <b>343</b> / <b>wp1 + 343</b>");
@@ -610,22 +861,18 @@ bot.on("message", async (msg) => {
     s.items = normalizedItems;
     s.totalPrice = total;
 
-    // Create sequential order id now (preview step)
     const no = await nextOrderNo();
     s.orderNo = no;
-    s.orderId = `BKS-${String(no).padStart(7, "0")}`; // BKS-0000001 style (7 digits)
+    s.orderId = `BKS-${String(no).padStart(7, "0")}`;
     s.orderDateText = nowDateText();
-
     s.step = "PREVIEW";
 
-    // delete last prompt (ask items), then send preview with buttons (important -> don't auto-delete)
     if (s.lastPromptMessageId) {
       await deleteIfPossible(cid, s.lastPromptMessageId);
       s.lastPromptMessageId = null;
     }
 
     const previewHeader = `<b>📦 Order Preview</b>\n\n${buildOrderPreviewHTML(s)}`;
-
     const sent = await bot.sendMessage(cid, previewHeader, {
       parse_mode: "HTML",
       reply_markup: {
@@ -637,46 +884,62 @@ bot.on("message", async (msg) => {
         ]
       }
     });
-
     s.previewMessageId = sent.message_id;
     return;
   }
-
-  // Other steps: ignore random text
 });
 
-// ===== PHOTO (RECEIPT) =====
+// Photo broadcast (admin)
 bot.on("photo", async (msg) => {
-  const cid = msg.chat.id;
-  if (isAdmin(cid)) return;
+  await touchChat(msg.chat);
+  if (msg.from) await touchUser(msg.from);
 
+  const cid = msg.chat.id;
+
+  // ADMIN PHOTO BROADCAST
+  const caption = msg.caption || "";
+  if (caption && caption.startsWith("/broadcast")) {
+    if (!isAdmin(cid)) return;
+    const body = caption.replace(/^\/broadcast\s*/i, "").trim();
+    const fileId = msg.photo?.at(-1)?.file_id;
+    if (!fileId) return;
+
+    const status = await bot.sendMessage(cid, "📣 Broadcasting photo…", { parse_mode: "HTML" });
+    const res = await broadcastToAll({
+      photoFileId: fileId,
+      captionHTML: body ? escapeHTML(body) : ""
+    });
+    await bot.editMessageText(
+      `✅ Broadcast Done\n\n📤 Sent: <b>${formatMMK(res.ok)}</b>\n❌ Failed: <b>${formatMMK(res.fail)}</b>\n👥 Total: <b>${formatMMK(res.total)}</b>`,
+      { chat_id: cid, message_id: status.message_id, parse_mode: "HTML" }
+    );
+    return;
+  }
+
+  // ORDER RECEIPT FLOW
+  if (isAdmin(cid)) return;
   const s = session[cid];
   if (!s || s.step !== "WAIT_RECEIPT" || !s.orderId) return;
 
   const fileId = msg.photo?.at(-1)?.file_id;
   if (!fileId) return;
 
-  // Remove last prompt asking receipt (auto-delete)
   if (s.lastPromptMessageId) {
     await deleteIfPossible(cid, s.lastPromptMessageId);
     s.lastPromptMessageId = null;
   }
 
-  const preview = buildOrderPreviewHTML(s);
   const pendingLine = "⏳ သင့်အော်ဒါကို Owner ထံ တင်ပြပြီးပါပြီ။ ကျေးဇူးပြု၍ ခေတ္တခန စောင့်ပေးပါ။";
-
-  // Send to user: receipt + full preview + pending text (IMPORTANT message - will be edited on approve/reject)
   const userCaption =
 `<b>${pendingLine}</b>
 
-${preview}`;
+${buildOrderPreviewHTML(s)}`;
 
   const userSent = await bot.sendPhoto(cid, fileId, {
     caption: userCaption,
     parse_mode: "HTML",
   });
 
-  // Create order in DB
   const order = await Order.create({
     orderId: s.orderId,
     orderNo: s.orderNo,
@@ -701,23 +964,19 @@ ${preview}`;
     userOrderMessageId: userSent.message_id,
   });
 
-  // Send to each admin: receipt + "Order အသစ်ရောက်ရှိပါတယ်" + full preview + buttons
   const adminHeadline = "🧾 Order အသစ်ရောက်ရှိပါတယ်";
-  const adminPreview = buildOrderPreviewHTML({
-    ...s,
-    // For admin preview: mention user by @username if available
-    userMentionHTML: msg.from.username ? `@${escapeHTML(msg.from.username)}` : mentionUserHTML(msg.from),
-  });
-
   const adminCaption =
 `<b>${adminHeadline}</b>
 
-${adminPreview}`;
+${buildOrderPreviewHTML({
+  ...s,
+  userMentionHTML: msg.from.username ? `@${escapeHTML(msg.from.username)}` : mentionUserHTML(msg.from),
+})}`;
 
-  // If you want to send only to first admin (owner) change loop -> only ADMIN_IDS[0]
+  // send to admins (store first for editing)
   for (const adminId of ADMIN_IDS) {
     try {
-      const adminSent = await bot.sendPhoto(adminId, fileId, {
+      const adminSent = await bot.sendPhoto(String(adminId), fileId, {
         caption: adminCaption,
         parse_mode: "HTML",
         reply_markup: {
@@ -728,8 +987,6 @@ ${adminPreview}`;
         }
       });
 
-      // Save the first admin message id for editing later (or last one)
-      // If you use admin group chat id, set ADMIN_CHAT_IDS to that group id only.
       if (!order.adminMessageId) {
         order.adminMessageId = adminSent.message_id;
         order.adminChatId = String(adminId);
@@ -740,13 +997,281 @@ ${adminPreview}`;
     }
   }
 
-  // Clean session (user flow finished)
   delete session[cid];
 });
 
-// ===== SERVER =====
+// ===================================
+// CALLBACKS (Order + Promo)
+// ===================================
+bot.on("callback_query", async (q) => {
+  const cid = q.message.chat.id;
+  const data = q.data;
+
+  try { await bot.answerCallbackQuery(q.id); } catch (_) {}
+
+  // ----- GAME SELECT -----
+  if (data === "GAME_MLBB" || data === "GAME_PUBG") {
+    const s = session[cid] || (session[cid] = {});
+    s.userMentionHTML = s.userMentionHTML || mentionUserHTML(q.from);
+
+    s.game = data === "GAME_MLBB" ? "MLBB" : "PUBG";
+    s.step = "WAIT_ID";
+
+    const askId =
+`🆔 <b>${escapeHTML(s.game)}</b> ID + SV ID ပို့ပါ
+ဥပမာ: <b>486679424 (2463)</b> / <b>486679424 2463</b> / <b>486679424(2463)</b>`;
+
+    await sendPrompt(cid, s, askId);
+    return;
+  }
+
+  // ----- ORDER CANCEL -----
+  if (data === "ORDER_CANCEL") {
+    const s = session[cid];
+    if (s?.previewMessageId) await deleteIfPossible(cid, s.previewMessageId);
+    if (s?.lastPromptMessageId) await deleteIfPossible(cid, s.lastPromptMessageId);
+    await bot.sendMessage(cid, "✅ သင့်order ရုတ်သိမ်းလိုက်ပါပြီ။", { parse_mode: "HTML" });
+    delete session[cid];
+    return;
+  }
+
+  // ----- ORDER CONFIRM -> choose payment -----
+  if (data === "ORDER_CONFIRM") {
+    const s = session[cid];
+    if (!s?.orderId) return;
+
+    s.step = "PAY_SELECT";
+    await sendPrompt(cid, s, "💳 Payment နည်းလမ်း ရွေးချယ်ပေးပါ 👇", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "KPay", callback_data: "PAY_KPAY" }],
+          [{ text: "WavePay", callback_data: "PAY_WAVEPAY" }]
+        ]
+      }
+    });
+    return;
+  }
+
+  // ----- PAYMENT SELECT -> ask receipt -----
+  if (data === "PAY_KPAY" || data === "PAY_WAVEPAY") {
+    const s = session[cid];
+    if (!s?.orderId) return;
+
+    s.paymentMethod = data === "PAY_KPAY" ? "KPAY" : "WAVEPAY";
+    s.step = "WAIT_RECEIPT";
+
+    const payInfo = s.paymentMethod === "KPAY"
+      ? `KPay: <b>Name</b> - Shine Htet Aung\n<b>Phone</b> - 09264202637`
+      : `WavePay: <b>Name</b> - Shine Htet Aung\n<b>Phone</b> - 09264202637`;
+
+    const askReceipt =
+`${payInfo}
+
+📸 ငွေလွှဲပြေစာ <b>ဓာတ်ပုံ</b> ပို့ပေးပါ
+🆔 Order ID: <b>${escapeHTML(s.orderId)}</b>`;
+
+    await sendPrompt(cid, s, askReceipt);
+    return;
+  }
+
+  // ----- ADMIN ORDER APPROVE/REJECT -----
+  if (data.startsWith("APPROVE_") || data.startsWith("REJECT_")) {
+    if (!isAdmin(cid)) return;
+
+    const orderId = data.split("_")[1];
+    const approve = data.startsWith("APPROVE_");
+    const newStatus = approve ? "COMPLETED" : "REJECTED";
+
+    const order = await Order.findOneAndUpdate(
+      { orderId },
+      { status: newStatus },
+      { new: true }
+    );
+
+    if (!order) {
+      return bot.sendMessage(cid, "⚠️ Order မတွေ့ပါ။", { parse_mode: "HTML" });
+    }
+
+    // Build admin caption (only headline changes, rest same)
+    const adminHeadline = approve ? "✅ Order Complete" : "❌ Order ပယ်ဖျက်ပြီးပါပြီ";
+
+    const adminUserName = order.username
+      ? `@${escapeHTML(order.username)}`
+      : `<b>${escapeHTML(order.firstName || "User")}</b>`;
+
+    const adminCaption =
+`<b>${adminHeadline}</b>
+
+👤 User: ${adminUserName}
+🆔 Order ID: <b>${escapeHTML(order.orderId)}</b>
+🗓️ Order Date: <b>${escapeHTML(order.orderDateText || "")}</b>
+
+🎮 Game: <b>${escapeHTML(order.game || "")}</b>
+🎯 ID + SV: <b>${escapeHTML(order.gameId || "")}${order.serverId ? " (" + escapeHTML(order.serverId) + ")" : ""}</b>
+💎 Amount: <b>${escapeHTML((order.items || []).join(" + "))}</b>
+💰 Total: <b>${formatMMK(order.totalPrice || 0)} MMK</b>`;
+
+    // Edit admin message caption (keep photo, remove buttons)
+    try {
+      await bot.editMessageCaption(adminCaption, {
+        chat_id: order.adminChatId,
+        message_id: order.adminMessageId,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [] }
+      });
+    } catch (_) {}
+
+    // Build user caption (edit pending line into completed/rejected line)
+    const userHeadline = approve
+      ? "🎉 သင့် Order အောင်မြင်စွာပြီးဆုံးသွားပါပြီ ဝယ်ယူအားပေးမူ့အတွက် ကျေးဇူးအထူးပါ"
+      : "❌ သင့်အော်ဒါကို Owner မှ ပယ်ချလိုက်ပါသည်။ အမှားအယွင်းရှိပါက Bot Owner @Official_Bika ထံသို့ဆက်သွယ်ပါ။";
+
+    const userCaption =
+`<b>${escapeHTML(userHeadline)}</b>
+
+👤 User: ${order.username ? `@${escapeHTML(order.username)}` : mentionUserHTML({ id: order.userId, first_name: order.firstName || "User" })}
+🆔 Order ID: <b>${escapeHTML(order.orderId)}</b>
+🗓️ Order Date: <b>${escapeHTML(order.orderDateText || "")}</b>
+
+🎮 Game: <b>${escapeHTML(order.game || "")}</b>
+🎯 ID + SV: <b>${escapeHTML(order.gameId || "")}${order.serverId ? " (" + escapeHTML(order.serverId) + ")" : ""}</b>
+💎 Amount: <b>${escapeHTML((order.items || []).join(" + "))}</b>
+💰 Total: <b>${formatMMK(order.totalPrice || 0)} MMK</b>`;
+
+    try {
+      await bot.editMessageCaption(userCaption, {
+        chat_id: order.userId,
+        message_id: order.userOrderMessageId,
+        parse_mode: "HTML",
+      });
+    } catch (_) {}
+
+    return;
+  }
+
+  // ===================================
+  // PROMO: CLAIM BUTTON
+  // ===================================
+  if (data.startsWith("PROMO_CLAIM_")) {
+    // only private chats
+    if (q.message.chat.type !== "private") {
+      return bot.sendMessage(cid, "ℹ️ Promo Claim ကို User Private Chat မှာပဲ လုပ်နိုင်ပါတယ်။", { parse_mode: "HTML" });
+    }
+
+    const promoId = data.replace("PROMO_CLAIM_", "").trim();
+    const winnerId = String(q.from.id);
+
+    // Atomic claim (first click wins)
+    const claimed = await Promo.findOneAndUpdate(
+      { _id: promoId, active: true, claimed: false, stage: "CLAIM" },
+      {
+        $set: {
+          claimed: true,
+          claimedAt: new Date(),
+          winnerUserId: winnerId,
+          winnerChatId: String(cid),
+          winnerUsername: q.from.username || "",
+          winnerFirstName: q.from.first_name || "",
+          stage: "WAIT_ID"
+        }
+      },
+      { new: true }
+    );
+
+    // If success => winner
+    if (claimed) {
+      // delete promo UI message in winner chat (button + text auto delete)
+      const s = session[cid] || (session[cid] = {});
+      if (s.lastPromoMessageId) {
+        await deleteIfPossible(cid, s.lastPromoMessageId);
+        s.lastPromoMessageId = null;
+      }
+
+      // Tell winner to send MLBB id+sv
+      s.promoWaitId = true;
+      await bot.sendMessage(
+        cid,
+        `🎉 <b>ဂုဏ်ယူပါတယ်!</b>\nသင်ကံထူးရှင်ဖြစ်သွားပါပြီ 🎊\n\n🆔 သင့် <b>MLBB ID + Server ID</b> ပို့ပေးပါ\nဥပမာ: <b>486679424 (2463)</b>`,
+        { parse_mode: "HTML" }
+      );
+      return;
+    }
+
+    // If not claimed => someone already won
+    const active = await Promo.findOne({ _id: promoId }).lean();
+    if (!active || !active.claimed) {
+      return bot.sendMessage(cid, "ℹ️ Promo မတွေ့ပါ (သို့) အလုပ်မလုပ်ပါ။ /promo ပြန်စမ်းပါ။", { parse_mode: "HTML" });
+    }
+
+    const winnerMention = active.winnerUsername
+      ? `@${escapeHTML(active.winnerUsername)}`
+      : `<b>${escapeHTML(active.winnerFirstName || "Winner")}</b>`;
+
+    const loserText =
+`${winnerMention} က ယခုဆုမဲကို သင့်ထက်အရင် ဦးစွာထုတ်ယူသွားပါပြီ။
+နောက်ကျလို့ကောင်းတာဆိုလို့ သေတာပဲရှိတယ် ညိုကီဘိုကီ❗`;
+
+    // delete promo message in loser chat too (so button disappears after they click)
+    try {
+      await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: cid, message_id: q.message.message_id });
+    } catch (_) {}
+
+    await bot.sendMessage(cid, loserText, { parse_mode: "HTML" });
+    return;
+  }
+
+  // ===================================
+  // PROMO: ADMIN APPROVE GIVEAWAY
+  // ===================================
+  if (data.startsWith("PROMO_APPROVE_")) {
+    if (!isAdmin(cid)) return;
+
+    const promoId = data.replace("PROMO_APPROVE_", "").trim();
+    const promo = await Promo.findOne({ _id: promoId });
+
+    if (!promo || !promo.claimed) {
+      return bot.sendMessage(cid, "⚠️ Promo မတွေ့ပါ (သို့) Claim မဖြစ်သေးပါ။", { parse_mode: "HTML" });
+    }
+
+    // Mark done
+    promo.stage = "DONE";
+    promo.active = false;
+    await promo.save();
+
+    // Notify winner
+    const winnerChatId = promo.winnerChatId;
+    const winnerMention = promo.winnerUsername
+      ? `@${escapeHTML(promo.winnerUsername)}`
+      : `<b>${escapeHTML(promo.winnerFirstName || "Winner")}</b>`;
+
+    try {
+      await bot.sendMessage(
+        winnerChatId,
+        `🎁 သင့်ဆုမဲကို ကို Bika ထုတ်ပေးလိုက်ပါပြီ ${winnerMention} ရေ`,
+        { parse_mode: "HTML" }
+      );
+    } catch (_) {}
+
+    // Update admin message button remove (optional)
+    try {
+      await bot.editMessageReplyMarkup(
+        { inline_keyboard: [] },
+        { chat_id: cid, message_id: q.message.message_id }
+      );
+    } catch (_) {}
+
+    await bot.sendMessage(cid, "✅ Giveaway Approved (Winner ကို notify လုပ်ပြီးပါပြီ)", { parse_mode: "HTML" });
+    return;
+  }
+});
+
+// ===================================
+// SERVER
+// ===================================
 app.get("/", (_, res) => res.send("Bika Store Bot Running"));
+
 app.listen(PORT, async () => {
   await bot.setWebHook(`${PUBLIC_URL}${WEBHOOK_PATH}`);
+  await setupCommands();
   console.log("✅ Bot Ready");
 });
