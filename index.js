@@ -99,6 +99,8 @@ const Promo = mongoose.model("Promo", new mongoose.Schema({
   title: String, // text shown
   createdAt: { type: Date, default: Date.now },
 
+  expireAt: Date,
+  
   claimed: { type: Boolean, default: false },
   claimedAt: Date,
 
@@ -619,12 +621,17 @@ bot.onText(/\/promocreate(?:\s+(.+))?/, async (msg, match) => {
   const customTitle = (match?.[1] || "").trim();
   const title = customTitle || "MLBB Diamonds Free Giveaway ပါ";
 
-  const promo = await Promo.create({
-    active: true,
-    title,
-    claimed: false,
-    stage: "CLAIM",
-  });
+  // Promo //
+  
+ const expireAt = new Date(Date.now() + 60 * 60 * 1000); // ⏰ 1 hour
+
+const promo = await Promo.create({
+  active: true,
+  title,
+  claimed: false,
+  stage: "CLAIM",
+  expireAt, // ✅ ADD THIS
+});
 
   const text =
 `✅ <b>Promo Created</b>
@@ -646,12 +653,20 @@ bot.onText(/\/promo/, async (msg) => {
 
   const cid = msg.chat.id;
 
+  await Promo.updateMany(
+  { active: true, expireAt: { $lte: new Date() } },
+  { $set: { active: false, stage: "DONE" } }
+);
+  
   // only private chat
   if (msg.chat.type !== "private") {
     return bot.sendMessage(cid, "ℹ️ /promo ကို User Private Chat မှာပဲ သုံးနိုင်ပါတယ်။", { parse_mode: "HTML" });
   }
 
-  const active = await Promo.findOne({ active: true }).sort({ createdAt: -1 });
+  const active = await Promo.findOne({
+  active: true,
+  expireAt: { $gt: new Date() } // ✅ 1 hour မကျော်သေး
+}).sort({ createdAt: -1 });
   if (!active) {
     return bot.sendMessage(cid, "😎 Giveaway မရှိဘူးကွ အားတိုင်း promo ပဲနှိပ်မနေနဲ့ 😎", { parse_mode: "HTML" });
   }
@@ -1163,7 +1178,7 @@ bot.on("callback_query", async (q) => {
 
     // Atomic claim (first click wins)
     const claimed = await Promo.findOneAndUpdate(
-      { _id: promoId, active: true, claimed: false, stage: "CLAIM" },
+      { _id: promoId, active: true, claimed: false, stage: "CLAIM" , expireAt: { $gt: new Date() } // ✅ late claim ပိတ် },
       {
         $set: {
           claimed: true,
