@@ -195,46 +195,50 @@ try {
     return ack({ text: "Promo approved 🎉" });  
   }  
 
-  // ===============================  
-  // ADMIN APPROVE ORDER  
-  // ===============================  
-  if (data.startsWith("APPROVE_")) {  
-    if (!isAdmin(from.id.toString(), ADMIN_IDS)) {  
-      return ack({ text: "Admin only", show_alert: true });  
-    }  
+  // ===============================
+      // APPROVE ORDER
+      // ===============================
+      if (data.startsWith("APPROVE_")) {
+        if (!isAdmin(fromId, ADMIN_IDS)) {
+          return bot.answerCallbackQuery(query.id, {
+            text: "⛔ Admin only",
+            show_alert: true
+          });
+        }
 
-    const orderId = data.replace("APPROVE_", "");  
+        const orderId = data.replace("APPROVE_", "");
+        await orders.approveOrder({ bot, orderId });
 
-    await orders.approveOrder({ bot, orderId });  
+        await bot.answerCallbackQuery(query.id, {
+          text: "✅ Order approved"
+        });
 
-    await bot.editMessageReplyMarkup(  
-      { inline_keyboard: [] },  
-      { chat_id: msg.chat.id, message_id: msg.message_id }  
-    );  
+        // delete admin order message
+        await bot.deleteMessage(chatId, messageId).catch(() => null);
+        return;
+      }
 
-    return ack({ text: "✅ Approved" });  
-  }  
+      // ===============================
+      // REJECT ORDER
+      // ===============================
+      if (data.startsWith("REJECT_")) {
+        if (!isAdmin(fromId, ADMIN_IDS)) {
+          return bot.answerCallbackQuery(query.id, {
+            text: "⛔ Admin only",
+            show_alert: true
+          });
+        }
 
-  // ===============================  
-  // ADMIN REJECT ORDER  
-  // ===============================  
-  if (data.startsWith("REJECT_")) {  
-    if (!isAdmin(from.id.toString(), ADMIN_IDS)) {  
-      return ack({ text: "Admin only", show_alert: true });  
-    }  
+        const orderId = data.replace("REJECT_", "");
+        await orders.rejectOrder({ bot, orderId });
 
-    const orderId = data.replace("REJECT_", "");  
+        await bot.answerCallbackQuery(query.id, {
+          text: "❌ Order rejected"
+        });
 
-    await orders.rejectOrder({ bot, orderId });  
-
-    await bot.editMessageReplyMarkup(  
-      { inline_keyboard: [] },  
-      { chat_id: msg.chat.id, message_id: msg.message_id }  
-    );  
-
-    return ack({ text: "❌ Rejected" });  
-  }  
-
+        await bot.deleteMessage(chatId, messageId).catch(() => null);
+        return;
+      }
   await ack();  
 
 } catch (err) {  
