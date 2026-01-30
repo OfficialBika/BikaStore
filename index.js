@@ -25,7 +25,7 @@ if (!BOT_TOKEN || !MONGO_URI || !PUBLIC_URL) {
 // ===== DB =====
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error("❌ Mongo Error", err));
+  .catch(err => console.error("❌ Mongo Error:", err));
 
 // ===== ORDER MODEL =====
 const OrderSchema = new mongoose.Schema({
@@ -45,7 +45,7 @@ const OrderSchema = new mongoose.Schema({
 const Order = mongoose.model("Order", OrderSchema);
 
 // ===== BOT & SERVER =====
-const bot = new TelegramBot(BOT_TOKEN);
+const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
@@ -56,14 +56,14 @@ app.post(WEBHOOK_PATH, (req, res) => {
 });
 
 // ===== SESSION =====
-const session = {};
+const session = Object.create(null);
 
 // ===== HELPERS =====
+const isAdmin = id => ADMIN_IDS.includes(String(id));
+const genOrderId = () => "BKS-" + Date.now().toString().slice(-6);
+
 const autoDelete = (cid, mid, ms = 8000) =>
   setTimeout(() => bot.deleteMessage(cid, mid).catch(() => {}), ms);
-
-const genOrderId = () => "BKS-" + Date.now().toString().slice(-6);
-const isAdmin = id => ADMIN_IDS.includes(String(id));
 
 // ===== PRICE TABLE =====
 const PRICE = {
@@ -76,73 +76,111 @@ const PRICE = {
   "wp1": 5900, "wp2": 11800, "wp3": 17700, "wp4": 23600, "wp5": 29500
 };
 
-// ===== NORMALIZE INPUT =====
+const PRICE_LIST_TEXT =
+`📋 *Mobile Legends PRICE LIST*
+━━━━━━━━━━━━━━━
+• 💎 11 — 800 MMK
+• 💎 22 — 1,600 MMK
+• 💎 33 — 2,350 MMK
+• 💎 55 — 3,600 MMK
+• 💎 86 — 4,800 MMK
+• 💎 112 — 8,200 MMK
+• 💎 172 — 9,800 MMK
+• 💎 257 — 14,500 MMK
+• 💎 343 — 20,000 MMK
+• ✨ wp1 — 5,900 MMK
+• ✨ wp2 — 11,800 MMK
+• ✨ wp3 — 17,700 MMK
+• ✨ wp4 — 23,600 MMK
+• ✨ wp5 — 29,500 MMK`;
+
+// ===== PARSERS =====
+function parseGameId(text) {
+  const m = text.match(/(\d+)\s*\(?\s*(\d+)?\s*\)?/);
+  if (!m) return {};
+  return { gameId: m[1], serverId: m[2] || "" };
+}
+
 function normalizeAmount(text) {
   return text
     .toLowerCase()
     .replace(/\s+/g, "")
     .split("+")
-    .map(x => x.replace("wp", "wp"));
-}
-
-function parseGameId(text) {
-  const match = text.match(/(\d+)(?:\D+(\d+))?/);
-  return { gameId: match?.[1], serverId: match?.[2] || "" };
+    .map(x => x.replace(/^wp/, "wp"));
 }
 
 // ===== START =====
-bot.onText(/\/start/, msg => {
-  session[msg.chat.id] = {};
-  bot.sendMessage(msg.chat.id, "🎮 MLBB Game ID + Server ID ပို့ပါ\nဥပမာ: 7822288393(2228)");
+bot.onText(/\/start/, async msg => {
+  const cid = msg.chat.id;
+  session[cid] = {};
+
+  await bot.sendMessage(
+    cid,
+    "🎮 *MLBB Game ID + Server ID ပို့ပါ*\nဥပမာ: `7822288393(2228)`",
+    { parse_mode: "Markdown" }
+  );
 });
 
-// ===== USER FLOW =====
+// ===== USER MESSAGE =====
 bot.on("message", async msg => {
   if (!msg.text) return;
-  const chatId = msg.chat.id;
-  if (isAdmin(chatId)) return;
+  if (msg.text.startsWith("/")) return;
 
-  const s = session[chatId] ||= {};
+  const cid = msg.chat.id;
+  if (isAdmin(cid)) return;
 
-  // STEP 1 ID
+  const s = session[cid] ||= {};
+
+  // STEP 1: ID
   if (!s.gameId) {
     const { gameId, serverId } = parseGameId(msg.text);
     if (!gameId) return;
+
     s.gameId = gameId;
     s.serverId = serverId;
-    const m = await bot.sendMessage(chatId, "💎 Amount ပို့ပါ (86+343 / wp1+wp2)");
-    return autoDelete(chatId, m.message_id);
+
+    const p = await bot.sendMessage(cid, PRICE_LIST_TEXT, { parse_mode: "Markdown" });
+    s.priceMsgId = p.message_id;
+
+    const m = await bot.sendMessage(cid, "💎 Amount ပို့ပါ (86+343 / wp1+wp2)");
+    autoDelete(cid, m.message_id);
+    return;
   }
 
-  // STEP 2 Amount
+  // STEP 2: AMOUNT
   if (!s.items) {
     const items = normalizeAmount(msg.text);
     let total = 0;
 
     for (const i of items) {
       if (!PRICE[i]) {
-        const m = await bot.sendMessage(chatId, "❌ Invalid Amount");
-        autoDelete(chatId, m.message_id);
+        const e = await bot.sendMessage(cid, "❌ Amount မမှန်ပါ");
+        autoDelete(cid, e.message_id);
         return;
       }
       total += PRICE[i];
     }
 
+    if (s.priceMsgId) {
+      bot.deleteMessage(cid, s.priceMsgId).catch(() => {});
+      delete s.priceMsgId;
+    }
+
     s.items = items;
     s.totalPrice = total;
 
-    const m = await bot.sendMessage(chatId,
-      `💰 Total: ${total.toLocaleString()} MMK\n💳 Payment Method`,
+    return bot.sendMessage(cid,
+      `💰 *Total:* ${total.toLocaleString()} MMK\n💳 Payment Method ရွေးပါ`,
       {
+        parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
-            [{ text: "KPay", callback_data: "PAY:KPay" }],
-            [{ text: "WavePay", callback_data: "PAY:WavePay" }]
+            [{ text: "💜 KPay", callback_data: "PAY:KPay" }],
+            [{ text: "💙 WavePay", callback_data: "PAY:WavePay" }]
           ]
         }
       }
     );
-    autoDelete(chatId, m.message_id, 10000);
   }
 });
 
@@ -154,30 +192,41 @@ bot.on("callback_query", async q => {
   // USER PAY
   if (data.startsWith("PAY:")) {
     const s = session[cid];
+    if (!s) return;
+
     s.paymentMethod = data.split(":")[1];
     s.orderId = genOrderId();
-    return bot.sendMessage(cid, `📸 Screenshot ပို့ပါ\n🆔 ${s.orderId}`);
+
+    return bot.sendMessage(cid,
+      `📸 Screenshot ပို့ပါ\n🆔 *${s.orderId}*`,
+      { parse_mode: "Markdown" }
+    );
   }
 
   // ADMIN ACTIONS
-  if (data.startsWith("APPROVE_") || data.startsWith("REJECT_") || data.startsWith("CANCEL_")) {
-    const id = data.split("_")[1];
+  if (/^(APPROVE|REJECT|CANCEL)_/.test(data)) {
+    const [action, id] = data.split("_");
     const status =
-      data.startsWith("APPROVE") ? "COMPLETED" :
-      data.startsWith("REJECT") ? "REJECTED" : "CANCELED";
+      action === "APPROVE" ? "COMPLETED" :
+      action === "REJECT" ? "REJECTED" : "CANCELED";
 
-    const order = await Order.findOneAndUpdate({ orderId: id }, { status }, { new: true });
-    if (!order) return;
-
-    await bot.sendMessage(order.userId,
-      status === "COMPLETED" ? "✅ Order Approved" :
-      status === "REJECTED" ? "❌ Order Rejected" :
-      "🚫 Order Canceled"
+    const order = await Order.findOneAndUpdate(
+      { orderId: id },
+      { status },
+      { new: true }
     );
+    if (!order) return;
 
     await bot.editMessageReplyMarkup(
       { inline_keyboard: [] },
       { chat_id: cid, message_id: q.message.message_id }
+    );
+
+    await bot.sendMessage(
+      order.userId,
+      status === "COMPLETED" ? "✅ Order Approved" :
+      status === "REJECTED" ? "❌ Order Rejected" :
+      "🚫 Order Canceled"
     );
   }
 });
@@ -204,10 +253,10 @@ bot.on("photo", async msg => {
   for (const a of ADMIN_IDS) {
     await bot.sendPhoto(a, order.screenshot, {
       caption:
-        `📦 ORDER ${order.orderId}\n` +
-        `ID: ${order.gameId} (${order.serverId})\n` +
-        `Items: ${order.items.join("+")}\n` +
-        `Total: ${order.totalPrice} MMK`,
+        `📦 ORDER ${order.orderId}
+ID: ${order.gameId} (${order.serverId})
+Items: ${order.items.join("+")}
+Total: ${order.totalPrice} MMK`,
       reply_markup: {
         inline_keyboard: [[
           { text: "✅ Approve", callback_data: `APPROVE_${order.orderId}` },
@@ -222,9 +271,34 @@ bot.on("photo", async msg => {
   bot.sendMessage(cid, "⏳ Admin စစ်ဆေးနေပါသည်...");
 });
 
+// ===== ADMIN DASHBOARD =====
+bot.onText(/\/admin/, async msg => {
+  if (!isAdmin(msg.chat.id)) return;
+
+  const total = await Order.countDocuments();
+  const pending = await Order.countDocuments({ status: "PENDING" });
+  const completed = await Order.countDocuments({ status: "COMPLETED" });
+  const rejected = await Order.countDocuments({ status: "REJECTED" });
+
+  bot.sendMessage(
+    msg.chat.id,
+    `👑 *ADMIN DASHBOARD*
+
+📦 Total: ${total}
+⏳ Pending: ${pending}
+✅ Completed: ${completed}
+❌ Rejected: ${rejected}`,
+    { parse_mode: "Markdown" }
+  );
+});
+
 // ===== SERVER =====
 app.get("/", (_, res) => res.send("🚀 Bika Store Bot Running"));
 app.listen(PORT, async () => {
-  await bot.setWebHook(`${PUBLIC_URL}${WEBHOOK_PATH}`);
-  console.log("✅ Webhook Ready");
+  try {
+    await bot.setWebHook(`${PUBLIC_URL}${WEBHOOK_PATH}`);
+    console.log("✅ Webhook Ready");
+  } catch (e) {
+    console.error("❌ Webhook Error:", e);
+  }
 });
