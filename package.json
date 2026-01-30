@@ -1,0 +1,19 @@
+{
+  "name": "bika-store-bot",
+  "version": "1.0.0",
+  "description": "BIKA Store Telegram Bot (Single File, Approve/Reject Orders)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.1.1",
+    "node-telegram-bot-api": "^0.64.0"
+  }
+}
