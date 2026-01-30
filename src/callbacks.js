@@ -194,51 +194,47 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       }
 
       // ===============================
-      // ADMIN APPROVE ORDER
-      // ===============================
-      if (data.startsWith("APPROVE:")) {
-        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-          return ack({ text: "Admin only", show_alert: true });
-        }
+// ADMIN APPROVE ORDER
+// ===============================
+if (data.startsWith("APPROVE_")) {
+  if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+    return ack({ text: "Admin only", show_alert: true });
+  }
 
-        await orders.approveOrder({
-          bot,
-          orderId: data.replace("APPROVE:", "")
-        });
+  const orderId = data.replace("APPROVE_", "");
 
-        await bot.editMessageReplyMarkup(
-          { inline_keyboard: [] },
-          { chat_id: msg.chat.id, message_id: msg.message_id }
-        );
-
-        return ack({ text: "✅ Approved" });
-      }
-
-      // ===============================
-      // ADMIN REJECT ORDER
-      // ===============================
-      if (data.startsWith("REJECT:")) {
-        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-          return ack({ text: "Admin only", show_alert: true });
-        }
-
-        await orders.rejectOrder({
-          bot,
-          orderId: data.replace("REJECT:", "")
-        });
-
-        await bot.editMessageReplyMarkup(
-          { inline_keyboard: [] },
-          { chat_id: msg.chat.id, message_id: msg.message_id }
-        );
-
-        return ack({ text: "❌ Rejected" });
-      }
-
-      await ack();
-    } catch (err) {
-      console.error("Callback error:", err);
-      await ack({ text: "Error occurred", show_alert: true });
-    }
+  await orders.approveOrder({
+    bot,
+    orderId
   });
-};
+
+  await bot.editMessageReplyMarkup(
+    { inline_keyboard: [] },
+    { chat_id: msg.chat.id, message_id: msg.message_id }
+  );
+
+  return ack({ text: "✅ Approved" });
+}
+
+// ===============================
+// ADMIN REJECT ORDER
+// ===============================
+if (data.startsWith("REJECT_")) {
+  if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+    return ack({ text: "Admin only", show_alert: true });
+  }
+
+  const orderId = data.replace("REJECT_", "");
+
+  await orders.rejectOrder({
+    bot,
+    orderId
+  });
+
+  await bot.editMessageReplyMarkup(
+    { inline_keyboard: [] },
+    { chat_id: msg.chat.id, message_id: msg.message_id }
+  );
+
+  return ack({ text: "❌ Rejected" });
+}
