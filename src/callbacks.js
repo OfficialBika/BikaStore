@@ -6,10 +6,11 @@ const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 const Order = require("./models/order");
-const promo = require(".models/promo"); // ✅ SAME PROMO OBJECT
+const promo = require("./models/promo");
 const PromoHistory = require("./models/PromoHistory");
 
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
+
   bot.on("callback_query", async (q) => {
     const data = q.data;
     const from = q.from;
@@ -185,6 +186,7 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
         );
 
         promo.reset();
+
         await bot.editMessageReplyMarkup(
           { inline_keyboard: [] },
           { chat_id: msg.chat.id, message_id: msg.message_id }
@@ -194,49 +196,50 @@ module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
       }
 
       // ===============================
-// ADMIN APPROVE ORDER
-// ===============================
-if (data.startsWith("APPROVE_")) {
-  if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-    return ack({ text: "Admin only", show_alert: true });
-  }
+      // ADMIN APPROVE ORDER
+      // ===============================
+      if (data.startsWith("APPROVE_")) {
+        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+          return ack({ text: "Admin only", show_alert: true });
+        }
 
-  const orderId = data.replace("APPROVE_", "");
+        const orderId = data.replace("APPROVE_", "");
 
-  await orders.approveOrder({
-    bot,
-    orderId
-  });
+        await orders.approveOrder({ bot, orderId });
 
-  await bot.editMessageReplyMarkup(
-    { inline_keyboard: [] },
-    { chat_id: msg.chat.id, message_id: msg.message_id }
-  );
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: msg.chat.id, message_id: msg.message_id }
+        );
 
-  return ack({ text: "✅ Approved" });
-}
+        return ack({ text: "✅ Approved" });
+      }
 
-// ===============================
-// ADMIN REJECT ORDER
-// ===============================
-if (data.startsWith("REJECT_")) {
-  if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
-    return ack({ text: "Admin only", show_alert: true });
-  }
+      // ===============================
+      // ADMIN REJECT ORDER
+      // ===============================
+      if (data.startsWith("REJECT_")) {
+        if (!isAdmin(from.id.toString(), ADMIN_IDS)) {
+          return ack({ text: "Admin only", show_alert: true });
+        }
 
-  const orderId = data.replace("REJECT_", "");
+        const orderId = data.replace("REJECT_", "");
 
-  await orders.rejectOrder({
-    bot,
-    orderId
-  });
+        await orders.rejectOrder({ bot, orderId });
 
-  await bot.editMessageReplyMarkup(
-    { inline_keyboard: [] },
-    { chat_id: msg.chat.id, message_id: msg.message_id }
-  );
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: msg.chat.id, message_id: msg.message_id }
+        );
 
-  return ack({ text: "❌ Rejected" });
-}
+        return ack({ text: "❌ Rejected" });
+      }
+
+      await ack();
+
+    } catch (err) {
+      console.error("Callback error:", err);
+      return ack({ text: "Error occurred", show_alert: true });
     }
-});
+  });
+};
