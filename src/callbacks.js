@@ -6,7 +6,7 @@ const ui = require("./ui");
 const orders = require("./orders");
 const { isAdmin } = require("./helpers");
 const Order = require("./models/order");
-const promo = require("./promo"); // ✅ SAME PROMO OBJECT
+const promo = require(".models/promo"); // ✅ SAME PROMO OBJECT
 const PromoHistory = require("./models/PromoHistory");
 
 module.exports = function registerCallbacks({ bot, session, ADMIN_IDS }) {
