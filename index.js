@@ -1,8 +1,8 @@
 // ===================================
 // BIKA STORE — FINAL SINGLE FILE BOT
+// RENDER SAFE (POLLING MODE)
 // ===================================
 
-// ===== CORE =====
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
@@ -10,14 +10,13 @@ const mongoose = require("mongoose");
 // ===== ENV =====
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const MONGO_URI = process.env.MONGO_URI;
-const PUBLIC_URL = process.env.PUBLIC_URL;
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_IDS = process.env.ADMIN_CHAT_IDS
   ? process.env.ADMIN_CHAT_IDS.split(",").map(x => x.trim())
   : [];
 
-if (!BOT_TOKEN || !MONGO_URI || !PUBLIC_URL) {
+if (!BOT_TOKEN || !MONGO_URI) {
   console.error("❌ Missing ENV");
   process.exit(1);
 }
@@ -34,7 +33,6 @@ const OrderSchema = new mongoose.Schema({
   username: String,
   game: String,
   gameId: String,
-  serverId: String,
   amount: String,
   totalPrice: Number,
   paymentMethod: String,
@@ -44,39 +42,32 @@ const OrderSchema = new mongoose.Schema({
 
 const Order = mongoose.model("Order", OrderSchema);
 
-// ===== BOT & SERVER =====
-const bot = new TelegramBot(BOT_TOKEN);
-const app = express();
-app.use(express.json());
+// ===== BOT (POLLING) =====
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-const WEBHOOK_PATH = `/telegram/bika_webhook`;
-app.post(WEBHOOK_PATH, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
+// ===== EXPRESS (KEEP ALIVE) =====
+const app = express();
+app.get("/", (_, res) => res.send("🚀 Bika Store Bot Running"));
+app.listen(PORT, () => console.log("🌐 Server running"));
 
 // ===== SESSION =====
 const session = {};
 
-// ===== HELPERS =====
-function isAdmin(id) {
-  return ADMIN_IDS.includes(String(id));
-}
-
-function genOrderId() {
-  return "BKS-" + Date.now().toString().slice(-6);
-}
+const isAdmin = id => ADMIN_IDS.includes(String(id));
+const genOrderId = () => "BKS-" + Date.now().toString().slice(-6);
 
 // ===== START =====
 bot.onText(/\/start/, msg => {
   session[msg.chat.id] = {};
-  bot.sendMessage(msg.chat.id, "👋 Welcome to *BIKA STORE*\n\nGame ID ကို ပို့ပါ", {
-    parse_mode: "Markdown"
-  });
+  bot.sendMessage(
+    msg.chat.id,
+    "👋 Welcome to *BIKA STORE*\n\nGame ID ကို ပို့ပါ",
+    { parse_mode: "Markdown" }
+  );
 });
 
 // ===== USER FLOW =====
-bot.on("message", async msg => {
+bot.on("message", msg => {
   if (!msg.text) return;
 
   const chatId = msg.chat.id;
@@ -92,7 +83,7 @@ bot.on("message", async msg => {
 
   if (!s.amount) {
     s.amount = msg.text;
-    s.totalPrice = Number(msg.text) * 100; // example price
+    s.totalPrice = Number(msg.text) * 100;
     return bot.sendMessage(chatId, "💳 Payment Method ရွေးပါ", {
       reply_markup: {
         inline_keyboard: [
@@ -104,12 +95,11 @@ bot.on("message", async msg => {
   }
 });
 
-// ===== PAYMENT SELECT =====
+// ===== CALLBACKS =====
 bot.on("callback_query", async q => {
   const chatId = q.message.chat.id;
   const data = q.data;
 
-  // ===== USER PAYMENT =====
   if (data.startsWith("PAY:")) {
     const s = session[chatId];
     if (!s) return;
@@ -117,13 +107,12 @@ bot.on("callback_query", async q => {
     s.paymentMethod = data.split(":")[1];
     s.orderId = genOrderId();
 
-    return bot.sendMessage(chatId,
-      `📸 Screenshot ပို့ပါ\n\n🆔 Order ID: ${s.orderId}`,
-      { parse_mode: "Markdown" }
+    return bot.sendMessage(
+      chatId,
+      `📸 Screenshot ပို့ပါ\n\n🆔 Order ID: ${s.orderId}`
     );
   }
 
-  // ===== ADMIN ACTION =====
   if (data.startsWith("APPROVE_") || data.startsWith("REJECT_")) {
     const orderId = data.split("_")[1];
     const status = data.startsWith("APPROVE") ? "COMPLETED" : "REJECTED";
@@ -140,11 +129,11 @@ bot.on("callback_query", async q => {
       { chat_id: q.message.chat.id, message_id: q.message.message_id }
     );
 
-    await bot.sendMessage(order.userId,
+    await bot.sendMessage(
+      order.userId,
       status === "COMPLETED"
         ? "✅ Order Completed — Thank you!"
-        : "❌ Order Rejected",
-      { parse_mode: "Markdown" }
+        : "❌ Order Rejected"
     );
   }
 });
@@ -172,12 +161,7 @@ bot.on("photo", async msg => {
   for (const admin of ADMIN_IDS) {
     await bot.sendPhoto(admin, fileId, {
       caption:
-        `📦 NEW ORDER\n` +
-        `🆔 ${order.orderId}\n` +
-        `🎮 ${order.game}\n` +
-        `ID: ${order.gameId}\n` +
-        `💎 ${order.amount}\n` +
-        `💰 ${order.totalPrice} MMK`,
+        `📦 NEW ORDER\n🆔 ${order.orderId}\n🎮 ${order.game}\nID: ${order.gameId}\n💎 ${order.amount}\n💰 ${order.totalPrice} MMK`,
       reply_markup: {
         inline_keyboard: [
           [
@@ -190,14 +174,5 @@ bot.on("photo", async msg => {
   }
 
   delete session[chatId];
-
   bot.sendMessage(chatId, "⏳ Admin စစ်ဆေးနေပါသည်...");
-});
-
-// ===== SERVER =====
-app.get("/", (_, res) => res.send("🚀 Bika Store Bot Running"));
-
-app.listen(PORT, async () => {
-  await bot.setWebHook(`${PUBLIC_URL}${WEBHOOK_PATH}`);
-  console.log("✅ Webhook set & server running");
 });
