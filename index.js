@@ -390,12 +390,12 @@ async function touchUser(from) {
 async function touchChat(chat) {
   if (!chat) return;
   const chatId = String(chat.id);
+
   await Chat.findOneAndUpdate(
     { chatId },
     {
       $setOnInsert: {
         chatId,
-        type: chat.type,
         addedAt: new Date(),
       },
       $set: {
