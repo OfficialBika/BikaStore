@@ -1178,20 +1178,26 @@ bot.on("callback_query", async (q) => {
 
     // Atomic claim (first click wins)
     const claimed = await Promo.findOneAndUpdate(
-      { _id: promoId, active: true, claimed: false, stage: "CLAIM" , expireAt: { $gt: new Date() } // ✅ late claim ပိတ် },
-      {
-        $set: {
-          claimed: true,
-          claimedAt: new Date(),
-          winnerUserId: winnerId,
-          winnerChatId: String(cid),
-          winnerUsername: q.from.username || "",
-          winnerFirstName: q.from.first_name || "",
-          stage: "WAIT_ID"
-        }
-      },
-      { new: true }
-    );
+  {
+    _id: promoId,
+    active: true,
+    claimed: false,
+    stage: "CLAIM",
+    expireAt: { $gt: new Date() } // late claim ပိတ်
+  },
+  {
+    $set: {
+      claimed: true,
+      claimedAt: new Date(),
+      winnerUserId: winnerId,
+      winnerChatId: String(cid),
+      winnerUsername: q.from.username || "",
+      winnerFirstName: q.from.first_name || "",
+      stage: "WAIT_ID"
+    }
+  },
+  { new: true }
+);
 
     // If success => winner
     if (claimed) {
