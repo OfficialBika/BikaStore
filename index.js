@@ -68,6 +68,30 @@ const Chat = mongoose.model("Chat", new mongoose.Schema({
   lastSeenAt: { type: Date, default: Date.now },
 }, { timestamps: true }));
 
+const GiveawayPost = mongoose.model("GiveawayPost", new mongoose.Schema({
+  channelId: String,
+  channelPostId: Number,
+
+  discussionChatId: String, // group chat id
+  createdAt: { type: Date, default: Date.now },
+
+  mentionTag: String, // @Bikastorebot
+}));
+
+const WinnerHistory = mongoose.model("WinnerHistory", new mongoose.Schema({
+  groupChatId: String,
+
+  channelId: String,
+  channelPostId: Number,
+
+  winnerUserId: String,
+  winnerUsername: String,
+  winnerName: String,
+  winnerComment: String,
+
+  pickedAt: { type: Date, default: Date.now },
+}));
+
 const Counter = mongoose.model("Counter", new mongoose.Schema({
   name: { type: String, unique: true },
   seq: { type: Number, default: 0 }
@@ -120,6 +144,63 @@ const Promo = mongoose.model("Promo", new mongoose.Schema({
 
   stage: { type: String, default: "CLAIM" }, // CLAIM -> WAIT_ID -> WAIT_APPROVE -> DONE
 }, { timestamps: true }));
+
+// =============================
+// GIVEAWAY: ACTIVE CHANNEL POSTS
+// =============================
+const GiveawayPost = mongoose.model("GiveawayPost", new mongoose.Schema({
+  channelId: String,          // Telegram channel id
+  channelPostId: Number,      // message_id of channel post
+
+  discussionChatId: String,   // linked discussion group id (optional)
+  mentionTag: String,         // @Bikastorebot
+
+  createdAt: { type: Date, default: Date.now },
+}));
+
+// =============================
+// GIVEAWAY: COMMENT ENTRIES
+// (DB-only, first comment only)
+// =============================
+const GiveawayEntrySchema = new mongoose.Schema({
+  groupChatId: String,        // discussion group id
+  channelPostId: Number,      // channel post id
+
+  userId: String,             // Telegram user id
+  username: String,
+  name: String,
+
+  comment: String,            // first comment text
+  commentMessageId: Number,   // message_id in group
+
+  createdAt: { type: Date, default: Date.now },
+});
+
+// 🚨 IMPORTANT: one entry per user per post per group
+GiveawayEntrySchema.index(
+  { groupChatId: 1, channelPostId: 1, userId: 1 },
+  { unique: true }
+);
+
+const GiveawayEntry = mongoose.model("GiveawayEntry", GiveawayEntrySchema);
+
+
+// =============================
+// GIVEAWAY: WINNER HISTORY
+// =============================
+const WinnerHistory = mongoose.model("WinnerHistory", new mongoose.Schema({
+  groupChatId: String,        // discussion group id
+
+  channelId: String,          // channel id
+  channelPostId: Number,      // channel post id
+
+  winnerUserId: String,
+  winnerUsername: String,
+  winnerName: String,
+  winnerComment: String,
+
+  pickedAt: { type: Date, default: Date.now },
+}));
 
 // ===================================
 // PRICES
@@ -561,6 +642,110 @@ bot.onText(/\/admin/, async (msg) => {
 });
 
 // ===================================
+// STEP D: /pickwinner (Admin only)
+// ===================================
+bot.onText(/\/pickwinner/, async (msg) => {
+  const chatId = String(msg.chat.id);
+
+  // only admin & only group
+  if (!isAdmin(msg.from.id)) return;
+  if (msg.chat.type !== "supergroup") {
+    return bot.sendMessage(chatId, "❗ /pickwinner ကို Discussion Group ထဲမှာပဲ သုံးနိုင်ပါတယ်။");
+  }
+
+  // find latest active giveaway post
+  const promo = await Promo.findOne({ active: true }).sort({ createdAt: -1 });
+  if (!promo) {
+    return bot.sendMessage(chatId, "⚠️ Giveaway မရှိသေးပါ။");
+  }
+
+  const channelPostId = promo.channelPostId;
+
+  // load comments
+  const comments = await GiveawayComment.find({
+    chatId,
+    channelPostId
+  });
+
+  if (!comments.length) {
+    return bot.sendMessage(chatId, "⚠️ Comment မရှိသေးပါ။");
+  }
+
+  // send initial countdown message
+  let countdown = 20;
+  
+  const spinnerFrames = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+let spinnerIndex = 0;
+  
+  const sent = await bot.sendMessage(
+  chatId,
+  `🌀 <b>${spinnerFrames[0]} Winner ရွေးချယ်နေပါပြီ...</b>\n\n⏳ ${countdown} စက္ကန့်`,
+  { parse_mode: "HTML" }
+);
+
+  // countdown animation
+  const timer = setInterval(async () => {
+  countdown--;
+  spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
+
+  if (countdown > 0) {
+    try {
+      await bot.editMessageText(
+        `🌀 <b>${spinnerFrames[spinnerIndex]} Winner ရွေးချယ်နေပါပြီ...</b>\n\n⏳ ${countdown} စက္ကန့်`,
+        {
+          chat_id: chatId,
+          message_id: sent.message_id,
+          parse_mode: "HTML"
+        }
+      );
+    } catch (_) {}
+  }
+}, 1000);
+  // wait 20s
+  await new Promise(res => setTimeout(res, 10000));
+  clearInterval(timer);
+
+  // pick random winner
+  const winner = comments[Math.floor(Math.random() * comments.length)];
+
+  // save winner
+  await GiveawayWinner.create({
+    chatId,
+    channelPostId,
+
+    userId: winner.userId,
+    username: winner.username,
+    firstName: winner.firstName,
+    commentText: winner.commentText
+  });
+
+  // cleanup comments (important)
+  await GiveawayComment.deleteMany({
+    chatId,
+    channelPostId
+  });
+
+  // announce winner
+  const mention = winner.username
+    ? `@${winner.username}`
+    : `<a href="tg://user?id=${winner.userId}">${escapeHTML(winner.firstName || "Winner")}</a>`;
+
+  const resultText =
+`🎉 <b>Winner ထွက်ပေါ်လာပါပြီ!</b>
+
+🏆 Winner: ${mention}
+💬 Comment: <i>${escapeHTML(winner.commentText)}</i>
+
+🎊 ဂုဏ်ယူပါတယ်!`;
+
+  await bot.editMessageText(resultText, {
+    chat_id: chatId,
+    message_id: sent.message_id,
+    parse_mode: "HTML"
+  });
+});
+
+// ===================================
 // /MYRANK — user level by total spend
 // ===================================
 const RANKS = [
@@ -751,6 +936,52 @@ bot.on("message", async (msg) => {
   // always track
   await touchChat(msg.chat);
   if (msg.from) await touchUser(msg.from);
+
+// ===================================
+// STEP C: SAVE GIVEAWAY COMMENTS
+// ===================================
+if (
+  msg.chat?.type === "supergroup" &&
+  msg.reply_to_message &&
+  msg.reply_to_message.forward_from_chat &&   // came from channel
+  msg.reply_to_message.forward_from_chat.type === "channel"
+) {
+  const discussionChatId = String(msg.chat.id);
+  const channelPostId = msg.reply_to_message.forward_from_message_id;
+  const userId = String(msg.from.id);
+
+  // Check giveaway post exists (from STEP B saved channel posts)
+  const giveawayPost = await Promo.findOne({
+    channelPostId,
+    active: true
+  });
+
+  if (!giveawayPost) return;
+
+  // Check duplicate comment (1 user = 1 chance)
+  const exists = await GiveawayComment.findOne({
+    chatId: discussionChatId,
+    channelPostId,
+    userId
+  });
+
+  if (exists) return;
+
+  // Save comment
+  await GiveawayComment.create({
+    chatId: discussionChatId,
+    channelPostId,
+    userId,
+
+    username: msg.from.username || "",
+    firstName: msg.from.first_name || "",
+
+    commentText: msg.text || "[non-text]",
+    messageId: msg.message_id
+  });
+
+  return;
+}
 
   const cid = msg.chat.id;
 
@@ -1291,6 +1522,50 @@ bot.on("callback_query", async (q) => {
     return;
   }
 });
+
+
+// ===================================
+// STEP B: DETECT GIVEAWAY CHANNEL POST
+// ===================================
+bot.on("channel_post", async (msg) => {
+  try {
+    // caption (photo) or text
+    const text = msg.caption || msg.text || "";
+
+    // must contain @Bikastorebot
+    if (!text.includes("@Bikastorebot")) return;
+
+    // channel info
+    const channelId = String(msg.chat.id);
+    const channelPostId = msg.message_id;
+
+    // linked discussion group (if exists)
+    const discussionChatId =
+      msg.chat?.linked_chat_id
+        ? String(msg.chat.linked_chat_id)
+        : null;
+
+    // already saved? (avoid duplicate)
+    const exists = await GiveawayPost.findOne({
+      channelId,
+      channelPostId,
+    });
+    if (exists) return;
+
+    // save giveaway post
+    await GiveawayPost.create({
+      channelId,
+      channelPostId,
+      discussionChatId,
+      mentionTag: "@Bikastorebot",
+    });
+
+    console.log("🎁 Giveaway post detected:", channelPostId);
+  } catch (err) {
+    console.error("❌ Giveaway channel_post error:", err.message);
+  }
+});
+
 
 // ===================================
 // SERVER
