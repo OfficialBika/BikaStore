@@ -68,15 +68,6 @@ const Chat = mongoose.model("Chat", new mongoose.Schema({
   lastSeenAt: { type: Date, default: Date.now },
 }, { timestamps: true }));
 
-const GiveawayPost = mongoose.model("GiveawayPost", new mongoose.Schema({
-  channelId: String,
-  channelPostId: Number,
-
-  discussionChatId: String, // group chat id
-  createdAt: { type: Date, default: Date.now },
-
-  mentionTag: String, // @Bikastorebot
-}));
 
 const WinnerHistory = mongoose.model("WinnerHistory", new mongoose.Schema({
   groupChatId: String,
