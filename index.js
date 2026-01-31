@@ -69,20 +69,6 @@ const Chat = mongoose.model("Chat", new mongoose.Schema({
 }, { timestamps: true }));
 
 
-const WinnerHistory = mongoose.model("WinnerHistory", new mongoose.Schema({
-  groupChatId: String,
-
-  channelId: String,
-  channelPostId: Number,
-
-  winnerUserId: String,
-  winnerUsername: String,
-  winnerName: String,
-  winnerComment: String,
-
-  pickedAt: { type: Date, default: Date.now },
-}));
-
 const Counter = mongoose.model("Counter", new mongoose.Schema({
   name: { type: String, unique: true },
   seq: { type: Number, default: 0 }
