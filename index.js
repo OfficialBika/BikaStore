@@ -5,6 +5,8 @@
 // Webhook (Render) + MongoDB
 // ===================================
 
+process.env.TZ = "Asia/Yangon";
+
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const mongoose = require("mongoose");
