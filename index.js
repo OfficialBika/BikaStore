@@ -14,6 +14,12 @@ const MONGO_URI = process.env.MONGO_URI;
 const PUBLIC_URL = process.env.PUBLIC_URL;
 const PORT = process.env.PORT || 3000;
 
+const KPAY_NAME = process.env.KPAY_NAME;
+const KPAY_PHONE = process.env.KPAY_PHONE;
+
+const WAVEPAY_NAME = process.env.WAVEPAY_NAME;
+const WAVEPAY_PHONE = process.env.WAVEPAY_PHONE;
+
 const ADMIN_IDS = process.env.ADMIN_CHAT_IDS
   ? process.env.ADMIN_CHAT_IDS.split(",").map(x => x.trim()).filter(Boolean)
   : [];
@@ -1076,9 +1082,9 @@ bot.on("callback_query", async (q) => {
     s.step = "WAIT_RECEIPT";
 
     const payInfo = s.paymentMethod === "KPAY"
-      ? `KPay: <b>Name</b> - Shine Htet Aung\n<b>Phone</b> - 09264202637`
-      : `WavePay: <b>Name</b> - Shine Htet Aung\n<b>Phone</b> - 09264202637`;
-
+  ? `💳 <b>KPay</b>\n<b>Name</b> - ${escapeHTML(KPAY_NAME)}\n<b>Phone</b> - ${escapeHTML(KPAY_PHONE)}`
+  : `💳 <b>WavePay</b>\n<b>Name</b> - ${escapeHTML(WAVEPAY_NAME)}\n<b>Phone</b> - ${escapeHTML(WAVEPAY_PHONE)}`;
+  
     const askReceipt =
 `${payInfo}
 
