@@ -10,4 +10,4 @@ const file = photo[photo.length - 1]; // Get highest resolution const fileId = f
 
 // Save payment proof for latest order session await savePaymentProof(from.id, fileId);
 
-await bot.sendMessage( from.id, 📸 ငွေလွဲပုံတင်ခြင်းအောင်မြင်ပါသည်။\n\n📤 Admin team သို့ ပေးပို့ပြီးစစ်ဆေးနေပါပြီ။ ); });
+await bot.sendMessage( from.id, 📸 ငွေလွဲပုံတင်ခြင်းအောင်မြင်ပါသည်။\n\n📤 Admin team သို့ ပေးပို့စစ်ဆေးနေပါပြီ။ခေတ္တစောင့်ပါ။ ); });
