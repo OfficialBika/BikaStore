@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BIKA Store – Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #050816;
+      --bg-soft: #0b1120;
+      --bg-softer: #020617;
+      --primary: #6366f1;
+      --primary-soft: rgba(99, 102, 241, 0.12);
+      --accent: #22c55e;
+      --danger: #f97373;
+      --text-main: #e5e7eb;
+      --text-soft: #9ca3af;
+      --border-subtle: rgba(148, 163, 184, 0.25);
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.75);
+      --shadow-card: 0 16px 40px rgba(15, 23, 42, 0.85);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0, #020617 45%, #000 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+
+    .app-shell {
+      display: flex;
+      width: 100%;
+      min-height: 100vh;
+      backdrop-filter: blur(30px);
+      background: linear-gradient(120deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.9));
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: radial-gradient(circle at top left, #1f2937 0, #020617 45%);
+      border-right: 1px solid var(--border-subtle);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      box-shadow: 20px 0 60px rgba(15, 23, 42, 0.9);
+      position: relative;
+      z-index: 2;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 16px;
+      background: radial-gradient(circle at 20% 0%, #22c55e, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #e5e7eb;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 20px 45px rgba(34, 197, 94, 0.45);
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: #e5e7eb;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .sidebar-section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--text-soft);
+      margin-bottom: 4px;
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-item {
+      border-radius: 999px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-soft);
+      font-size: 13px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.16s ease-out;
+    }
+
+    .nav-item span.icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(15, 23, 42, 0.7));
+      border-color: rgba(94, 234, 212, 0.3);
+      color: #e5e7eb;
+      box-shadow: 0 13px 35px rgba(15, 23, 42, 0.9);
+    }
+
+    .nav-item:hover:not(.active) {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: rgba(148, 163, 184, 0.4);
+      color: #e5e7eb;
+    }
+
+    .nav-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .nav-title {
+      font-size: 13px;
+    }
+
+    .nav-caption {
+      font-size: 11px;
+      color: var(--text-soft);
+      opacity: 0.8;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.35);
+      font-size: 11px;
+      color: var(--text-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sidebar-footer strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    /* Main layout */
+    .main {
+      flex: 1;
+      padding: 20px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .topbar-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .topbar-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .topbar-subtitle {
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    .topbar-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.12);
+      color: #a7f3d0;
+      font-size: 11px;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill-button {
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.14s ease-out;
+    }
+
+    .pill-button.primary {
+      border-color: rgba(94, 234, 212, 0.5);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.8), rgba(56, 189, 248, 0.8));
+      color: white;
+      box-shadow: 0 14px 35px rgba(56, 189, 248, 0.4);
+    }
+
+    .pill-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 35px rgba(15, 23, 42, 0.7);
+      border-color: rgba(148, 163, 184, 0.8);
+    }
+
+    .pill-button.primary:hover {
+      box-shadow: 0 18px 45px rgba(37, 99, 235, 0.55);
+    }
+
+    .pill-button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 20% 0%, #6366f1, #0f172a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    .avatar-label {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .avatar-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    /* Views container */
+    .views {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 4px;
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    /* Dashboard view */
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 1200px) {
+      .grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        box-shadow: 0 12px 40px rgba(15, 23, 42, 0.9);
+      }
+      .sidebar-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+      .sidebar-footer {
+        width: 100%;
+        margin-top: 8px;
+      }
+      .main {
+        padding: 16px;
+      }
+      .grid-3, .grid-2 {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .card {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at top left, rgba(30, 64, 175, 0.5), rgba(15, 23, 42, 0.96) 45%);
+      box-shadow: var(--shadow-card);
+      padding: 18px 18px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 0 0, rgba(94, 234, 212, 0.12), transparent 55%),
+        radial-gradient(circle at 100% 0, rgba(129, 140, 248, 0.16), transparent 55%);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .card-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .stat-title {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      margin-bottom: 8px;
+    }
+
+    .stat-value-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .stat-chip {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      border: 1px solid rgba(74, 222, 128, 0.5);
+      background: rgba(22, 163, 74, 0.16);
+      color: #bbf7d0;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-subline {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .stat-trend {
+      font-size: 11px;
+      color: #4ade80;
+    }
+
+    .pill-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--text-soft);
+    }
+
+    .pill-tag strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .section {
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at top, rgba(30, 64, 175, 0.35), rgba(15, 23, 42, 0.98) 45%);
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-title-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .section-sub {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .badge-soft {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--text-soft);
+    }
+
+    /* Table */
+    .table-wrap {
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead {
+      background: rgba(15, 23, 42, 0.94);
+    }
+
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid rgba(31, 41, 55, 0.9);
+      white-space: nowrap;
+    }
+
+    th {
+      font-weight: 500;
+      color: var(--text-soft);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    tbody tr:hover {
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .status-pill {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-pill.pending {
+      background: rgba(234, 179, 8, 0.12);
+      color: #facc15;
+      border: 1px solid rgba(234, 179, 8, 0.6);
+    }
+
+    .status-pill.awaiting {
+      background: rgba(59, 130, 246, 0.12);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.7);
+    }
+
+    .status-pill.completed {
+      background: rgba(34, 197, 94, 0.14);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.7);
+    }
+
+    .status-pill.rejected {
+      background: rgba(239, 68, 68, 0.14);
+      color: #fecaca;
+      border: 1px solid rgba(239, 68, 68, 0.7);
+    }
+
+    .small-button {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.16s ease-out;
+    }
+
+    .small-button.primary {
+      border-color: rgba(56, 189, 248, 0.65);
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(37, 99, 235, 0.85));
+      color: white;
+    }
+
+    .small-button.danger {
+      border-color: rgba(248, 113, 113, 0.7);
+      background: linear-gradient(135deg, rgba(248, 113, 113, 0.95), rgba(185, 28, 28, 0.9));
+      color: #fee2e2;
+    }
+
+    .small-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.9);
+    }
+
+    .small-button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    .muted {
+      color: var(--text-soft);
+      font-size: 11px;
+    }
+
+    /* Inputs */
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .input-text {
+      flex: 1;
+      min-width: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.95);
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text-main);
+      outline: none;
+    }
+
+    .input-text::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .textarea {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      background: rgba(15, 23, 42, 0.98);
+      color: var(--text-main);
+      font-size: 12px;
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+    }
+
+    /* Modal (Order detail) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      backdrop-filter: blur(18px);
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal {
+      width: min(540px, 100% - 32px);
+      border-radius: 22px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: radial-gradient(circle at top, rgba(37, 99, 235, 0.55), rgba(15, 23, 42, 0.98) 48%);
+      padding: 18px 18px 14px;
+      box-shadow: 0 32px 80px rgba(15, 23, 42, 1);
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .modal-title-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .modal-sub {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .close-button {
+      border-radius: 999px;
+      width: 26px;
+      height: 26px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-soft);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.16s ease-out;
+    }
+
+    .close-button:hover {
+      background: rgba(15, 23, 42, 1);
+      color: #e5e7eb;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.9);
+    }
+
+    .modal-body {
+      font-size: 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 14px;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 700px) {
+      .modal-body {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .detail-block {
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.98);
+      padding: 10px 12px;
+    }
+
+    .detail-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-soft);
+      margin-bottom: 4px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 3px 0;
+    }
+
+    .detail-label {
+      color: var(--text-soft);
+    }
+
+    .detail-value {
+      font-weight: 500;
+      text-align: right;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.6);
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">B</div>
+        <div class="brand-text">
+          <div class="brand-title">BIKA STORE</div>
+          <div class="brand-subtitle">Telegram Admin Console</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sidebar-section-label">Navigation</div>
+        <div class="sidebar-nav">
+          <div class="nav-item active" data-view="dashboard">
+            <span class="icon">📊</span>
+            <div class="nav-labels">
+              <div class="nav-title">Overview</div>
+              <div class="nav-caption">Key metrics & summary</div>
+            </div>
+          </div>
+          <div class="nav-item" data-view="orders">
+            <span class="icon">📦</span>
+            <div class="nav-labels">
+              <div class="nav-title">All Orders</div>
+              <div class="nav-caption">Full order history</div>
+            </div>
+          </div>
+          <div class="nav-item" data-view="pending">
+            <span class="icon">⏳</span>
+            <div class="nav-labels">
+              <div class="nav-title">Pending Payments</div>
+              <div class="nav-caption">Confirm or reject</div>
+            </div>
+          </div>
+          <div class="nav-item" data-view="promotions">
+            <span class="icon">🎯</span>
+            <div class="nav-labels">
+              <div class="nav-title">Promotions</div>
+              <div class="nav-caption">Promo banner content</div>
+            </div>
+          </div>
+          <div class="nav-item" data-view="export">
+            <span class="icon">📄</span>
+            <div class="nav-labels">
+              <div class="nav-title">Export</div>
+              <div class="nav-caption">Download CSV report</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div>Connected Bot: <strong>@BIKA_Store_Bot</strong></div>
+        <div>Environment: <strong>Production</strong></div>
+        <div class="muted">* ဤ Dashboard သည် sample data အသုံးပြုထားပြီး Telegram Bot API နှင့် ချိတ်ဆက်ရန် Backend API လိုအပ်ပါသည် *</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">Admin Dashboard</div>
+          <div class="topbar-subtitle">
+            Central panel for managing <span style="color:#bfdbfe;">orders, payments & promotions</span>.
+          </div>
+          <div class="topbar-badge">
+            <span>LIVE PREVIEW</span>
+            <span>•</span>
+            <span>Sample data only</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <button class="pill-button" id="refresh-button">
+            🔄 Refresh mock data
+          </button>
+          <button class="pill-button primary" onclick="switchView('pending')">
+            ⏳ Pending Queue
+          </button>
+          <div class="avatar-wrap">
+            <div class="avatar">AD</div>
+            <div class="avatar-label">Admin · BIKA Store</div>
+          </div>
+        </div>
+      </header>
+
+      <div class="views">
+        <!-- Dashboard View -->
+        <section id="view-dashboard" class="view active">
+          <div class="grid grid-3">
+            <div class="card">
+              <div class="card-inner">
+                <div class="stat-title">Total Orders</div>
+                <div class="stat-value-row">
+                  <div class="stat-value" id="stat-total-orders">0</div>
+                  <div class="stat-chip">
+                    <span>Today</span>
+                    <span id="stat-today-orders">+0</span>
+                  </div>
+                </div>
+                <div class="stat-subline">
+                  Last 30 days · <span id="stat-last30-orders">0</span> orders
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <div class="stat-title">Revenue</div>
+                <div class="stat-value-row">
+                  <div class="stat-value" id="stat-revenue">0 MMK</div>
+                  <div class="stat-chip" style="border-color:rgba(56,189,248,0.6);background:rgba(56,189,248,0.18);color:#e0f2fe;">
+                    <span>Completed</span>
+                  </div>
+                </div>
+                <div class="stat-subline">
+                  Pending amount: <span id="stat-pending-amount">0 MMK</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-inner">
+                <div class="stat-title">Queue Health</div>
+                <div class="stat-value-row">
+                  <div class="stat-value" id="stat-pending-count">0</div>
+                  <div class="stat-chip" style="border-color:rgba(250,204,21,0.7);background:rgba(250,204,21,0.16);color:#facc15;">
+                    <span>Pending payments</span>
+                  </div>
+                </div>
+                <div class="stat-subline">
+                  Awaiting transfer: <span id="stat-awaiting-count">0</span> orders
+                </div>
+                <div class="stat-trend" id="stat-queue-text">Queue looks healthy ✅</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-2" style="margin-top:16px;">
+            <div class="section">
+              <div class="section-header">
+                <div class="section-title-wrap">
+                  <div class="section-title">Recent Orders</div>
+                  <div class="section-sub">Last 5 orders from your Telegram store</div>
+                </div>
+                <div class="badge-soft" id="badge-recent-count">0 orders</div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Item</th>
+                      <th>Customer</th>
+                      <th>Status</th>
+                      <th>Total</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboard-recent-body">
+                    <!-- rows injected by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-header">
+                <div class="section-title-wrap">
+                  <div class="section-title">Promotion Banner</div>
+                  <div class="section-sub">This matches your in-bot <code>/promos</code> content</div>
+                </div>
+                <div class="badge-soft" id="badge-promo-status">Active</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div class="pill-tag" style="margin-bottom:4px;">
+                  <span>🎯 Current Banner</span>
+                  <span style="font-size:10px;color:#6ee7b7;">shown on Telegram</span>
+                </div>
+                <textarea id="promo-textarea" class="textarea"></textarea>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;">
+                  <div class="muted">
+                    * Static demo only – in real app this will call your Node.js API
+                  </div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="small-button" id="promo-toggle-button">🔴 Disable</button>
+                    <button class="small-button primary" id="promo-save-button">💾 Save (demo)</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Orders View -->
+        <section id="view-orders" class="view">
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title-wrap">
+                <div class="section-title">All Orders</div>
+                <div class="section-sub">Full history from your store (demo data)</div>
+              </div>
+              <div class="input-row">
+                <input type="text" id="orders-search" class="input-text" placeholder="Search by item, player, game ID…" />
+                <button class="small-button" onclick="exportCsv()">
+                  📄 Export CSV (demo)
+                </button>
+              </div>
+            </div>
+            <div class="table-wrap" style="max-height:380px;overflow:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Item</th>
+                    <th>Player</th>
+                    <th>Game ID</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="orders-body">
+                  <!-- rows injected -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Pending View -->
+        <section id="view-pending" class="view">
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title-wrap">
+                <div class="section-title">Pending Payments</div>
+                <div class="section-sub">Payments waiting for admin confirmation</div>
+              </div>
+              <div class="badge-soft" id="badge-pending-count">0 pending</div>
+            </div>
+            <div class="table-wrap" style="max-height:380px;overflow:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Item</th>
+                    <th>Player</th>
+                    <th>Contact</th>
+                    <th>Amount</th>
+                    <th>Paid At</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="pending-body">
+                  <!-- rows injected -->
+                </tbody>
+              </table>
+            </div>
+            <div class="muted" style="margin-top:8px;">
+              ✅ In real integration, clicking Confirm/Reject in detail modal will send request to your Node.js bot API.
+            </div>
+          </div>
+        </section>
+
+        <!-- Promotions View -->
+        <section id="view-promotions" class="view">
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title-wrap">
+                <div class="section-title">Promotions</div>
+                <div class="section-sub">Edit your marketing banner (demo only)</div>
+              </div>
+              <div class="badge-soft" id="badge-promo-status-2">Active</div>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px;">
+              <div>
+                <div class="pill-tag" style="margin-bottom:6px;">
+                  <span>📝 Editable Promo Text</span>
+                  <span style="font-size:10px;color:#a5b4fc;">Sync with Telegram bot later</span>
+                </div>
+                <textarea id="promo-textarea-2" class="textarea"></textarea>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;">
+                  <div class="muted">
+                    🔐 Suggestion: control from admin-only endpoint on your Node server.
+                  </div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="small-button" id="promo-toggle-button-2">🔴 Disable</button>
+                    <button class="small-button primary" id="promo-save-button-2">💾 Save Preview</button>
+                  </div>
+                </div>
+              </div>
+              <div class="detail-block">
+                <div class="detail-title">Preview (Telegram style)</div>
+                <div id="promo-preview" style="font-size:12px;white-space:pre-line;"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Export View -->
+        <section id="view-export" class="view">
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title-wrap">
+                <div class="section-title">Export Orders</div>
+                <div class="section-sub">Download CSV for Excel / Google Sheets</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <p class="muted">
+                CSV format includes: <code>id, userId, username, categoryKey, packageName, price, currency, gameId,
+                playerName, contact, status, createdAt, paidAt, confirmedAt</code>.
+              </p>
+              <div class="detail-block">
+                <div class="detail-title">Quick Export</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;">
+                  <div>
+                    <div style="font-size:12px;margin-bottom:4px;">
+                      Orders currently in memory: <strong id="export-orders-count">0</strong>
+                    </div>
+                    <div class="muted">
+                      In production, this button should call something like:
+                      <code>GET /admin/orders/export.csv</code>
+                    </div>
+                  </div>
+                  <button class="small-button primary" onclick="exportCsv()">
+                    📥 Download orders.csv
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal for order detail -->
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-title" id="modal-title">Order Detail</div>
+          <div class="modal-sub" id="modal-subtitle"></div>
+        </div>
+        <button class="close-button" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-block">
+          <div class="detail-title">Order Info</div>
+          <div class="detail-row">
+            <div class="detail-label">Order ID</div>
+            <div class="detail-value" id="detail-id">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Item</div>
+            <div class="detail-value" id="detail-item">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Status</div>
+            <div class="detail-value" id="detail-status">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Amount</div>
+            <div class="detail-value" id="detail-amount">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Created</div>
+            <div class="detail-value" id="detail-created">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Paid At</div>
+            <div class="detail-value" id="detail-paid">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Confirmed</div>
+            <div class="detail-value" id="detail-confirmed">-</div>
+          </div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-title">Customer</div>
+          <div class="detail-row">
+            <div class="detail-label">Player</div>
+            <div class="detail-value" id="detail-player">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Game ID</div>
+            <div class="detail-value" id="detail-gameid">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Contact</div>
+            <div class="detail-value" id="detail-contact">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">User ID</div>
+            <div class="detail-value" id="detail-userid">-</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Username</div>
+            <div class="detail-value" id="detail-username">-</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div>
+          <span class="muted">⚠ Demo only: in real app this should call your Node.js bot admin API.</span>
+        </div>
+        <div class="modal-actions">
+          <button class="small-button danger" id="modal-reject">❌ Reject</button>
+          <button class="small-button primary" id="modal-confirm">✅ Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Sample Data (Demo) ---
+    const sampleOrders = [
+      {
+        id: 1,
+        userId: 111111,
+        username: "bika",
+        firstName: "Bika",
+        categoryKey: "mlbb",
+        packageId: "mlbb_172",
+        packageName: "172 Diamonds",
+        price: 3600,
+        currency: "MMK",
+        gameId: "12345678",
+        playerName: "BIKA",
+        contact: "09xxxxxxx",
+        status: "PENDING_CONFIRMATION",
+        createdAt: "2026-02-01T10:00:00Z",
+        paidAt: "2026-02-01T10:05:00Z",
+        confirmedAt: ""
+      },
+      {
+        id: 2,
+        userId: 111111,
+        username: "bika",
+        firstName: "Bika",
+        categoryKey: "pubg",
+        packageId: "pubg_60",
+        packageName: "60 UC",
+        price: 1800,
+        currency: "MMK",
+        gameId: "88888888",
+        playerName: "BIKA",
+        contact: "09xxxxxxx",
+        status: "COMPLETED",
+        createdAt: "2026-01-30T14:12:00Z",
+        paidAt: "2026-01-30T14:15:00Z",
+        confirmedAt: "2026-01-30T14:18:00Z"
+      },
+      {
+        id: 3,
+        userId: 222222,
+        username: "player2",
+        firstName: "Player 2",
+        categoryKey: "magicchess",
+        packageId: "mc_200",
+        packageName: "200 Diamonds",
+        price: 4000,
+        currency: "MMK",
+        gameId: "99990999",
+        playerName: "MC-God",
+        contact: "Telegram: @player2",
+        status: "AWAITING_PAYMENT",
+        createdAt: "2026-02-01T08:30:00Z",
+        paidAt: "",
+        confirmedAt: ""
+      },
+      {
+        id: 4,
+        userId: 333333,
+        username: "tg_premium",
+        firstName: "Premium User",
+        categoryKey: "tgpremium",
+        packageId: "tg_prem_1m",
+        packageName: "Premium – 1 Month",
+        price: 8000,
+        currency: "MMK",
+        gameId: "N/A",
+        playerName: "Telegram",
+        contact: "Telegram: @premium",
+        status: "COMPLETED",
+        createdAt: "2026-01-29T11:00:00Z",
+        paidAt: "2026-01-29T11:02:00Z",
+        confirmedAt: "2026-01-29T11:05:00Z"
+      },
+      {
+        id: 5,
+        userId: 444444,
+        username: "star_user",
+        firstName: "Star User",
+        categoryKey: "tgstar",
+        packageId: "tg_star_300",
+        packageName: "300 Stars",
+        price: 4500,
+        currency: "MMK",
+        gameId: "N/A",
+        playerName: "Stars",
+        contact: "09yyyyyyy",
+        status: "PENDING_CONFIRMATION",
+        createdAt: "2026-02-01T09:20:00Z",
+        paidAt: "2026-02-01T09:22:00Z",
+        confirmedAt: ""
+      }
+    ];
+
+    let orders = JSON.parse(JSON.stringify(sampleOrders));
+
+    // Promotions demo state
+    let promoState = {
+      isActive: true,
+      text: "🎉 Welcome to BIKA Store – Special Promo!\n\nMLBB Diamonds, PUBG UC, Magic Chess, Telegram Premium & Telegram Stars with fast delivery.\nOrder now and enjoy special service 💎"
+    };
+
+    // --- Helpers ---
+    function formatPrice(amount, currency = "MMK") {
+      if (amount == null) return "-";
+      return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + " " + currency;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return "-";
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return dateStr;
+      return d.toLocaleString();
+    }
+
+    function statusClass(status) {
+      switch (status) {
+        case "COMPLETED": return "status-pill completed";
+        case "PENDING_CONFIRMATION": return "status-pill pending";
+        case "AWAITING_PAYMENT": return "status-pill awaiting";
+        case "REJECTED": return "status-pill rejected";
+        default: return "status-pill";
+      }
+    }
+
+    function statusLabel(status) {
+      switch (status) {
+        case "COMPLETED": return "Completed";
+        case "PENDING_CONFIRMATION": return "Pending";
+        case "AWAITING_PAYMENT": return "Awaiting Payment";
+        case "REJECTED": return "Rejected";
+        default: return status;
+      }
+    }
+
+    // --- View switching ---
+    function switchView(view) {
+      document.querySelectorAll(".nav-item").forEach((el) => {
+        el.classList.toggle("active", el.getAttribute("data-view") === view);
+      });
+      document.querySelectorAll(".view").forEach((el) => {
+        el.classList.toggle("active", el.id === "view-" + view);
+      });
+    }
+
+    document.querySelectorAll(".nav-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const view = el.getAttribute("data-view");
+        switchView(view);
+      });
+    });
+
+    // --- Stats & dashboard rendering ---
+    function recomputeStats() {
+      const totalOrders = orders.length;
+      const completed = orders.filter(o => o.status === "COMPLETED");
+      const pending = orders.filter(o => o.status === "PENDING_CONFIRMATION");
+      const awaiting = orders.filter(o => o.status === "AWAITING_PAYMENT");
+
+      const revenue = completed.reduce((sum, o) => sum + (o.price || 0), 0);
+      const pendingAmount = pending.reduce((sum, o) => sum + (o.price || 0), 0);
+
+      document.getElementById("stat-total-orders").textContent = totalOrders;
+      document.getElementById("stat-last30-orders").textContent = totalOrders; // demo only
+      document.getElementById("stat-today-orders").textContent = "+" + pending.length; // demo only
+
+      document.getElementById("stat-revenue").textContent = formatPrice(revenue);
+      document.getElementById("stat-pending-amount").textContent = formatPrice(pendingAmount);
+
+      document.getElementById("stat-pending-count").textContent = pending.length;
+      document.getElementById("stat-awaiting-count").textContent = awaiting.length;
+
+      const queueTextEl = document.getElementById("stat-queue-text");
+      if (pending.length === 0 && awaiting.length <= 1) {
+        queueTextEl.textContent = "Queue looks healthy ✅";
+      } else if (pending.length + awaiting.length <= 3) {
+        queueTextEl.textContent = "A few payments waiting – easy to clear 💼";
+      } else {
+        queueTextEl.textContent = "High queue – confirm payments as soon as possible ⚠️";
+      }
+
+      // Export section
+      document.getElementById("export-orders-count").textContent = totalOrders;
+
+      // Pending badge
+      document.getElementById("badge-pending-count").textContent = pending.length + " pending";
+
+      // recent orders
+      renderDashboardRecent();
+    }
+
+    function renderDashboardRecent() {
+      const tbody = document.getElementById("dashboard-recent-body");
+      tbody.innerHTML = "";
+      const sorted = [...orders].sort((a, b) => b.id - a.id).slice(0, 5);
+      document.getElementById("badge-recent-count").textContent = sorted.length + " orders";
+      sorted.forEach((o) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>#${o.id}</td>
+          <td>${o.packageName}</td>
+          <td>${o.playerName}</td>
+          <td><span class="${statusClass(o.status)}">${statusLabel(o.status)}</span></td>
+          <td>${formatPrice(o.price, o.currency)}</td>
+          <td>
+            <button class="small-button" onclick="openOrderDetail(${o.id})">
+              👁 View
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Orders table ---
+    function renderOrdersTable() {
+      const tbody = document.getElementById("orders-body");
+      const query = (document.getElementById("orders-search").value || "").toLowerCase();
+      tbody.innerHTML = "";
+      const filtered = orders.filter((o) => {
+        if (!query) return true;
+        const text = [
+          o.packageName,
+          o.playerName,
+          o.gameId,
+          o.contact,
+          o.username
+        ].join(" ").toLowerCase();
+        return text.includes(query);
+      });
+      filtered
+        .slice()
+        .sort((a, b) => b.id - a.id)
+        .forEach((o) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>#${o.id}</td>
+            <td>${o.packageName}</td>
+            <td>${o.playerName}</td>
+            <td>${o.gameId}</td>
+            <td><span class="${statusClass(o.status)}">${statusLabel(o.status)}</span></td>
+            <td>${formatPrice(o.price, o.currency)}</td>
+            <td>${formatDate(o.createdAt)}</td>
+            <td>
+              <button class="small-button" onclick="openOrderDetail(${o.id})">
+                👁 Detail
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById("orders-search").addEventListener("input", () => {
+      renderOrdersTable();
+    });
+
+    // --- Pending table ---
+    function renderPendingTable() {
+      const tbody = document.getElementById("pending-body");
+      tbody.innerHTML = "";
+      const pending = orders
+        .filter((o) => o.status === "PENDING_CONFIRMATION")
+        .sort((a, b) => a.id - b.id);
+      pending.forEach((o) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>#${o.id}</td>
+          <td>${o.packageName}</td>
+          <td>${o.playerName}</td>
+          <td>${o.contact || "-"}</td>
+          <td>${formatPrice(o.price, o.currency)}</td>
+          <td>${formatDate(o.paidAt)}</td>
+          <td>
+            <button class="small-button" onclick="openOrderDetail(${o.id})">
+              👁 Review
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Order detail modal ---
+    let currentOrderId = null;
+
+    function openOrderDetail(orderId) {
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) return;
+      currentOrderId = orderId;
+
+      document.getElementById("modal-title").textContent = "Order #" + order.id;
+      document.getElementById("modal-subtitle").textContent = "Review payment & customer details";
+
+      document.getElementById("detail-id").textContent = "#" + order.id;
+      document.getElementById("detail-item").textContent = order.packageName;
+      document.getElementById("detail-status").textContent = statusLabel(order.status);
+      document.getElementById("detail-amount").textContent = formatPrice(order.price, order.currency);
+      document.getElementById("detail-created").textContent = formatDate(order.createdAt);
+      document.getElementById("detail-paid").textContent = formatDate(order.paidAt);
+      document.getElementById("detail-confirmed").textContent = formatDate(order.confirmedAt);
+
+      document.getElementById("detail-player").textContent = order.playerName;
+      document.getElementById("detail-gameid").textContent = order.gameId;
+      document.getElementById("detail-contact").textContent = order.contact || "-";
+      document.getElementById("detail-userid").textContent = order.userId;
+      document.getElementById("detail-username").textContent = order.username ? "@" + order.username : "(none)";
+
+      // Enabled/disabled actions depending on status
+      const confirmBtn = document.getElementById("modal-confirm");
+      const rejectBtn = document.getElementById("modal-reject");
+      if (order.status === "PENDING_CONFIRMATION" || order.status === "AWAITING_PAYMENT") {
+        confirmBtn.disabled = false;
+        rejectBtn.disabled = false;
+        confirmBtn.style.opacity = "1";
+        rejectBtn.style.opacity = "1";
+      } else {
+        confirmBtn.disabled = true;
+        rejectBtn.disabled = true;
+        confirmBtn.style.opacity = "0.6";
+        rejectBtn.style.opacity = "0.6";
+      }
+
+      document.getElementById("modal-backdrop").classList.add("active");
+    }
+
+    function closeModal() {
+      document.getElementById("modal-backdrop").classList.remove("active");
+      currentOrderId = null;
+    }
+
+    document.getElementById("modal-close").addEventListener("click", closeModal);
+    document.getElementById("modal-backdrop").addEventListener("click", (e) => {
+      if (e.target.id === "modal-backdrop") closeModal();
+    });
+
+    document.getElementById("modal-confirm").addEventListener("click", () => {
+      if (currentOrderId == null) return;
+      // In real app: call backend API: PATCH /admin/orders/:id { status: "COMPLETED" }
+      const order = orders.find(o => o.id === currentOrderId);
+      if (!order) return;
+      order.status = "COMPLETED";
+      order.confirmedAt = new Date().toISOString();
+      closeModal();
+      recomputeStats();
+      renderOrdersTable();
+      renderPendingTable();
+      alert("✅ (Demo) Order #" + order.id + " marked as COMPLETED.");
+    });
+
+    document.getElementById("modal-reject").addEventListener("click", () => {
+      if (currentOrderId == null) return;
+      // In real app: call backend API: PATCH /admin/orders/:id { status: "REJECTED" }
+      const order = orders.find(o => o.id === currentOrderId);
+      if (!order) return;
+      order.status = "REJECTED";
+      order.confirmedAt = new Date().toISOString();
+      closeModal();
+      recomputeStats();
+      renderOrdersTable();
+      renderPendingTable();
+      alert("❌ (Demo) Order #" + order.id + " marked as REJECTED.");
+    });
+
+    // --- Promotions UI ---
+    function syncPromoUI() {
+      document.getElementById("promo-textarea").value = promoState.text;
+      document.getElementById("promo-textarea-2").value = promoState.text;
+      document.getElementById("promo-preview").textContent = promoState.text;
+
+      const statusLabel = promoState.isActive ? "Active" : "Inactive";
+      const text = statusLabel + (promoState.isActive ? " – shown in bot" : " – hidden in bot");
+      document.getElementById("badge-promo-status").textContent = text;
+      document.getElementById("badge-promo-status-2").textContent = text;
+
+      const toggle1 = document.getElementById("promo-toggle-button");
+      const toggle2 = document.getElementById("promo-toggle-button-2");
+      toggle1.textContent = promoState.isActive ? "🔴 Disable" : "🟢 Enable";
+      toggle2.textContent = promoState.isActive ? "🔴 Disable" : "🟢 Enable";
+    }
+
+    document.getElementById("promo-toggle-button").addEventListener("click", () => {
+      promoState.isActive = !promoState.isActive;
+      syncPromoUI();
+    });
+    document.getElementById("promo-toggle-button-2").addEventListener("click", () => {
+      promoState.isActive = !promoState.isActive;
+      syncPromoUI();
+    });
+
+    document.getElementById("promo-save-button").addEventListener("click", () => {
+      promoState.text = document.getElementById("promo-textarea").value;
+      syncPromoUI();
+      alert("💾 (Demo) Promo text saved locally. In production call Node.js API here.");
+    });
+    document.getElementById("promo-save-button-2").addEventListener("click", () => {
+      promoState.text = document.getElementById("promo-textarea-2").value;
+      syncPromoUI();
+      alert("💾 (Demo) Promo text saved locally. In production call Node.js API here.");
+    });
+
+    // --- CSV Export ---
+    function escapeCSVValue(value) {
+      if (value === null || value === undefined) return "";
+      const str = String(value);
+      if (/[",\n]/.test(str)) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    }
+
+    function exportCsv() {
+      if (!orders.length) {
+        alert("No orders to export.");
+        return;
+      }
+      const header = [
+        "id",
+        "userId",
+        "username",
+        "firstName",
+        "categoryKey",
+        "packageId",
+        "packageName",
+        "price",
+        "currency",
+        "gameId",
+        "playerName",
+        "contact",
+        "status",
+        "createdAt",
+        "paidAt",
+        "confirmedAt"
+      ];
+      const rows = orders.map((o) => [
+        o.id,
+        o.userId,
+        o.username,
+        o.firstName,
+        o.categoryKey,
+        o.packageId,
+        o.packageName,
+        o.price,
+        o.currency,
+        o.gameId,
+        o.playerName,
+        o.contact,
+        o.status,
+        o.createdAt,
+        o.paidAt || "",
+        o.confirmedAt || ""
+      ]);
+      const lines = [header.join(","), ...rows.map(r => r.map(escapeCSVValue).join(","))];
+      const csv = lines.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "orders.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Make exportCsv globally accessible (used in HTML onclick)
+    window.exportCsv = exportCsv;
+    window.openOrderDetail = openOrderDetail;
+    window.switchView = switchView;
+
+    // Refresh button reset to sample
+    document.getElementById("refresh-button").addEventListener("click", () => {
+      orders = JSON.parse(JSON.stringify(sampleOrders));
+      recomputeStats();
+      renderOrdersTable();
+      renderPendingTable();
+      alert("🔄 Demo orders refreshed.");
+    });
+
+    // Initial render
+    recomputeStats();
+    renderOrdersTable();
+    renderPendingTable();
+    syncPromoUI();
+  </script>
+</body>
+</html>
