@@ -1,32 +1,49 @@
-// bot/callbacks/promo.callback.js — Promo Claim & Status Handler
+// bot/callbacks/promo.callback.js — Handle PROMO_CLAIM Callback
 
-const { bot } = require("../bot"); const { usePromo } = require("../../services/promo.service"); const { mentionUserHTML } = require("../../utils/html");
+const { bot } = require("../bot");
+const { Promo } = require("../../models/Promo");
+const { escapeHTML } = require("../../utils/helpers");
 
-bot.on("callback_query", async (ctx) => { const { data, from } = ctx; if (!data.startsWith("promo:")) return;
+bot.on("callback_query", async (q) => {
+  const cid = q.message.chat.id;
+  const uid = String(q.from.id);
+  const username = q.from.username;
+  const firstName = q.from.first_name;
 
-const [, promoCode] = data.split(":");
+  if (!q.data.startsWith("PROMO_CLAIM_")) return;
 
-try { const result = await usePromo(from.id, promoCode);
+  const promoId = q.data.replace("PROMO_CLAIM_", "");
+  const promo = await Promo.findById(promoId);
 
-if (result.success) {
-  await bot.sendMessage(
-    from.id,
-    `🎉 <b>PROMO SUCCESS!</b>\n\n` +
-      `📦 Code: <code>${promoCode}</code>\n` +
-      `💎 Reward: <b>${result.reward}</b>\n\n` +
-      `🟢 သင့်ရဲ့ Promo ကိုအောင်မြင်စွာ သုံးပြီးပါပြီ။`,
-    { parse_mode: "HTML" }
-  );
-} else {
-  await bot.sendMessage(
-    from.id,
-    `⚠️ <b>PROMO ERROR</b>\n\n` +
-      `📦 Code: <code>${promoCode}</code>\n` +
-      `❌ Reason: ${result.message}`,
-    { parse_mode: "HTML" }
-  );
-}
+  if (!promo || !promo.active || promo.claimed || promo.expireAt < new Date()) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "⛔️ This giveaway is already claimed or expired!",
+      show_alert: true,
+    });
+  }
 
-} catch (err) { await bot.sendMessage( from.id, ❌ Unknown error while using promo: ${promoCode} ); }
+  // Update promo as claimed
+  promo.claimed = true;
+  promo.winnerUserId = uid;
+  promo.winnerUsername = username;
+  promo.winnerFirstName = firstName;
+  promo.stage = "CLAIMED";
+  await promo.save();
 
-ctx.answerCallbackQuery(); });
+  // Edit original message
+  const winner = username ? `@${escapeHTML(username)}` : `<b>${escapeHTML(firstName || "User")}</b>`;
+  const claimText = `🎉 <b>${escapeHTML(promo.title)}</b>\n\n🥇 Winner: ${winner}\n✅ <i>This giveaway is now claimed.</i>`;
+
+  try {
+    await bot.editMessageText(claimText, {
+      chat_id: cid,
+      message_id: q.message.message_id,
+      parse_mode: "HTML",
+    });
+  } catch (_) {
+    // fallback
+    await bot.sendMessage(cid, claimText, { parse_mode: "HTML" });
+  }
+
+  bot.answerCallbackQuery(q.id, { text: "🎉 You’ve successfully claimed!", show_alert: true });
+});
