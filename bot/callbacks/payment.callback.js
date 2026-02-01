@@ -1,17 +1,48 @@
-// bot/callbacks/payment.callback.js — Payment Method & Proof Flow
+const { bot } = require("../bot");
+const { Order } = require("../../models/Order");
+const { PAYMENTS } = require("../../config/payments");
+const { formatMMK } = require("../../utils/helpers");
 
-const { bot } = require("../bot"); const { PAYMENTS } = require("../../config/payments"); const { formatMMK } = require("../../utils/helpers"); const { touchUser } = require("../../services/user.service");
+bot.on("callback_query", async (q) => {
+  const cid = q.message.chat.id;
+  const uid = String(q.from.id);
 
-bot.on("callback_query", async (ctx) => { const { data, from } = ctx; if (!data.startsWith("pay:")) return;
+  if (!q.data.startsWith("PAY_")) return;
 
-const method = data.split(":")[1]; const payment = PAYMENTS[method];
+  const method = q.data.replace("PAY_", "");
+  const order = await Order.findOne({ userId: uid, status: "PENDING" }).sort({ createdAt: -1 });
 
-if (!payment) { return ctx.answerCallbackQuery({ text: "Invalid payment method.", show_alert: true }); }
+  if (!order) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "❌ Order not found or already submitted!",
+      show_alert: true,
+    });
+  }
 
-await touchUser(from);
+  const payment = PAYMENTS[method];
+  if (!payment) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "❌ Invalid payment method!",
+      show_alert: true,
+    });
+  }
 
-const text = 💵 <b>ငွေပေးချေမှု ( ${payment.name} )</b>\n\n + 📱 <b>နာမည်:</b> ${payment.name}\n + 📞 <b>ဖုန်းနံပါတ်:</b> ${payment.accountNumber}\n\n + 🧾 ငွေလွဲပြီးပါက <b>Screenshot</b> တင်ပေးပါ။;
+  order.paymentMethod = method;
+  await order.save();
 
-await bot.sendPhoto(from.id, payment.qr, { caption: text, parse_mode: "HTML", reply_markup: { inline_keyboard: [ [ { text: "📸 ငွေလွဲ Screenshot တင်မယ်", callback_data: upload_proof:${method} }, ], [ { text: "🔙 နောက်သို့", callback_data: "cancel_order" }, ], ], }, });
+  const text = `💰 <b>Payment Method Selected</b>
+━━━━━━━━━━━━━━━━━━
+🏦 Method: <b>${method.toUpperCase()}</b>
+👤 Name: <b>${payment.name}</b>
+📱 Account: <b>${payment.accountNumber}</b>
+💸 Amount: <b>${formatMMK(order.totalPrice)} MMK</b>
+━━━━━━━━━━━━━━━━━━
+📤 <b>ကျေးဇူးပြုပြီး ငွေလွှဲပြီးပါက Screenshot ကို ပို့ပေးပါ။</b>`;
 
-ctx.answerCallbackQuery(); });
+  await bot.sendPhoto(cid, payment.qr, {
+    caption: text,
+    parse_mode: "HTML",
+  });
+
+  bot.answerCallbackQuery(q.id, { text: "✅ Payment method selected", show_alert: false });
+});
