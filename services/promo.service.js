@@ -1,25 +1,48 @@
-// services/promo.service.js — Promo Code Logic
+// services/promo.service.js — Promo creation, claiming, and expiration
 
-const Promo = require("../models/Promo"); const User = require("../models/User");
+const { Promo } = require("../models/Promo");
 
-module.exports = { async createPromo(code, reward, maxUse = 1, expiresAt = null, createdBy = null) { return await Promo.create({ code, reward, maxUse, expiresAt, createdBy, }); },
-
-async findPromo(code) { return await Promo.findOne({ code: code.toUpperCase(), active: true }); },
-
-async usePromo(code, userId) { const promo = await Promo.findOne({ code: code.toUpperCase(), active: true }); if (!promo) throw new Error("Promo code not found or inactive");
-
-if (promo.expiresAt && promo.expiresAt < new Date()) {
-  throw new Error("Promo code expired");
+async function createPromo({ title, expireAt }) {
+  const promo = new Promo({
+    title,
+    expireAt,
+    claimed: false,
+    active: true,
+    stage: "LIVE",
+  });
+  await promo.save();
+  return promo;
 }
 
-if (promo.usedCount >= promo.maxUse) {
-  throw new Error("Promo usage limit reached");
+async function claimPromo(promoId, { userId, username, firstName }) {
+  const promo = await Promo.findById(promoId);
+
+  if (!promo || !promo.active || promo.claimed || promo.expireAt < new Date()) {
+    throw new Error("Promo invalid or already claimed");
+  }
+
+  promo.claimed = true;
+  promo.active = false;
+  promo.stage = "CLAIMED";
+  promo.winnerUserId = userId;
+  promo.winnerUsername = username;
+  promo.winnerFirstName = firstName;
+
+  await promo.save();
+  return promo;
 }
 
-promo.usedCount++;
-if (promo.usedCount >= promo.maxUse) promo.active = false;
+async function expirePromos() {
+  const now = new Date();
+  const result = await Promo.updateMany(
+    { active: true, expireAt: { $lte: now } },
+    { $set: { active: false, stage: "DONE" } }
+  );
+  return result;
+}
 
-await promo.save();
-return promo.reward;
-
-}, };
+module.exports = {
+  createPromo,
+  claimPromo,
+  expirePromos,
+};
