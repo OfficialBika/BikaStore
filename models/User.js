@@ -1,15 +1,19 @@
-// models/User.js — Telegram User Schema
+// models/User.js — User Schema
 
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema( { telegramId: { type: Number, required: true, unique: true }, username: String, firstName: String, lastName: String, languageCode: String, isBot: { type: Boolean, default: false },
+const userSchema = new mongoose.Schema(
+  {
+    userId: { type: String, required: true, unique: true },
+    username: String,
+    firstName: String,
+    lastName: String,
+    languageCode: String,
+    isBot: Boolean,
+  },
+  { timestamps: true }
+);
 
-level: { type: Number, default: 1 },
-totalSpent: { type: Number, default: 0 },
-
-isAdmin: { type: Boolean, default: false },
-lastActiveAt: { type: Date, default: Date.now },
-
-}, { timestamps: true } );
-
-module.exports = mongoose.model("User", userSchema);
+module.exports = {
+  User: mongoose.model("User", userSchema),
+};
