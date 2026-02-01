@@ -1,23 +1,63 @@
-services/orde// services/order.service.js — Order Flow Logic
+// services/order.service.js — Order creation, listing, status change
 
-const Order = require("../models/Order"); const User = require("../models/User");
+const { Order } = require("../models/Order");
+const { Counter } = require("../models/Counter");
 
-module.exports = { async createOrder(userId, gameId, itemCode, itemName, price, quantity = 1) { const order = await Order.create({ userId, gameId, itemCode, itemName, price, quantity, }); return order; },
+async function getNextOrderNo() {
+  const counter = await Counter.findOneAndUpdate(
+    { name: "order" },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq;
+}
 
-async markAsPaid(orderId, paymentMethod) { return await Order.findByIdAndUpdate( orderId, { isPaid: true, status: "paid", paymentMethod }, { new: true } ); },
+async function createOrder({
+  userId,
+  username,
+  firstName,
+  game,
+  gameId,
+  serverId,
+  items,
+  totalPrice,
+  method,
+}) {
+  const orderNo = await getNextOrderNo();
 
-async markAsDelivered(orderId) { return await Order.findByIdAndUpdate( orderId, { isDelivered: true, status: "delivered" }, { new: true } ); },
+  const order = await Order.create({
+    userId,
+    username,
+    firstName,
+    orderNo,
+    game,
+    gameId,
+    serverId,
+    items,
+    totalPrice,
+    paymentMethod: method,
+    status: "PENDING",
+  });
 
-async savePaymentProof(telegramUserId, fileId) { const user = await User.findOne({ telegramId: telegramUserId }); if (!user) return;
+  return order;
+}
 
-const order = await Order.findOne({ userId: user._id, status: "pending" }).sort({ createdAt: -1 });
-if (!order) return;
+async function completeOrder(orderId) {
+  return Order.findByIdAndUpdate(orderId, {
+    status: "COMPLETED",
+    completedAt: new Date(),
+  });
+}
 
-order.proofFileId = fileId;
-order.status = "paid";
-order.isPaid = true;
-await order.save();
+async function rejectOrder(orderId) {
+  return Order.findByIdAndUpdate(orderId, {
+    status: "REJECTED",
+    rejectedAt: new Date(),
+  });
+}
 
-},
-
-async getUserOrders(userId) { return await Order.find({ userId }).sort({ createdAt: -1 }); }, };r.service.js
+module.exports = {
+  createOrder,
+  completeOrder,
+  rejectOrder,
+};
