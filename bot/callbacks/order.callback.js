@@ -1,39 +1,58 @@
 const { bot } = require("../bot");
 const { Order } = require("../../models/Order");
-const { sendPrompt } = require("../../utils/helpers");
+const { parseItems, parseGameId } = require("../../utils/parser");
+const { formatMMK } = require("../../utils/helpers");
 
 bot.on("callback_query", async (q) => {
   const cid = q.message.chat.id;
   const uid = String(q.from.id);
 
-  if (!q.data.startsWith("GAME_")) return;
+  if (!q.data.startsWith("ORDER_ITEM_")) return;
 
-  const game = q.data.replace("GAME_", "");
-  const order = await Order.findOne({ userId: uid, status: "PENDING" }).sort({ createdAt: -1 });
+  const data = q.data.replace("ORDER_ITEM_", "");
+  const [game, itemId] = data.split("_");
 
-  if (!order) {
+  const { itemName, itemPrice } = parseItems(game, itemId);
+  if (!itemName || !itemPrice) {
     return bot.answerCallbackQuery(q.id, {
-      text: "❌ Order not found or already processed!",
+      text: "❌ Invalid item selected!",
       show_alert: true,
     });
   }
 
-  order.game = game;
-  order.step = "SERVER_SELECT";
+  // Check if there's a pending order
+  let order = await Order.findOne({ userId: uid, status: "PENDING" }).sort({ createdAt: -1 });
+
+  if (!order) {
+    order = new Order({
+      userId: uid,
+      username: q.from.username,
+      firstName: q.from.first_name,
+      status: "PENDING",
+      items: [],
+      totalPrice: 0,
+    });
+  }
+
+  order.items.push({ itemId, name: itemName, price: itemPrice });
+  order.totalPrice += itemPrice;
+
   await order.save();
 
-  const nextText = `🎮 Game Selected: <b>${game}</b>\n\n➡️ Please choose your server`;
-  await bot.editMessageText(nextText, {
+  const summary = order.items
+    .map((i, idx) => `#${idx + 1} ${i.name} — <code>${formatMMK(i.price)} MMK</code>`)
+    .join("\n");
+
+  const text = `🧾 <b>Order Updated</b>\n━━━━━━━━━━━━━━\n${summary}\n━━━━━━━━━━━━━━\n💰 Total: <b>${formatMMK(order.totalPrice)} MMK</b>`;
+
+  await bot.editMessageText(text, {
     chat_id: cid,
     message_id: q.message.message_id,
     parse_mode: "HTML",
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "🌐 Asia", callback_data: `SERVER_Asia` }],
-        [{ text: "🌍 Europe", callback_data: `SERVER_Europe` }],
-      ],
-    },
   });
 
-  bot.answerCallbackQuery(q.id);
+  bot.answerCallbackQuery(q.id, {
+    text: `✅ Added: ${itemName}`,
+    show_alert: false,
+  });
 });
