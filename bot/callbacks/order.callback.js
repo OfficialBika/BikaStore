@@ -1,37 +1,39 @@
-// bot/callbacks/order.callback.js — Game Item Order Flow
-
 const { bot } = require("../bot");
-const { parseGameId, parseItems } = require("../../utils/parser");
-const { formatMMK } = require("../../utils/helpers");
-const { makeOrderSession, confirmOrderUI } = require("../../services/order.service");
-const { touchUser } = require("../../services/user.service");
+const { Order } = require("../../models/Order");
+const { sendPrompt } = require("../../utils/helpers");
 
-bot.on("callback_query", async (ctx) => {
-  const { data, message, from } = ctx;
-  if (!data.startsWith("order:")) return;
+bot.on("callback_query", async (q) => {
+  const cid = q.message.chat.id;
+  const uid = String(q.from.id);
 
-  const [, gameCode, itemCode] = data.split(":");
+  if (!q.data.startsWith("GAME_")) return;
 
-  const gameId = parseGameId(gameCode);
-  const item = parseItems(gameCode).find((i) => i.code === itemCode);
-  if (!item) return ctx.answerCallbackQuery({ text: "Invalid item.", show_alert: true });
+  const game = q.data.replace("GAME_", "");
+  const order = await Order.findOne({ userId: uid, status: "PENDING" }).sort({ createdAt: -1 });
 
-  await touchUser(from);
-  await makeOrderSession(from.id, gameId, item);
+  if (!order) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "❌ Order not found or already processed!",
+      show_alert: true,
+    });
+  }
 
-  const price = formatMMK(item.price);
-  const caption = `🛒 <b>Order Summary</b>\n\n🎮 Game: <b>${gameId}</b>\n📦 Item: <b>${item.name}</b>\n💵 Price: <b>${price}</b>\n\nသင့်အမှာစာကို အတည်ပြုရန် Confirm ကိုနှိပ်ပါ။`;
+  order.game = game;
+  order.step = "SERVER_SELECT";
+  await order.save();
 
-  const buttons = {
-    reply_markup: {
-      inline_keyboard: [[
-        { text: "✅ Confirm", callback_data: `confirm:${gameCode}:${itemCode}` },
-        { text: "❌ Cancel", callback_data: `cancel_order` },
-      ]],
-    },
+  const nextText = `🎮 Game Selected: <b>${game}</b>\n\n➡️ Please choose your server`;
+  await bot.editMessageText(nextText, {
+    chat_id: cid,
+    message_id: q.message.message_id,
     parse_mode: "HTML",
-  };
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🌐 Asia", callback_data: `SERVER_Asia` }],
+        [{ text: "🌍 Europe", callback_data: `SERVER_Europe` }],
+      ],
+    },
+  });
 
-  await bot.sendMessage(from.id, caption, buttons);
-  ctx.answerCallbackQuery();
+  bot.answerCallbackQuery(q.id);
 });
