@@ -1,17 +1,16 @@
 'use strict';
 
 /**
- * BIKA STORE BOT - MongoDB Version (MLBB & PUBG only)
+ * BIKA STORE BOT - MongoDB + Webhook Version (MLBB & PUBG only)
  *
  * Features:
- *  - Orders stored in MongoDB (no in-memory DB)
- *  - Multiple pending orders allowed (old pending not deleted)
+ *  - Webhook mode (Express) – no polling
+ *  - Orders stored in MongoDB
+ *  - Multiple pending orders allowed (no auto delete of old orders)
  *  - MLBB: ask only MLBB ID + Server ID
  *  - PUBG: ask only PUBG ID
- *  - Order confirmation UI with clean, detailed layout
- *  - Step messages (ID / ServerID request, etc.) auto-delete:
- *      when bot sends a new step message to that user,
- *      previous step message is deleted automatically
+ *  - Step messages auto-delete (when new step appears)
+ *  - Clean order confirmation UI
  *  - Admin panel: recent orders, pending payments, promo, broadcast, CSV export
  *  - /start from_website deep-link greeting
  *
@@ -19,14 +18,18 @@
  *  - TELEGRAM_BOT_TOKEN
  *  - ADMIN_IDS       (comma separated user IDs, e.g. 123,456)
  *  - STORE_CURRENCY  (optional, default 'Ks')
- *  - MONGODB_URI     (optional, default mongodb://127.0.0.1:27017/bika_store_bot)
+ *  - MONGODB_URI     (required for Mongo connection)
+ *  - PUBLIC_URL      (e.g. https://mybot.onrender.com)
+ *      Webhook URL will be: PUBLIC_URL + /webhook/<BOT_TOKEN>
  */
 
 const TelegramBot = require('node-telegram-bot-api');
 const mongoose = require('mongoose');
+const express = require('express');
 
 // ====== ENV ======
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
+const BOT_TOKEN =
+  process.env.TELEGRAM_BOT_TOKEN || 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
 if (!BOT_TOKEN || BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
   console.warn('⚠️ Please set TELEGRAM_BOT_TOKEN in your environment!');
 }
@@ -39,6 +42,9 @@ const ADMIN_IDS = (process.env.ADMIN_IDS || '')
 
 const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bika_store_bot';
+
+const PUBLIC_URL = process.env.PUBLIC_URL || '';
+const WEBHOOK_PATH = `/webhook/${BOT_TOKEN}`;
 
 // ====== MONGOOSE INIT ======
 mongoose
@@ -76,9 +82,43 @@ const orderSchema = new mongoose.Schema({
 
 const Order = mongoose.model('Order', orderSchema);
 
-// ====== BOT INIT ======
-const bot = new TelegramBot(BOT_TOKEN, {
-  polling: true,
+// ====== BOT INIT (Webhook mode) ======
+const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
+
+// configure webhook URL if PUBLIC_URL is provided
+if (PUBLIC_URL) {
+  const fullWebhookUrl = PUBLIC_URL.replace(/\/+$/, '') + WEBHOOK_PATH;
+  bot
+    .setWebHook(fullWebhookUrl)
+    .then(() => console.log('🔗 Webhook set to:', fullWebhookUrl))
+    .catch((err) =>
+      console.error('Failed to set webhook automatically:', err.message)
+    );
+} else {
+  console.warn(
+    '⚠️ PUBLIC_URL is not set. Please set Telegram webhook manually using BotFather or ENV.'
+  );
+}
+
+// Express app to receive webhook
+const app = express();
+app.use(express.json());
+
+// Telegram webhook endpoint
+app.post(WEBHOOK_PATH, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// simple health endpoint
+app.get('/', (req, res) => {
+  res.send('BIKA Store Bot is running (webhook mode).');
+});
+
+// start web server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log('🌐 Express server listening on port', PORT);
 });
 
 // ====== IN-MEMORY DATA ======
@@ -425,11 +465,14 @@ function formatOrderSummary(order, options = {}) {
   }
 
   lines.push('');
-  lines.push(`Telegram: @${order.username || 'unknown'} (${order.firstName || 'User'})`);
+  lines.push(
+    `Telegram: @${order.username || 'unknown'} (${order.firstName || 'User'})`
+  );
   lines.push('');
   lines.push(`Created at: ${formatDateTime(order.createdAt)}`);
   if (order.paidAt) lines.push(`Paid at: ${formatDateTime(order.paidAt)}`);
-  if (order.confirmedAt) lines.push(`Confirmed at: ${formatDateTime(order.confirmedAt)}`);
+  if (order.confirmedAt)
+    lines.push(`Confirmed at: ${formatDateTime(order.confirmedAt)}`);
   if (order.adminNote) lines.push(`Admin note: ${order.adminNote}`);
   return lines.join('\n');
 }
@@ -617,7 +660,7 @@ bot.on('message', async (msg) => {
       await sendStepMessage(
         userId,
         chatId,
-        '🔢 **Server ID** (SV ID) ကို ထည့်ပေးပါ။\n\n' +
+        '🔢 **Server ID (SV ID)** ကို ထည့်ပေးပါ။\n\n' +
           'MLBB game ထဲက profile ပေါ်မှာ မြင်ရတဲ့ **Server ID** ကိုပါ။',
         {
           parse_mode: 'Markdown',
@@ -631,9 +674,13 @@ bot.on('message', async (msg) => {
     } else {
       // PUBG => go straight to confirm
       session.step = 'WAIT_CONFIRM';
-      await bot.sendMessage(chatId, '✅ PUBG ID ကို လက်ခံရရှိပြီး၊ order ကို အတည်ပြုဖို့ လာပါပြီ။', {
-        reply_markup: { remove_keyboard: true },
-      });
+      await bot.sendMessage(
+        chatId,
+        '✅ PUBG ID ကို လက်ခံရရှိပြီး၊ order ကို အတည်ပြုဖို့ လာပါပြီ။',
+        {
+          reply_markup: { remove_keyboard: true },
+        }
+      );
       await sendOrderConfirmMessage(userId, chatId, draft);
     }
     return;
@@ -643,9 +690,13 @@ bot.on('message', async (msg) => {
     draft.serverId = text;
     session.step = 'WAIT_CONFIRM';
 
-    await bot.sendMessage(chatId, '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီး၊ order ကို အတည်ပြုဖို့ လာပါပြီ။', {
-      reply_markup: { remove_keyboard: true },
-    });
+    await bot.sendMessage(
+      chatId,
+      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီး၊ order ကို အတည်ပြုဖို့ လာပါပြီ။',
+      {
+        reply_markup: { remove_keyboard: true },
+      }
+    );
 
     await sendOrderConfirmMessage(userId, chatId, draft);
     return;
@@ -660,7 +711,8 @@ bot.on('message', async (msg) => {
 
 // Helper – best-looking order confirm UI
 async function sendOrderConfirmMessage(userId, chatId, draft) {
-  const gameLabel = draft.categoryKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime';
+  const gameLabel =
+    draft.categoryKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime';
 
   const lines = [];
   lines.push('📦 **Review & Confirm your order**');
@@ -681,7 +733,9 @@ async function sendOrderConfirmMessage(userId, chatId, draft) {
 
   lines.push('');
   lines.push('အထက်ပါ အချက်အလက်တွေ **မှန်ကန်တယ်** လို့သေချာရင်');
-  lines.push('အောက်က "✅ Confirm Order" ကိုနှိပ်ပြီး order ကို အတည်ပြုပါ။');
+  lines.push(
+    'အောက်က "✅ Confirm Order" ကိုနှိပ်ပြီး order ကို အတည်ပြုပါ။'
+  );
 
   await sendStepMessage(userId, chatId, lines.join('\n'), {
     parse_mode: 'Markdown',
@@ -705,7 +759,8 @@ bot.on('callback_query', async (query) => {
 
     knownUserIds.add(userId);
 
-    const acknowledge = () => bot.answerCallbackQuery(query.id).catch(() => {});
+    const acknowledge = () =>
+      bot.answerCallbackQuery(query.id).catch(() => {});
     const isAdminUser = isAdmin(userId);
 
     // Main navigation
@@ -728,7 +783,7 @@ bot.on('callback_query', async (query) => {
         '1️⃣ **Browse Items** ကိုနှိပ်ပါ',
         '2️⃣ ထဲကနေ **MLBB** (Diamonds / Pass) နဲ့ **PUBG UC** ထဲကလိုချင်တာရွေးပါ',
         '3️⃣ MLBB အတွက်: **ID + Server ID** ထည့်ပေးပါ',
-        '4️⃣ PUBG အတွက်: **Pubg ID** ပဲထည့်ပေးရပါမယ်',
+        '4️⃣ PUBG အတွက်: **PUBG ID** ပဲ ထည့်ပေးရပါမယ်',
         '5️⃣ Order summary ကို စစ်ပြီး **Confirm Order** ကိုနှိပ်ပါ',
         '6️⃣ Payment info အတိုင်း KBZ Pay / WavePay နဲ့ ငွေလွှဲပါ',
         '7️⃣ ပြီးသွားရင် **"I have paid"** ကိုနှိပ်ပြီး slip ပို့ပေးပါ',
@@ -747,7 +802,9 @@ bot.on('callback_query', async (query) => {
     if (data === 'm:promo') {
       await acknowledge();
       const text =
-        (promoConfig.isActive ? '🎉 **Promotion is active**\n\n' : 'ℹ️ Promotion is currently off.\n\n') +
+        (promoConfig.isActive
+          ? '🎉 **Promotion is active**\n\n'
+          : 'ℹ️ Promotion is currently off.\n\n') +
         (promoConfig.text || 'No promotion text yet.');
       await bot.editMessageText(text, {
         chat_id: chatId,
@@ -796,9 +853,9 @@ bot.on('callback_query', async (query) => {
       lines.push('');
       userOrders.forEach((o) => {
         lines.push(
-          `#${o.id} • ${o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'} • ${o.packageName} • ${formatPrice(
-            o.price
-          )}`
+          `#${o.id} • ${
+            o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'
+          } • ${o.packageName} • ${formatPrice(o.price)}`
         );
         lines.push(`   Status: ${o.status}`);
       });
@@ -862,9 +919,9 @@ bot.on('callback_query', async (query) => {
       introLines.push('📝 **Order Form**');
       introLines.push('');
       introLines.push(
-        `Game: ${catKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime'}\nPackage: ${
-          pkg.name
-        }\nPrice: ${formatPrice(pkg.price)}`
+        `Game: ${
+          catKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime'
+        }\nPackage: ${pkg.name}\nPrice: ${formatPrice(pkg.price)}`
       );
       introLines.push('');
 
@@ -962,10 +1019,13 @@ bot.on('callback_query', async (query) => {
       order.status = 'CANCELLED_BY_USER';
       await order.save();
 
-      await bot.editMessageText('❌ Order ကို customer ထဲကနေ cancel လုပ်လိုက်ပြီ။', {
-        chat_id: chatId,
-        message_id: msgId,
-      });
+      await bot.editMessageText(
+        '❌ Order ကို customer ထဲကနေ cancel လုပ်လိုက်ပြီ။',
+        {
+          chat_id: chatId,
+          message_id: msgId,
+        }
+      );
       return;
     }
 
@@ -1073,9 +1133,9 @@ bot.on('callback_query', async (query) => {
         lines.push('');
         latest.forEach((o) => {
           lines.push(
-            `#${o.id} • ${o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'} • ${o.packageName} • ${formatPrice(
-              o.price
-            )}`
+            `#${o.id} • ${
+              o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'
+            } • ${o.packageName} • ${formatPrice(o.price)}`
           );
           lines.push(`   ${shortUserLabel(o)} • ${o.status}`);
         });
@@ -1091,16 +1151,21 @@ bot.on('callback_query', async (query) => {
 
       if (data === 'admin:pending') {
         await acknowledge();
-        const pending = await Order.find({ status: 'PENDING_CONFIRMATION' })
+        const pending = await Order.find({
+          status: 'PENDING_CONFIRMATION',
+        })
           .sort({ id: 1 })
           .lean();
 
         if (!pending.length) {
-          await bot.editMessageText('⏳ Pending confirm orders မရှိသေးပါ။', {
-            chat_id: chatId,
-            message_id: msgId,
-            ...buildAdminPanelKeyboard(),
-          });
+          await bot.editMessageText(
+            '⏳ Pending confirm orders မရှိသေးပါ။',
+            {
+              chat_id: chatId,
+              message_id: msgId,
+              ...buildAdminPanelKeyboard(),
+            }
+          );
           return;
         }
 
@@ -1109,11 +1174,13 @@ bot.on('callback_query', async (query) => {
         lines.push('');
         pending.forEach((o) => {
           lines.push(
-            `#${o.id} • ${o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'} • ${o.packageName} • ${formatPrice(
-              o.price
-            )}`
+            `#${o.id} • ${
+              o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'
+            } • ${o.packageName} • ${formatPrice(o.price)}`
           );
-          lines.push(`   ${shortUserLabel(o)} • Paid at: ${formatDateTime(o.paidAt)}`);
+          lines.push(
+            `   ${shortUserLabel(o)} • Paid at: ${formatDateTime(o.paidAt)}`
+          );
         });
 
         await bot.editMessageText(lines.join('\n'), {
@@ -1135,7 +1202,9 @@ bot.on('callback_query', async (query) => {
         lines.push('');
         lines.push(promoConfig.text || '_no promo text_');
         lines.push('');
-        lines.push('Text ကိုပြင်ချင်ရင် `/setpromo your text` လို့သုံးနိုင်ပါတယ်။');
+        lines.push(
+          'Text ကိုပြင်ချင်ရင် `/setpromo your text` လို့သုံးနိုင်ပါတယ်။'
+        );
 
         await bot.editMessageText(lines.join('\n'), {
           chat_id: chatId,
@@ -1145,7 +1214,9 @@ bot.on('callback_query', async (query) => {
             inline_keyboard: [
               [
                 {
-                  text: promoConfig.isActive ? '⏸ Disable Promo' : '▶ Enable Promo',
+                  text: promoConfig.isActive
+                    ? '⏸ Disable Promo'
+                    : '▶ Enable Promo',
                   callback_data: 'admin:promo_toggle',
                 },
               ],
@@ -1190,7 +1261,12 @@ bot.on('callback_query', async (query) => {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '📣 Send now', callback_data: 'admin:broadcast_send' }],
+              [
+                {
+                  text: '📣 Send now',
+                  callback_data: 'admin:broadcast_send',
+                },
+              ],
               [{ text: '⬅️ Back', callback_data: 'admin:panel' }],
             ],
           },
@@ -1201,12 +1277,13 @@ bot.on('callback_query', async (query) => {
       if (data === 'admin:broadcast_send') {
         await acknowledge();
         const text =
-          (promoConfig.text || '') +
-          '\n\n— Sent from BIKA Store Bot';
+          (promoConfig.text || '') + '\n\n— Sent from BIKA Store Bot';
         let sent = 0;
         for (const uid of knownUserIds) {
           try {
-            await bot.sendMessage(uid, text, { disable_notification: true });
+            await bot.sendMessage(uid, text, {
+              disable_notification: true,
+            });
             sent += 1;
           } catch (e) {
             console.error('Broadcast failed to', uid, e.message);
@@ -1276,11 +1353,14 @@ bot.on('callback_query', async (query) => {
         order.confirmedAt = new Date();
         await order.save();
 
-        await bot.editMessageText(`✅ Order #${order.id} ကို Completed လို့မှတ်လိုက်ပါတယ်။`, {
-          chat_id: chatId,
-          message_id: msgId,
-          ...buildAdminPanelKeyboard(),
-        });
+        await bot.editMessageText(
+          `✅ Order #${order.id} ကို Completed လို့မှတ်လိုက်ပါတယ်။`,
+          {
+            chat_id: chatId,
+            message_id: msgId,
+            ...buildAdminPanelKeyboard(),
+          }
+        );
 
         try {
           await bot.sendMessage(
@@ -1307,11 +1387,14 @@ bot.on('callback_query', async (query) => {
         order.adminNote = 'Rejected by admin';
         await order.save();
 
-        await bot.editMessageText(`❌ Order #${order.id} ကို Rejected လုပ်လိုက်ပါတယ်။`, {
-          chat_id: chatId,
-          message_id: msgId,
-          ...buildAdminPanelKeyboard(),
-        });
+        await bot.editMessageText(
+          `❌ Order #${order.id} ကို Rejected လုပ်လိုက်ပါတယ်။`,
+          {
+            chat_id: chatId,
+            message_id: msgId,
+            ...buildAdminPanelKeyboard(),
+          }
+        );
 
         try {
           await bot.sendMessage(
@@ -1362,5 +1445,5 @@ bot.on('callback_query', async (query) => {
 
 // ====== STARTUP LOG ======
 
-console.log('🚀 BIKA Store Bot is running with MongoDB...');
+console.log('🚀 BIKA Store Bot is running with MongoDB (webhook mode)...');
 console.log('Admins:', ADMIN_IDS.join(', ') || '(none configured)');
