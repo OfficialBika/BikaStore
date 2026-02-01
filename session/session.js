@@ -1,9 +1,40 @@
-// session/session.js — In-Memory Session Store
+// session/session.js — In-memory Session Store
 
 const sessions = new Map();
 
-function getSession(userId) { if (!sessions.has(userId)) { sessions.set(userId, {}); } return sessions.get(userId); }
+/**
+ * Get or create session for chat ID
+ * @param {number|string} chatId
+ * @returns {object} session
+ */
+function getSession(chatId) {
+  if (!sessions.has(chatId)) {
+    sessions.set(chatId, {
+      step: null,
+      game: null,
+      gameId: null,
+      serverId: null,
+      items: null,
+      totalPrice: 0,
+      orderId: null,
+      orderNo: null,
+      orderDateText: null,
+      paymentMethod: null,
+      userMentionHTML: null,
+    });
+  }
+  return sessions.get(chatId);
+}
 
-function clearSession(userId) { sessions.delete(userId); }
+/**
+ * Clear session for chat ID
+ * @param {number|string} chatId
+ */
+function clearSession(chatId) {
+  sessions.delete(chatId);
+}
 
-module.exports = { getSession, clearSession, };
+module.exports = {
+  getSession,
+  clearSession,
+};
