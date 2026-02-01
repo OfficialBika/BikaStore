@@ -105,7 +105,9 @@ const app = express();
 app.use(express.json());
 
 // Telegram webhook endpoint
-app.post(WEBHOOK_PATH, (req, res) => {
+// (POST လာရင် path ဘယ်လိုဖြစ်နေသော်လည်း accept လုပ်မယ်)
+app.post('*', (req, res) => {
+  // Telegram update ကို bot သို့ pass ပေးမယ်
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
