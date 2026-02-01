@@ -3,24 +3,21 @@
 /**
  * BIKA STORE BOT - MongoDB + Webhook Version (MLBB & PUBG only)
  *
- * Features:
- *  - Webhook mode (Express) – no polling
- *  - Orders stored in MongoDB
- *  - Multiple pending orders allowed (no auto delete of old orders)
- *  - MLBB: ask only MLBB ID + Server ID
- *  - PUBG: ask only PUBG ID
- *  - Step messages auto-delete (when new step appears)
- *  - Clean order confirmation UI
- *  - Admin panel: recent orders, pending payments, promo, broadcast, CSV export
- *  - /start from_website deep-link greeting
+ * New in this version:
+ *  - MLBB: ask MLBB ID + Server ID together in one message (e.g. "12345678 1234")
+ *  - Payment slip flow:
+ *      User taps "I have paid" -> bot asks for screenshot -> user sends photo
+ *      Then admins receive: "Order အသစ်လက်ခံရရှိပါသည်" + slip + order info + Approve / Reject buttons
+ *  - When admin Approve / Reject:
+ *      - Buttons disappear on that admin message, caption changes to "Order Complete" or "Order Rejected"
+ *      - If Approve -> user receives "Your order is complete" + order info
  *
  * ENV:
  *  - TELEGRAM_BOT_TOKEN
  *  - ADMIN_IDS       (comma separated user IDs, e.g. 123,456)
  *  - STORE_CURRENCY  (optional, default 'Ks')
- *  - MONGODB_URI     (required for Mongo connection)
+ *  - MONGODB_URI
  *  - PUBLIC_URL      (e.g. https://mybot.onrender.com)
- *      Webhook URL will be: PUBLIC_URL + /webhook/<BOT_TOKEN>
  */
 
 const TelegramBot = require('node-telegram-bot-api');
@@ -44,7 +41,6 @@ const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bika_store_bot';
 
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
-const WEBHOOK_PATH = `/webhook/${BOT_TOKEN}`;
 
 // ====== MONGOOSE INIT ======
 mongoose
@@ -73,11 +69,12 @@ const orderSchema = new mongoose.Schema({
   // MLBB & PUBG IDs
   gameId: String, // MLBB ID or PUBG ID
   serverId: String, // MLBB Server ID (empty for PUBG)
-  status: { type: String, index: true }, // PENDING_PAYMENT, PENDING_CONFIRMATION, COMPLETED, REJECTED, CANCELLED_BY_USER, ...
+  status: { type: String, index: true }, // PENDING_PAYMENT, AWAITING_SLIP, PENDING_CONFIRMATION, COMPLETED, REJECTED, ...
   createdAt: Date,
   paidAt: Date,
   confirmedAt: Date,
   adminNote: String,
+  paymentSlipFileId: String, // telegram file_id of slip
 });
 
 const Order = mongoose.model('Order', orderSchema);
@@ -85,39 +82,37 @@ const Order = mongoose.model('Order', orderSchema);
 // ====== BOT INIT (Webhook mode) ======
 const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
 
-// configure webhook URL if PUBLIC_URL is provided
+// Webhook setup (if PUBLIC_URL provided)
 if (PUBLIC_URL) {
-  const fullWebhookUrl = PUBLIC_URL.replace(/\/+$/, '') + WEBHOOK_PATH;
+  const cleanBase = PUBLIC_URL.replace(/\/+$/, '');
+  const webhookUrl = `${cleanBase}/webhook/${BOT_TOKEN}`;
   bot
-    .setWebHook(fullWebhookUrl)
-    .then(() => console.log('🔗 Webhook set to:', fullWebhookUrl))
+    .setWebHook(webhookUrl)
+    .then(() => console.log('🔗 Webhook set to:', webhookUrl))
     .catch((err) =>
       console.error('Failed to set webhook automatically:', err.message)
     );
 } else {
   console.warn(
-    '⚠️ PUBLIC_URL is not set. Please set Telegram webhook manually using BotFather or ENV.'
+    '⚠️ PUBLIC_URL not set. Please configure webhook manually via BotFather.'
   );
 }
 
-// Express app to receive webhook
+// Express app for webhook
 const app = express();
 app.use(express.json());
 
-// Telegram webhook endpoint
-// (POST လာရင် path ဘယ်လိုဖြစ်နေသော်လည်း accept လုပ်မယ်)
+// Accept Telegram updates on ANY path (easy for BotFather / Render)
 app.post('*', (req, res) => {
-  // Telegram update ကို bot သို့ pass ပေးမယ်
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// simple health endpoint
+// Simple health check
 app.get('/', (req, res) => {
   res.send('BIKA Store Bot is running (webhook mode).');
 });
 
-// start web server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('🌐 Express server listening on port', PORT);
@@ -128,15 +123,15 @@ app.listen(PORT, () => {
 /**
  * Session per user:
  * {
- *   step: 'WAIT_GAME_ID' | 'WAIT_SERVER_ID' | 'WAIT_CONFIRM' | null,
- *   orderDraft: {...}
+ *   step: 'WAIT_MLBB_ID_SVID' | 'WAIT_PUBG_ID' | 'WAIT_CONFIRM' | 'WAIT_SLIP' | null,
+ *   orderDraft: {...},
+ *   pendingOrderId: number | null
  * }
  */
 const sessions = new Map();
 
 /**
  * For auto-deleting step messages (per user)
- * userLastStepMessage[userId] = { chatId, messageId }
  */
 const userLastStepMessage = new Map();
 
@@ -165,7 +160,6 @@ const CATEGORIES = {
     description: 'Mobile Legends: Bang Bang – Diamonds and Weekly Pass.',
     emoji: '💎',
     packages: [
-      // Diamonds
       { id: 'mlbb_11', name: '11 Diamonds', price: 800 },
       { id: 'mlbb_22', name: '22 Diamonds', price: 1600 },
       { id: 'mlbb_33', name: '33 Diamonds', price: 2350 },
@@ -195,7 +189,6 @@ const CATEGORIES = {
       { id: 'mlbb_5532', name: '5532 Diamonds', price: 300000 },
       { id: 'mlbb_6055', name: '6055 Diamonds', price: 330000 },
 
-      // Weekly / special
       { id: 'mlbb_wp1', name: 'Weekly Pass 1 (wp1)', price: 5900 },
       { id: 'mlbb_wp2', name: 'Weekly Pass 2 (wp2)', price: 11800 },
       { id: 'mlbb_wp3', name: 'Weekly Pass 3 (wp3)', price: 17700 },
@@ -244,7 +237,11 @@ function resetUserSession(userId) {
 
 function getUserSession(userId, createIfMissing = false) {
   if (!sessions.has(userId) && createIfMissing) {
-    sessions.set(userId, { step: null, orderDraft: null });
+    sessions.set(userId, {
+      step: null,
+      orderDraft: null,
+      pendingOrderId: null,
+    });
   }
   return sessions.get(userId) || null;
 }
@@ -305,6 +302,7 @@ async function ordersToCSV() {
     'paidAt',
     'confirmedAt',
     'adminNote',
+    'paymentSlipFileId',
   ];
 
   const lines = [];
@@ -330,6 +328,7 @@ async function ordersToCSV() {
       escapeCSVValue(o.paidAt),
       escapeCSVValue(o.confirmedAt),
       escapeCSVValue(o.adminNote),
+      escapeCSVValue(o.paymentSlipFileId),
     ];
     lines.push(row.join(','));
   }
@@ -448,7 +447,16 @@ function buildAdminPanelKeyboard() {
 function formatOrderSummary(order, options = {}) {
   const showStatus = options.showStatus !== false;
   const lines = [];
-  lines.push(`🧾 **Order #${order.id}**`);
+  if (options.title === 'COMPLETE') {
+    lines.push(`✅ **Order #${order.id} Complete**`);
+  } else if (options.title === 'REJECTED') {
+    lines.push(`❌ **Order #${order.id} Rejected**`);
+  } else if (options.title === 'NEW') {
+    lines.push(`🆕 **Order #${order.id} အသစ်လက်ခံရရှိပါသည်**`);
+  } else {
+    lines.push(`🧾 **Order #${order.id}**`);
+  }
+
   if (showStatus) {
     lines.push(`Status: \`${order.status}\``);
   }
@@ -494,7 +502,7 @@ function buildOrderDetailKeyboard(order, forAdmin) {
     if (order.status === 'PENDING_CONFIRMATION') {
       rows.push([
         {
-          text: '✅ Mark as Completed',
+          text: '✅ Approve (Complete)',
           callback_data: `admin:complete:${order.id}`,
         },
         {
@@ -563,7 +571,8 @@ async function sendPaymentInstructions(chatId, order) {
   lines.push('- (Admin will specify exact account)');
   lines.push('');
   lines.push(
-    'ငွေလွှဲပြီးသွားရင် အောက်က **"I have paid"** button ကိုနှိပ်ပြီး slip ကို Bot ထဲပို့ပေးပါ။'
+    'ငွေလွှဲပြီးသွားရင် အောက်က **"I have paid"** button ကိုနှိပ်ပြီး ' +
+      'Bot က တောင်းတဲ့ ငွေလွှဲပြေစာ screenshot ကို ပို့ပေးပါ။'
   );
 
   await bot.sendMessage(chatId, lines.join('\n'), {
@@ -635,80 +644,132 @@ bot.onText(/\/setpromo(?:\s+([\s\S]+))?/, async (msg, match) => {
   await bot.sendMessage(chatId, '✅ Promotion text updated & enabled.');
 });
 
-// Text messages for steps (MLBB ID + SV ID / PUBG ID only)
-bot.on('message', async (msg) => {
-  if (!msg.text || msg.text.startsWith('/')) return;
+// ====== MESSAGE HANDLER (ID+SV, PUBG ID, Slip Photo) ======
 
+bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
-
   knownUserIds.add(userId);
 
   const session = getUserSession(userId, false);
-  if (!session || !session.step) {
+
+  // 1) Handle payment slip photo
+  if (session && session.step === 'WAIT_SLIP' && msg.photo && msg.photo.length) {
+    const orderId = session.pendingOrderId;
+    const order = await Order.findOne({ id: orderId, userId });
+    if (!order) {
+      resetUserSession(userId);
+      return;
+    }
+
+    const photoSizes = msg.photo;
+    const largestPhoto = photoSizes[photoSizes.length - 1];
+    const fileId = largestPhoto.file_id;
+
+    order.status = 'PENDING_CONFIRMATION';
+    order.paidAt = order.paidAt || new Date();
+    order.paymentSlipFileId = fileId;
+    await order.save();
+
+    session.step = null;
+    session.pendingOrderId = null;
+
+    await bot.sendMessage(
+      chatId,
+      '✅ ငွေလွှဲပြေစာ Screenshot ကို လက်ခံရရှိပြီးပါပြီ။ ' +
+        'Admin အား Order အသစ်အဖြစ် သတင်းပို့ပေးထားပြီး အတည်ပြုနေပါပြီ။'
+    );
+
+    // send to admins – slip + order info + approve/reject
+    const caption = formatOrderSummary(order, { title: 'NEW' });
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '✅ Approve', callback_data: `admin:complete:${order.id}` },
+          { text: '❌ Reject', callback_data: `admin:reject:${order.id}` },
+        ],
+      ],
+    };
+
+    for (const adminId of ADMIN_IDS) {
+      try {
+        await bot.sendPhoto(adminId, fileId, {
+          caption,
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } catch (e) {
+        console.error('Failed to send slip to admin', adminId, e.message);
+      }
+    }
+
     return;
   }
+
+  // For other flows we only care about text (ignore photos if not WAIT_SLIP)
+  if (!msg.text || msg.text.startsWith('/')) return;
+  if (!session || !session.step) return;
 
   const text = msg.text.trim();
   const draft = session.orderDraft || {};
 
-  if (session.step === 'WAIT_GAME_ID') {
-    // MLBB or PUBG ID
-    draft.gameId = text;
-
-    if (draft.categoryKey === 'mlbb') {
-      session.step = 'WAIT_SERVER_ID';
-
-      await sendStepMessage(
-        userId,
-        chatId,
-        '🔢 **Server ID (SV ID)** ကို ထည့်ပေးပါ။\n\n' +
-          'MLBB game ထဲက profile ပေါ်မှာ မြင်ရတဲ့ **Server ID** ကိုပါ။',
-        {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            keyboard: [[{ text: '❌ Cancel' }]],
-            resize_keyboard: true,
-            one_time_keyboard: true,
-          },
-        }
-      );
-    } else {
-      // PUBG => go straight to confirm
-      session.step = 'WAIT_CONFIRM';
-      await bot.sendMessage(
-        chatId,
-        '✅ PUBG ID ကို လက်ခံရရှိပြီး၊ order ကို အတည်ပြုဖို့ လာပါပြီ။',
-        {
-          reply_markup: { remove_keyboard: true },
-        }
-      );
-      await sendOrderConfirmMessage(userId, chatId, draft);
-    }
+  // optional cancel
+  if (text === '❌ Cancel') {
+    resetUserSession(userId);
+    await bot.sendMessage(chatId, '❌ Order ကို cancel လုပ်ထားပါတယ်။', {
+      reply_markup: { remove_keyboard: true },
+    });
     return;
   }
 
-  if (session.step === 'WAIT_SERVER_ID') {
-    draft.serverId = text;
+  // 2) MLBB (ID + SVID in one message)
+  if (session.step === 'WAIT_MLBB_ID_SVID') {
+    const parts = text.split(/[\s,]+/).filter(Boolean);
+    let gameId = '';
+    let serverId = '';
+
+    if (parts.length >= 2) {
+      gameId = parts[0];
+      serverId = parts[1];
+    } else {
+      // user တစ်ခုတည်းပဲ ထည့်ရင် ID အနေနဲ့ယူပြီး ServerId ကို ထပ်မေးမနေတော့ – အရင်တန် ID မှာပဲ သိမ်းထားမယ်
+      gameId = text;
+      serverId = '';
+    }
+
+    draft.gameId = gameId;
+    draft.serverId = serverId;
     session.step = 'WAIT_CONFIRM';
+    session.orderDraft = draft;
 
     await bot.sendMessage(
       chatId,
-      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီး၊ order ကို အတည်ပြုဖို့ လာပါပြီ။',
-      {
-        reply_markup: { remove_keyboard: true },
-      }
+      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီးပါပြီ။ Order ကို အတည်ပြုဖို့ စစ်ဆေးကြည့်ပါ။',
+      { reply_markup: { remove_keyboard: true } }
     );
 
     await sendOrderConfirmMessage(userId, chatId, draft);
     return;
   }
 
-  if (session.step === 'WAIT_CONFIRM') {
-    // normally we don't expect raw text here (only inline button),
-    // but if user types something, we just ignore.
+  // 3) PUBG (ID only)
+  if (session.step === 'WAIT_PUBG_ID') {
+    draft.gameId = text;
+    draft.serverId = '';
+    session.step = 'WAIT_CONFIRM';
+    session.orderDraft = draft;
+
+    await bot.sendMessage(
+      chatId,
+      '✅ PUBG ID ကို လက်ခံရရှိပြီးပါပြီ။ Order ကို အတည်ပြုဖို့ စစ်ဆေးကြည့်ပါ။',
+      { reply_markup: { remove_keyboard: true } }
+    );
+
+    await sendOrderConfirmMessage(userId, chatId, draft);
     return;
   }
+
+  // WAIT_CONFIRM – ignore random text
 });
 
 // Helper – best-looking order confirm UI
@@ -728,7 +789,7 @@ async function sendOrderConfirmMessage(userId, chatId, draft) {
 
   if (draft.categoryKey === 'mlbb') {
     lines.push(`• MLBB ID: \`${draft.gameId}\``);
-    lines.push(`• Server ID: \`${draft.serverId}\``);
+    lines.push(`• Server ID: \`${draft.serverId || '-'}\``);
   } else {
     lines.push(`• PUBG ID: \`${draft.gameId}\``);
   }
@@ -784,13 +845,12 @@ bot.on('callback_query', async (query) => {
         '',
         '1️⃣ **Browse Items** ကိုနှိပ်ပါ',
         '2️⃣ ထဲကနေ **MLBB** (Diamonds / Pass) နဲ့ **PUBG UC** ထဲကလိုချင်တာရွေးပါ',
-        '3️⃣ MLBB အတွက်: **ID + Server ID** ထည့်ပေးပါ',
-        '4️⃣ PUBG အတွက်: **PUBG ID** ပဲ ထည့်ပေးရပါမယ်',
+        '3️⃣ MLBB အတွက်: **ID + Server ID** ကို တစ်ကြိမ်တည်းထဲ space နဲ့ ခွဲရေးပြီး ထည့်ပေးပါ (ဥပမာ 12345678 1234)',
+        '4️⃣ PUBG အတွက်: **PUBG ID** တစ်ခုတည်း ထည့်ပေးပါ',
         '5️⃣ Order summary ကို စစ်ပြီး **Confirm Order** ကိုနှိပ်ပါ',
         '6️⃣ Payment info အတိုင်း KBZ Pay / WavePay နဲ့ ငွေလွှဲပါ',
-        '7️⃣ ပြီးသွားရင် **"I have paid"** ကိုနှိပ်ပြီး slip ပို့ပေးပါ',
-        '',
-        'Admin က payment confirm လုပ်ပြီး game ထဲက item တွေကို မြန်မြန်ပို့ပေးပါမယ် 💨',
+        '7️⃣ **I have paid** ကိုနှိပ်ပြီး Bot ပြောသလို Slip ပုံ ပို့ပါ',
+        '8️⃣ Admin confirm လုပ်လိုက်တာနဲ့ Order Complete ဖြစ်သွားမယ် 💨',
       ];
       await bot.editMessageText(lines.join('\n'), {
         chat_id: chatId,
@@ -915,44 +975,73 @@ bot.on('callback_query', async (query) => {
       };
 
       // first question depending on category
-      session.step = 'WAIT_GAME_ID';
-
-      const introLines = [];
-      introLines.push('📝 **Order Form**');
-      introLines.push('');
-      introLines.push(
-        `Game: ${
-          catKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime'
-        }\nPackage: ${pkg.name}\nPrice: ${formatPrice(pkg.price)}`
-      );
-      introLines.push('');
-
       if (catKey === 'mlbb') {
-        introLines.push('အရင်ဆုံး **MLBB ID** ကို ထည့်ပေးပါ။');
+        session.step = 'WAIT_MLBB_ID_SVID';
+
+        const introLines = [];
+        introLines.push('📝 **Order Form – MLBB**');
+        introLines.push('');
+        introLines.push(
+          `Package: ${pkg.name}\nPrice: ${formatPrice(
+            pkg.price
+          )}\n\nအောက်ကအချက်အလက်ကို ထည့်ပေးပါ👇`
+        );
+        introLines.push(
+          '**MLBB ID + Server ID** ကို တစ်ကြိမ်တည်း space နဲ့ ခွဲရေးပြီး ထည့်ပါ (ဥပမာ `12345678 1234`)'
+        );
+
+        await bot.editMessageText(introLines.join('\n'), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+        });
+
+        await sendStepMessage(
+          userId,
+          chatId,
+          '👉 ကိုယ့် **MLBB ID + Server ID** ကို `12345678 1234` ဆိုပြီး space နဲ့ ခွဲပြီး ရိုက်ထည့်ပေးပါ။',
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              keyboard: [[{ text: '❌ Cancel' }]],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          }
+        );
       } else {
-        introLines.push('အရင်ဆုံး **PUBG ID** ကို ထည့်ပေးပါ။');
+        // PUBG
+        session.step = 'WAIT_PUBG_ID';
+
+        const introLines = [];
+        introLines.push('📝 **Order Form – PUBG UC & Prime**');
+        introLines.push('');
+        introLines.push(
+          `Package: ${pkg.name}\nPrice: ${formatPrice(
+            pkg.price
+          )}\n\nအောက်ကအချက်အလက်ကို ထည့်ပေးပါ👇`
+        );
+        introLines.push('**PUBG ID (Character ID)** ကို ထည့်ပါ။');
+
+        await bot.editMessageText(introLines.join('\n'), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+        });
+
+        await sendStepMessage(
+          userId,
+          chatId,
+          '👉 ကိုယ့် **PUBG ID (Character ID)** ကို ရိုက်ထည့်ပေးပါ။',
+          {
+            reply_markup: {
+              keyboard: [[{ text: '❌ Cancel' }]],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          }
+        );
       }
-
-      await bot.editMessageText(introLines.join('\n'), {
-        chat_id: chatId,
-        message_id: msgId,
-        parse_mode: 'Markdown',
-      });
-
-      await sendStepMessage(
-        userId,
-        chatId,
-        catKey === 'mlbb'
-          ? '👉 MLBB ID ကို ရိုက်ထည့်ပေးပါ (in-game ID).'
-          : '👉 PUBG ID ကို ရိုက်ထည့်ပေးပါ (Character ID).',
-        {
-          reply_markup: {
-            keyboard: [[{ text: '❌ Cancel' }]],
-            resize_keyboard: true,
-            one_time_keyboard: true,
-          },
-        }
-      );
 
       return;
     }
@@ -984,6 +1073,7 @@ bot.on('callback_query', async (query) => {
         paidAt: null,
         confirmedAt: null,
         adminNote: '',
+        paymentSlipFileId: '',
       });
 
       resetUserSession(userId);
@@ -1031,7 +1121,7 @@ bot.on('callback_query', async (query) => {
       return;
     }
 
-    // Payment: user says "I have paid"
+    // Payment: user says "I have paid" -> ask for slip
     if (data.startsWith('payment:paid:')) {
       await acknowledge();
       const [, , idStr] = data.split(':');
@@ -1047,52 +1137,29 @@ bot.on('callback_query', async (query) => {
         return;
       }
 
-      order.status = 'PENDING_CONFIRMATION';
+      order.status = 'AWAITING_SLIP';
       order.paidAt = new Date();
       await order.save();
 
+      const session = getUserSession(userId, true);
+      session.step = 'WAIT_SLIP';
+      session.pendingOrderId = order.id;
+
       await bot.editMessageText(
-        `✅ Order #${order.id} အတွက် "I have paid" ကို လက်ခံရရှိပါပြီ။\nAdmin က slip ကို စစ်ဆေးပြီး Confirm လုပ်ပေးမယ်။`,
+        `💳 Order #${order.id} အတွက် "I have paid" ကို လက်ခံရရှိပြီ။\n\n` +
+          '👉 အောက်တွင် KBZ/WavePay စသဖြင့် ငွေလွှဲပြေစာ screenshot ကို **တစ်ပုံပဲ** ပို့ပေးပါ။',
         {
           chat_id: chatId,
           message_id: msgId,
         }
       );
 
-      // Notify admins
-      for (const adminId of ADMIN_IDS) {
-        try {
-          await bot.sendMessage(
-            adminId,
-            `💳 **Payment to confirm**\n\n${formatOrderSummary(order)}`,
-            {
-              parse_mode: 'Markdown',
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: '✅ Confirm (Complete)',
-                      callback_data: `admin:complete:${order.id}`,
-                    },
-                    {
-                      text: '❌ Reject',
-                      callback_data: `admin:reject:${order.id}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: '📄 View in Admin Panel',
-                      callback_data: `admin:order:${order.id}`,
-                    },
-                  ],
-                ],
-              },
-            }
-          );
-        } catch (e) {
-          console.error('Failed to notify admin', adminId, e.message);
-        }
-      }
+      await sendStepMessage(
+        userId,
+        chatId,
+        '📸 ငွေလွှဲပြေစာ screenshot ကို ပုံအနေနဲ့ တစ်ပုံပို့ပေးပါ။\n\n' +
+          '(*ဤပုံကို Admin ထံ Order အသစ်အဖြစ် ပို့ပေးမည်ဖြစ်ပါတယ်*)'
+      );
       return;
     }
 
@@ -1344,67 +1411,70 @@ bot.on('callback_query', async (query) => {
         return;
       }
 
-      if (data.startsWith('admin:complete:')) {
+      // COMPLETE / REJECT (with caption change)
+      if (data.startsWith('admin:complete:') || data.startsWith('admin:reject:')) {
         await acknowledge();
+        const isComplete = data.startsWith('admin:complete:');
         const [, , idStr] = data.split(':');
         const orderId = parseInt(idStr, 10);
         const order = await Order.findOne({ id: orderId });
         if (!order) return;
 
-        order.status = 'COMPLETED';
-        order.confirmedAt = new Date();
+        if (isComplete) {
+          order.status = 'COMPLETED';
+          order.confirmedAt = new Date();
+        } else {
+          order.status = 'REJECTED';
+          order.confirmedAt = new Date();
+          order.adminNote = 'Rejected by admin';
+        }
         await order.save();
 
-        await bot.editMessageText(
-          `✅ Order #${order.id} ကို Completed လို့မှတ်လိုက်ပါတယ်။`,
-          {
+        // Update admin message caption / text (remove buttons)
+        const newText = formatOrderSummary(order, {
+          title: isComplete ? 'COMPLETE' : 'REJECTED',
+        });
+
+        if (query.message && query.message.photo) {
+          await bot.editMessageCaption(newText, {
             chat_id: chatId,
             message_id: msgId,
-            ...buildAdminPanelKeyboard(),
-          }
-        );
-
-        try {
-          await bot.sendMessage(
-            order.userId,
-            `✅ BIKA Store – Order #${order.id} Completed!\n\n` +
-              'Game ထဲကို ဝင်စစ်ကြည့်ပါ။ မရှိသေးရင် Admin ကို မေးလို့ရပါတယ်။'
-          );
-        } catch (e) {
-          console.error('Notify user failed', order.userId, e.message);
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [] },
+          });
+        } else {
+          await bot.editMessageText(newText, {
+            chat_id: chatId,
+            message_id: msgId,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [] },
+          });
         }
 
-        return;
-      }
-
-      if (data.startsWith('admin:reject:')) {
-        await acknowledge();
-        const [, , idStr] = data.split(':');
-        const orderId = parseInt(idStr, 10);
-        const order = await Order.findOne({ id: orderId });
-        if (!order) return;
-
-        order.status = 'REJECTED';
-        order.confirmedAt = new Date();
-        order.adminNote = 'Rejected by admin';
-        await order.save();
-
-        await bot.editMessageText(
-          `❌ Order #${order.id} ကို Rejected လုပ်လိုက်ပါတယ်။`,
-          {
-            chat_id: chatId,
-            message_id: msgId,
-            ...buildAdminPanelKeyboard(),
+        if (isComplete) {
+          try {
+            await bot.sendMessage(
+              order.userId,
+              formatOrderSummary(order, {
+                title: 'COMPLETE',
+              }),
+              { parse_mode: 'Markdown' }
+            );
+          } catch (e) {
+            console.error('Notify user failed', order.userId, e.message);
           }
-        );
-
-        try {
-          await bot.sendMessage(
-            order.userId,
-            `❌ BIKA Store – Order #${order.id} Rejected.\n\nငွေလွှဲအဆင့်/အချက်အလက်တွေကို Admin နဲ့ ထပ်မံဆွေးနွေးပါ။`
-          );
-        } catch (e) {
-          console.error('Notify user failed', order.userId, e.message);
+        } else {
+          try {
+            await bot.sendMessage(
+              order.userId,
+              formatOrderSummary(order, {
+                title: 'REJECTED',
+              }),
+              { parse_mode: 'Markdown' }
+            );
+          } catch (e) {
+            console.error('Notify user failed', order.userId, e.message);
+          }
         }
 
         return;
