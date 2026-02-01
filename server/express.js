@@ -1,13 +1,25 @@
-// server/express.js — Express App for Telegram Webhook
+// server/express.js — Express Server + Webhook Setup
 
-const express = require("express"); const bodyParser = require("body-parser"); const { bot } = require("../bot/bot"); const { WEBHOOK_PATH } = process.env;
+const express = require("express");
+const { bot } = require("../bot/bot");
+const { WEBHOOK_SECRET } = require("../config/env");
 
 const app = express();
+app.use(express.json());
 
-app.use(bodyParser.json());
+const routePath = `/webhook/${WEBHOOK_SECRET}`;
 
-// Telegram webhook endpoint app.post(WEBHOOK_PATH, (req, res) => { bot.handleUpdate(req.body); res.status(200).send("✅ Webhook received"); });
+// Webhook endpoint
+app.post(routePath, (req, res) => {
+  bot.handleUpdate(req.body, res);
+});
 
-app.get("/", (req, res) => { res.send("🤖 Bika Store Bot is running!"); });
+// Health check route
+app.get("/", (req, res) => {
+  res.send("✅ BIKA Store Bot Webhook is running.");
+});
 
-module.exports = app;
+module.exports = {
+  app,
+  routePath,
+};
