@@ -1,26 +1,64 @@
-// services/broadcast.service.js — Broadcast Messages to Groups
+// services/broadcast.service.js — Broadcast Helper for Bot Admins
 
-const { bot } = require("../bot/bot"); const fs = require("fs");
+const { bot } = require("../bot");
+const { User } = require("../models/User");
+const { Chat } = require("../models/Chat");
 
-module.exports = { async sendBroadcast({ chatIds = [], message, photoFileId, buttons }) { const inlineKeyboard = buttons?.length ? { reply_markup: { inline_keyboard: [buttons.map((btn) => ({ text: btn.text, url: btn.url }))], }, } : {};
+async function getBroadcastTargets() {
+  const users = await User.find({}, { userId: 1 }).lean();
+  const chats = await Chat.find({ type: { $in: ["group", "supergroup"] } }, { chatId: 1 }).lean();
 
-for (const chatId of chatIds) {
-  try {
-    if (photoFileId) {
-      await bot.sendPhoto(chatId, photoFileId, {
-        caption: message,
-        parse_mode: "HTML",
-        ...inlineKeyboard,
-      });
-    } else {
-      await bot.sendMessage(chatId, message, {
-        parse_mode: "HTML",
-        ...inlineKeyboard,
-      });
-    }
-  } catch (err) {
-    console.error(`❌ Failed to send broadcast to ${chatId}:`, err.message);
-  }
+  const targets = [
+    ...users.map((u) => ({ chatId: u.userId })),
+    ...chats.map((c) => ({ chatId: c.chatId })),
+  ];
+
+  return targets;
 }
 
-}, };
+async function broadcastMessage({ text, buttons }) {
+  const targets = await getBroadcastTargets();
+  let ok = 0,
+    fail = 0;
+
+  for (const t of targets) {
+    try {
+      await bot.sendMessage(t.chatId, text, {
+        parse_mode: "HTML",
+        reply_markup: buttons ? { inline_keyboard: buttons } : undefined,
+        disable_web_page_preview: true,
+      });
+      ok++;
+    } catch (_) {
+      fail++;
+    }
+  }
+
+  return { ok, fail, total: targets.length };
+}
+
+async function broadcastPhoto({ photoFileId, captionHTML, buttons }) {
+  const targets = await getBroadcastTargets();
+  let ok = 0,
+    fail = 0;
+
+  for (const t of targets) {
+    try {
+      await bot.sendPhoto(t.chatId, photoFileId, {
+        caption: captionHTML,
+        parse_mode: "HTML",
+        reply_markup: buttons ? { inline_keyboard: buttons } : undefined,
+      });
+      ok++;
+    } catch (_) {
+      fail++;
+    }
+  }
+
+  return { ok, fail, total: targets.length };
+}
+
+module.exports = {
+  broadcastMessage,
+  broadcastPhoto,
+};
