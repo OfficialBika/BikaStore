@@ -1,44 +1,56 @@
-// services/giveaway.service.js — Giveaway Logic Handler
+// services/giveaway.service.js — Giveaway Logic & Utilities
 
-const GiveawayPost = require("../models/GiveawayPost"); const GiveawayEntry = require("../models/GiveawayEntry"); const WinnerHistory = require("../models/WinnerHistory"); const User = require("../models/User");
+const { GiveawayPost } = require("../models/GiveawayPost");
+const { GiveawayEntry } = require("../models/GiveawayEntry");
+const { WinnerHistory } = require("../models/WinnerHistory");
 
-module.exports = { async handleGiveawayEntry(channelPost) { const { message_id, chat, text } = channelPost;
+// Create a giveaway post (messageId, photoId, caption)
+async function createGiveawayPost(data) {
+  const post = new GiveawayPost(data);
+  await post.save();
+  return post;
+}
 
-const existing = await GiveawayPost.findOne({ messageId: message_id, channelId: chat.id });
-if (existing) return;
+// Add entry (userId, username, firstName)
+async function addGiveawayEntry({ giveawayId, userId, username, firstName }) {
+  const entry = new GiveawayEntry({ giveawayId, userId, username, firstName });
+  await entry.save();
+  return entry;
+}
 
-await GiveawayPost.create({
-  messageId: message_id,
-  channelId: chat.id,
-  hashtag: "#BIKA_GIVEAWAY",
-  postText: text,
-});
+// Check if already entered
+async function hasEntered(giveawayId, userId) {
+  const existing = await GiveawayEntry.findOne({ giveawayId, userId });
+  return !!existing;
+}
 
-},
+// Pick a winner randomly
+async function pickWinner(giveawayId) {
+  const entries = await GiveawayEntry.find({ giveawayId });
+  if (!entries.length) return null;
 
-async enterGiveaway(postId, userId) { const entry = await GiveawayEntry.findOne({ giveawayPost: postId, user: userId }); if (entry) return; // already entered
+  const winner = entries[Math.floor(Math.random() * entries.length)];
+  const history = new WinnerHistory({
+    giveawayId,
+    userId: winner.userId,
+    username: winner.username,
+    firstName: winner.firstName,
+    pickedAt: new Date(),
+  });
+  await history.save();
+  return winner;
+}
 
-await GiveawayEntry.create({ giveawayPost: postId, user: userId });
-await GiveawayPost.findByIdAndUpdate(postId, {
-  $inc: { entryCount: 1 },
-  $addToSet: { participants: userId },
-});
+// Clear giveaway data
+async function clearGiveaway(giveawayId) {
+  await GiveawayEntry.deleteMany({ giveawayId });
+  await GiveawayPost.deleteOne({ _id: giveawayId });
+}
 
-},
-
-async pickWinner(postId) { const post = await GiveawayPost.findById(postId).populate("participants"); if (!post || post.participants.length === 0) throw new Error("No participants");
-
-const winnerIndex = Math.floor(Math.random() * post.participants.length);
-const winner = post.participants[winnerIndex];
-
-const history = await WinnerHistory.create({
-  giveawayPost: postId,
-  user: winner._id,
-  reward: post.reward || "Unknown Reward",
-});
-
-return winner;
-
-},
-
-async getWinnerHistory(groupId) { return await WinnerHistory.find() .populate("user") .populate("giveawayPost") .sort({ createdAt: -1 }); }, };
+module.exports = {
+  createGiveawayPost,
+  addGiveawayEntry,
+  hasEntered,
+  pickWinner,
+  clearGiveaway,
+};
