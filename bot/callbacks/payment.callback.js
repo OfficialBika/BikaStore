@@ -14,15 +14,15 @@ bot.on("callback_query", async (q) => {
 
   if (!order) {
     return bot.answerCallbackQuery(q.id, {
-      text: "❌ Order not found or already submitted!",
+      text: "⛔️ မရှိတဲ့ Order ပါ။",
       show_alert: true,
     });
   }
 
-  const payment = PAYMENTS[method];
-  if (!payment) {
+  const pay = PAYMENTS[method];
+  if (!pay) {
     return bot.answerCallbackQuery(q.id, {
-      text: "❌ Invalid payment method!",
+      text: "❌ မမှန်ကန်တဲ့ Payment Method ဖြစ်ပါတယ်။",
       show_alert: true,
     });
   }
@@ -30,19 +30,38 @@ bot.on("callback_query", async (q) => {
   order.paymentMethod = method;
   await order.save();
 
-  const text = `💰 <b>Payment Method Selected</b>
+  const text = `💸 <b>ငွေပေးချေမှုအချက်အလက် (${method.toUpperCase()})</b>
 ━━━━━━━━━━━━━━━━━━
-🏦 Method: <b>${method.toUpperCase()}</b>
-👤 Name: <b>${payment.name}</b>
-📱 Account: <b>${payment.accountNumber}</b>
-💸 Amount: <b>${formatMMK(order.totalPrice)} MMK</b>
+👤 အကောင့်အမည် — <b>${pay.name}</b>
+📱 ဖုန်းနံပါတ် — <code>${pay.accountNumber}</code>
+💰 ပေးရန်Totalငွေ — <b>${formatMMK(order.totalPrice)} MMK</b>
 ━━━━━━━━━━━━━━━━━━
-📤 <b>ကျေးဇူးပြုပြီး ငွေလွှဲပြီးပါက Screenshot ကို ပို့ပေးပါ။</b>`;
+🧾 <b>Order ID</b> — <code>${order._id}</code>
 
-  await bot.sendPhoto(cid, payment.qr, {
-    caption: text,
-    parse_mode: "HTML",
+❗️ငွေလွှဲပြီးရင် Screenshot ကို ပေးပို့ပေးပါ။`;
+
+  try {
+    await bot.editMessageMedia(
+      {
+        type: "photo",
+        media: pay.qr,
+        caption: text,
+        parse_mode: "HTML",
+      },
+      {
+        chat_id: cid,
+        message_id: q.message.message_id,
+      }
+    );
+  } catch (_) {
+    await bot.sendPhoto(cid, pay.qr, {
+      caption: text,
+      parse_mode: "HTML",
+    });
+  }
+
+  bot.answerCallbackQuery(q.id, {
+    text: "✅ ငွေချေမှုအချက်အလက် စီစစ်နေပါသည်။ခေတ္တစောင့်ပါ",
+    show_alert: true,
   });
-
-  bot.answerCallbackQuery(q.id, { text: "✅ Payment method selected", show_alert: false });
 });
