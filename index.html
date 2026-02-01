@@ -2,9 +2,9 @@
 <html lang="my">
 <head>
   <meta charset="UTF-8" />
-  <title>BIKA STORE – Game Top-up & Telegram Premium</title>
+  <title>BIKA STORE – MLBB Diamonds & PUBG UC Top-up</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="BIKA STORE – MLBB Diamonds, PUBG UC, Magic Chess, Telegram Premium & Telegram Stars fast top-up via Telegram bot." />
+  <meta name="description" content="BIKA STORE – MLBB Diamonds & Weekly Pass, PUBG UC & Prime fast top-up via @BikaStoreBot." />
   <style>
     :root {
       --bg: #020617;
@@ -13,7 +13,6 @@
       --primary-soft: rgba(99, 102, 241, 0.18);
       --accent: #22c55e;
       --accent-soft: rgba(34, 197, 94, 0.18);
-      --danger: #f97373;
       --text-main: #e5e7eb;
       --text-soft: #9ca3af;
       --border-subtle: rgba(148, 163, 184, 0.35);
@@ -23,36 +22,21 @@
       --shadow-pill: 0 18px 40px rgba(37, 99, 235, 0.65);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html, body {
       margin: 0;
       padding: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background:
-        radial-gradient(circle at top, #1e293b 0, #020617 45%, #000 100%);
+      background: radial-gradient(circle at top, #1e293b 0, #020617 45%, #000 100%);
       color: var(--text-main);
       scroll-behavior: smooth;
     }
 
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
+    a { color: inherit; text-decoration: none; }
 
-    .page {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .shell {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 16px 16px 40px;
-    }
+    .page { min-height: 100vh; display: flex; flex-direction: column; }
+    .shell { max-width: 1120px; margin: 0 auto; padding: 16px 16px 40px; }
 
     /* Top bar */
     .topbar {
@@ -72,52 +56,23 @@
       backdrop-filter: blur(18px);
     }
 
-    .brand-block {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .brand-block { display: flex; align-items: center; gap: 10px; }
 
     .brand-logo {
-      width: 38px;
-      height: 38px;
+      width: 38px; height: 38px;
       border-radius: 15px;
       background: radial-gradient(circle at 20% 0%, #22c55e, #6366f1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      color: #e5e7eb;
-      letter-spacing: 0.04em;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; color: #e5e7eb; letter-spacing: 0.04em;
       box-shadow: 0 18px 46px rgba(79, 70, 229, 0.7);
       font-size: 18px;
     }
 
-    .brand-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
+    .brand-text { display: flex; flex-direction: column; gap: 2px; }
+    .brand-name { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .brand-sub { font-size: 11px; color: var(--text-soft); }
 
-    .brand-name {
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .brand-sub {
-      font-size: 11px;
-      color: var(--text-soft);
-    }
-
-    .top-nav {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 12px;
-    }
-
+    .top-nav { display: flex; align-items: center; gap: 10px; font-size: 12px; }
     .top-link {
       padding: 6px 10px;
       border-radius: 999px;
@@ -126,7 +81,6 @@
       cursor: pointer;
       background: transparent;
     }
-
     .top-link:hover {
       border-color: rgba(148,163,184,0.5);
       background: rgba(15,23,42,0.9);
@@ -146,10 +100,7 @@
       gap: 8px;
       box-shadow: var(--shadow-pill);
     }
-
-    .top-cta span {
-      font-size: 15px;
-    }
+    .top-cta span { font-size: 15px; }
 
     /* Hero */
     .hero {
@@ -159,71 +110,33 @@
       align-items: center;
       margin-top: 32px;
     }
-
-    .hero-main-title {
-      font-size: 32px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 8px;
-    }
-
-    .hero-gradient {
-      background: linear-gradient(120deg, #e5e7eb, #a5b4fc, #5eead4);
-      -webkit-background-clip: text;
-      color: transparent;
-    }
-
+    .hero-main-title { font-size: 32px; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 8px; }
+    .hero-gradient { background: linear-gradient(120deg, #e5e7eb, #a5b4fc, #5eead4); -webkit-background-clip: text; color: transparent; }
     .hero-subtitle {
-      font-size: 13px;
-      color: var(--text-soft);
-      max-width: 460px;
-      line-height: 1.6;
-      margin-bottom: 16px;
+      font-size: 13px; color: var(--text-soft);
+      max-width: 460px; line-height: 1.6; margin-bottom: 16px;
     }
 
-    .hero-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 18px;
-    }
-
+    .hero-tags { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
     .tag {
-      font-size: 11px;
-      padding: 4px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.55);
-      background: rgba(15, 23, 42, 0.96);
-      color: var(--text-soft);
+      font-size: 11px; padding: 4px 9px;
+      border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.55);
+      background: rgba(15, 23, 42, 0.96); color: var(--text-soft);
     }
+    .tag strong { color:#e5e7eb; font-weight:500; }
 
-    .tag strong {
-      color: #e5e7eb;
-      font-weight: 500;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 18px;
-    }
-
+    .hero-actions { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
     .btn-primary {
       padding: 9px 18px;
       border-radius: 999px;
       border: 1px solid rgba(94,234,212,0.7);
       background: linear-gradient(135deg, rgba(34,197,94,0.98), rgba(56,189,248,0.92));
-      color: white;
-      font-size: 13px;
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
+      color:white;
+      font-size:13px; font-weight:600;
+      display:inline-flex; align-items:center; gap:8px;
+      cursor:pointer;
       box-shadow: var(--shadow-pill);
     }
-
     .btn-outline {
       padding: 9px 16px;
       border-radius: 999px;
@@ -231,19 +144,15 @@
       background: rgba(15,23,42,0.96);
       color: var(--text-main);
       font-size: 13px;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
+      display: inline-flex; align-items:center; gap:7px;
+      cursor:pointer;
     }
-
     .btn-primary:hover,
     .btn-outline:hover,
     .top-cta:hover {
       transform: translateY(-1px);
       box-shadow: 0 24px 60px rgba(15,23,42,1);
     }
-
     .btn-primary:active,
     .btn-outline:active,
     .top-cta:active {
@@ -252,20 +161,13 @@
     }
 
     .hero-meta {
-      font-size: 11px;
-      color: var(--text-soft);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
+      font-size: 11px; color: var(--text-soft);
+      display:flex; flex-wrap:wrap; gap:12px; align-items:center;
     }
-
     .hero-meta-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 999px;
-      background: #22c55e;
-      box-shadow: 0 0 0 4px rgba(34,197,94,0.35);
+      width:6px; height:6px; border-radius:999px;
+      background:#22c55e;
+      box-shadow:0 0 0 4px rgba(34,197,94,0.35);
     }
 
     .hero-card {
@@ -277,69 +179,25 @@
       padding: 18px 18px 16px;
       box-shadow: var(--shadow-soft);
     }
+    .hero-card-title { font-size: 13px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-soft); margin-bottom:12px; }
 
-    .hero-card-title {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-soft);
-      margin-bottom: 12px;
-    }
-
-    .hero-stat-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .mini-stat {
-      border-radius: 14px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.98);
-      padding: 8px 9px;
-      font-size: 11px;
-    }
-
-    .mini-label {
-      color: var(--text-soft);
-      margin-bottom: 2px;
-    }
-
-    .mini-value {
-      font-size: 14px;
-      font-weight: 600;
-    }
-
+    .hero-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
+    .mini-stat { border-radius:14px; border:1px solid rgba(148,163,184,0.6); background:rgba(15,23,42,0.98); padding:8px 9px; font-size:11px; }
+    .mini-label { color:var(--text-soft); margin-bottom:2px; }
+    .mini-value { font-size:14px; font-weight:600; }
     .mini-chip {
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(52,211,153,0.7);
-      background: rgba(16,185,129,0.18);
-      color: #bbf7d0;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      margin-top: 4px;
+      font-size:10px; padding:2px 8px; border-radius:999px;
+      border:1px solid rgba(52,211,153,0.7);
+      background:rgba(16,185,129,0.18); color:#bbf7d0;
+      display:inline-flex; align-items:center; gap:4px; margin-top:4px;
     }
-
     .hero-card-footer {
-      font-size: 10px;
-      color: var(--text-soft);
-      border-top: 1px dashed rgba(148,163,184,0.6);
-      padding-top: 8px;
-      margin-top: 6px;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      align-items: center;
+      font-size:10px; color:var(--text-soft);
+      border-top:1px dashed rgba(148,163,184,0.6);
+      padding-top:8px; margin-top:6px;
+      display:flex; justify-content:space-between; gap:8px; align-items:center;
     }
-
-    .hero-card-footer span.highlight {
-      color: #a5b4fc;
-    }
+    .hero-card-footer span.highlight { color:#a5b4fc; }
 
     /* Sections */
     .section {
@@ -347,317 +205,144 @@
       border-radius: var(--radius-xl);
       border: 1px solid var(--border-subtle);
       padding: 18px 18px 18px;
-      background:
-        radial-gradient(circle at top, rgba(30,64,175,0.35), rgba(15,23,42,0.98) 55%);
+      background: radial-gradient(circle at top, rgba(30,64,175,0.35), rgba(15,23,42,0.98) 55%);
       box-shadow: var(--shadow-soft);
     }
-
     .section-header {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
+      display:flex; justify-content:space-between; gap:10px; align-items:center;
+      margin-bottom:14px; flex-wrap:wrap;
     }
-
-    .section-title-block {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .section-eyebrow {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: var(--text-soft);
-    }
-
-    .section-title {
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    .section-sub {
-      font-size: 11px;
-      color: var(--text-soft);
-    }
-
+    .section-title-block { display:flex; flex-direction:column; gap:2px; }
+    .section-eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:0.16em; color:var(--text-soft); }
+    .section-title { font-size:15px; font-weight:600; }
+    .section-sub { font-size:11px; color:var(--text-soft); }
     .section-badge {
-      font-size: 11px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.96);
-      color: var(--text-soft);
+      font-size:11px; padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,0.6);
+      background:rgba(15,23,42,0.96); color:var(--text-soft);
     }
 
-    /* Product tabs */
-    .product-tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
+    /* Product tabs + tables */
+    .product-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
     .product-tab {
-      padding: 6px 11px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.95);
-      font-size: 12px;
-      color: var(--text-soft);
-      cursor: pointer;
+      padding:6px 11px; border-radius:999px;
+      border:1px solid rgba(148,163,184,0.6);
+      background:rgba(15,23,42,0.95);
+      font-size:12px; color:var(--text-soft);
+      cursor:pointer;
     }
-
     .product-tab.active {
-      border-color: rgba(56,189,248,0.7);
-      background: radial-gradient(circle at 0 0, rgba(56,189,248,0.4), rgba(15,23,42,0.98) 60%);
-      color: #e5e7eb;
-      box-shadow: 0 14px 36px rgba(15,23,42,0.9);
+      border-color:rgba(56,189,248,0.7);
+      background:radial-gradient(circle at 0 0, rgba(56,189,248,0.4), rgba(15,23,42,0.98) 60%);
+      color:#e5e7eb;
+      box-shadow:0 14px 36px rgba(15,23,42,0.9);
     }
 
-    .product-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: 12px;
+    .price-table-wrap {
+      border-radius:14px;
+      border:1px solid var(--border-subtle);
+      overflow:hidden;
+      background:rgba(15,23,42,0.98);
+    }
+    .price-table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+    }
+    .price-table th,
+    .price-table td {
+      padding:7px 10px;
+      border-bottom:1px solid rgba(31,41,55,0.85);
+      text-align:left;
+      white-space:nowrap;
+    }
+    .price-table th {
+      font-size:11px;
+      color:var(--text-soft);
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+    }
+    .price-table tbody tr:nth-child(even) {
+      background:rgba(15,23,42,0.92);
     }
 
-    @media (max-width: 960px) {
-      .hero {
-        grid-template-columns: minmax(0,1fr);
-      }
-      .hero-card {
-        order: -1;
-      }
-      .product-grid {
-        grid-template-columns: repeat(2, minmax(0,1fr));
-      }
-    }
-
-    @media (max-width: 640px) {
-      .topbar {
-        flex-wrap: wrap;
-        border-radius: 20px;
-        padding: 10px 12px;
-      }
-      .hero {
-        margin-top: 24px;
-      }
-      .hero-main-title {
-        font-size: 26px;
-      }
-      .product-grid {
-        grid-template-columns: minmax(0,1fr);
-      }
-    }
-
-    .product-card {
-      border-radius: 16px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(15,23,42,0.98);
-      padding: 10px 11px 11px;
-      font-size: 12px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .product-card::before {
-      content: "";
-      position: absolute;
-      inset: -20%;
-      background:
-        radial-gradient(circle at 0 0, rgba(96,165,250,0.25), transparent 50%),
-        radial-gradient(circle at 100% 100%, rgba(52,211,153,0.24), transparent 45%);
-      opacity: 0.8;
-      pointer-events: none;
-    }
-
-    .product-inner {
-      position: relative;
-      z-index: 1;
-    }
-
-    .product-name {
-      font-weight: 600;
-      margin-bottom: 3px;
-    }
-
-    .product-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 6px;
-      margin-bottom: 3px;
-    }
-
-    .product-price {
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .product-tagline {
-      font-size: 11px;
-      color: var(--text-soft);
-      margin-bottom: 5px;
-    }
-
-    .product-chip-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 4px;
-    }
-
-    .chip {
-      font-size: 10px;
-      padding: 2px 7px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.96);
-      color: var(--text-soft);
-    }
-
-    .chip.highlight {
-      border-color: rgba(34,197,94,0.7);
-      background: rgba(22,163,74,0.16);
-      color: #bbf7d0;
-    }
-
-    .product-foot {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: var(--text-soft);
-      border-top: 1px dashed rgba(148,163,184,0.6);
-      padding-top: 4px;
-      margin-top: 4px;
-    }
-
-    .product-foot span.link {
-      color: #a5b4fc;
+    .price-note {
+      font-size:11px;
+      color:var(--text-soft);
+      margin-top:8px;
     }
 
     /* Steps */
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: 12px;
-    }
-
-    @media (max-width: 800px) {
-      .steps-grid {
-        grid-template-columns: minmax(0,1fr);
-      }
-    }
-
+    .steps-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
     .step-card {
-      border-radius: 16px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(15,23,42,0.98);
-      padding: 12px 13px;
-      font-size: 12px;
-      position: relative;
-      overflow: hidden;
+      border-radius:16px;
+      border:1px solid var(--border-subtle);
+      background:rgba(15,23,42,0.98);
+      padding:12px 13px;
+      font-size:12px;
     }
-
     .step-number {
-      width: 24px;
-      height: 24px;
-      border-radius: 999px;
-      background: rgba(56,189,248,0.16);
-      border: 1px solid rgba(56,189,248,0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      color: #e0f2fe;
-      margin-bottom: 6px;
+      width:24px; height:24px; border-radius:999px;
+      background:rgba(56,189,248,0.16);
+      border:1px solid rgba(56,189,248,0.7);
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; color:#e0f2fe; margin-bottom:6px;
     }
-
-    .step-title {
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .step-text {
-      color: var(--text-soft);
-      font-size: 11px;
-      line-height: 1.6;
-    }
+    .step-title { font-weight:600; margin-bottom:4px; }
+    .step-text { color:var(--text-soft); font-size:11px; line-height:1.6; }
 
     /* FAQ */
-    .faq-grid {
-      display: grid;
-      grid-template-columns: minmax(0,1.2fr) minmax(0,1fr);
-      gap: 14px;
-    }
-
-    @media (max-width: 900px) {
-      .faq-grid {
-        grid-template-columns: minmax(0,1fr);
-      }
-    }
-
+    .faq-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:14px; }
     .faq-card {
-      border-radius: 16px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(15,23,42,0.98);
-      padding: 12px 13px;
-      font-size: 12px;
+      border-radius:16px; border:1px solid var(--border-subtle);
+      background:rgba(15,23,42,0.98); padding:12px 13px; font-size:12px;
     }
-
-    .faq-item + .faq-item {
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px dashed rgba(148,163,184,0.5);
-    }
-
-    .faq-q {
-      font-weight: 600;
-      margin-bottom: 3px;
-    }
-
-    .faq-a {
-      color: var(--text-soft);
-      font-size: 11px;
-      line-height: 1.6;
-    }
+    .faq-item + .faq-item { margin-top:10px; padding-top:8px; border-top:1px dashed rgba(148,163,184,0.5); }
+    .faq-q { font-weight:600; margin-bottom:3px; }
+    .faq-a { color:var(--text-soft); font-size:11px; line-height:1.6; }
 
     .contact-card {
-      border-radius: 16px;
-      border: 1px dashed rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.98);
-      padding: 12px 13px;
-      font-size: 12px;
+      border-radius:16px;
+      border:1px dashed rgba(148,163,184,0.6);
+      background:rgba(15,23,42,0.98);
+      padding:12px 13px;
+      font-size:12px;
     }
-
     .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(94,234,212,0.6);
-      background: rgba(45,212,191,0.16);
-      color: #e0f2fe;
-      font-size: 11px;
-      margin-bottom: 6px;
+      display:inline-flex; align-items:center; gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(94,234,212,0.6);
+      background:rgba(45,212,191,0.16);
+      color:#e0f2fe;
+      font-size:11px;
+      margin-bottom:6px;
     }
 
     /* Footer */
     .footer {
-      margin-top: 28px;
-      padding: 14px 4px 4px;
-      font-size: 11px;
-      color: var(--text-soft);
-      text-align: center;
+      margin-top:28px;
+      padding:14px 4px 4px;
+      font-size:11px;
+      color:var(--text-soft);
+      text-align:center;
     }
+    .footer a { color:#a5b4fc; }
 
-    .footer a {
-      color: #a5b4fc;
+    /* Responsive */
+    @media (max-width: 960px) {
+      .hero { grid-template-columns:minmax(0,1fr); }
+      .hero-card { order:-1; }
+    }
+    @media (max-width: 800px) {
+      .steps-grid { grid-template-columns:minmax(0,1fr); }
+      .faq-grid { grid-template-columns:minmax(0,1fr); }
+    }
+    @media (max-width: 640px) {
+      .topbar { flex-wrap:wrap; border-radius:20px; padding:10px 12px; }
+      .hero { margin-top:24px; }
+      .hero-main-title { font-size:26px; }
     }
   </style>
 </head>
@@ -670,16 +355,16 @@
           <div class="brand-logo">B</div>
           <div class="brand-text">
             <div class="brand-name">BIKA STORE</div>
-            <div class="brand-sub">Game Top-up & Telegram Services</div>
+            <div class="brand-sub">MLBB Diamonds & PUBG UC</div>
           </div>
         </div>
         <nav class="top-nav">
-          <button class="top-link" onclick="scrollToId('products')">Packages</button>
+          <button class="top-link" onclick="scrollToId('products')">Price List</button>
           <button class="top-link" onclick="scrollToId('steps')">How to order</button>
           <button class="top-link" onclick="scrollToId('faq')">FAQ</button>
-          <a class="top-cta" href="https://t.me/BIKA_Store_Bot" target="_blank" rel="noopener">
+          <a class="top-cta" href="https://t.me/BikaStoreBot?start=from_website" target="_blank" rel="noopener">
             <span>↗</span>
-            Open Telegram Bot
+            Open @BikaStoreBot
           </a>
         </nav>
       </header>
@@ -688,27 +373,26 @@
       <section class="hero">
         <div>
           <h1 class="hero-main-title">
-            <span class="hero-gradient">Fast & trusted</span><br/>
-            top-up for your games.
+            <span class="hero-gradient">Fast & trusted top-up</span><br/>
+            for MLBB & PUBG players.
           </h1>
           <p class="hero-subtitle">
-            BIKA STORE က MLBB Diamonds, PUBG UC, Magic Chess Diamonds, Telegram Premium,
-            Telegram Stars စတဲ့ digital items တွေကို Telegram bot မှတစ်ဆင့်
-            မြန်မြန်ဆန်ဆန် top-up ပေးနေပါတယ်။
+            BIKA STORE က MLBB Diamonds & Weekly Pass နဲ့ PUBG UC / Prime ကို
+            <strong>@BikaStoreBot</strong> မှတစ်ဆင့် မြန်မြန်ဆန်ဆန် top-up ပေးနေပါတယ်။
+            ငွေပေးချေပြီး slip ပို့လိုက်ရင် Admin က confirm လုပ်ပေးပြီး gameထဲအတွင်းချိန်တိုင်းထဲမှာရောက်လာပါမယ်။
           </p>
 
           <div class="hero-tags">
-            <div class="tag"><strong>MLBB</strong> Diamonds & Weekly Pass</div>
-            <div class="tag"><strong>PUBG</strong> UC</div>
-            <div class="tag"><strong>Telegram</strong> Premium & Stars</div>
+            <div class="tag"><strong>MLBB</strong> Diamonds & Pass</div>
+            <div class="tag"><strong>PUBG</strong> UC & Prime</div>
           </div>
 
           <div class="hero-actions">
-            <a class="btn-primary" href="https://t.me/BIKA_Store_Bot" target="_blank" rel="noopener">
+            <a class="btn-primary" href="https://t.me/BikaStoreBot?start=from_website" target="_blank" rel="noopener">
               🚀 Start order in Telegram
             </a>
-            <button class="btn-outline" onclick="scrollToId('steps')">
-              📋 အော်ဒါတင်နည်း ကြည့်မယ်
+            <button class="btn-outline" onclick="scrollToId('products')">
+              💰 Price List ကြည့်မယ်
             </button>
           </div>
 
@@ -717,12 +401,12 @@
               <div class="hero-meta-dot"></div>
               <span>Online • auto reply bot</span>
             </div>
-            <span>Average delivery: 5–15 mins (depending on game)</span>
+            <span>Average delivery: 5–15 mins (server ပိုင်းပေါ်မူတည်)</span>
           </div>
         </div>
 
         <aside class="hero-card">
-          <div class="hero-card-title">Live from Telegram bot</div>
+          <div class="hero-card-title">BIKA STORE Status</div>
           <div class="hero-stat-grid">
             <div class="mini-stat">
               <div class="mini-label">Total orders (bot)</div>
@@ -731,14 +415,14 @@
             </div>
             <div class="mini-stat">
               <div class="mini-label">Main services</div>
-              <div class="mini-value">MLBB · PUBG · TG</div>
+              <div class="mini-value">MLBB · PUBG</div>
               <div class="mini-chip" style="border-color:rgba(129,140,248,0.7);background:rgba(79,70,229,0.32);color:#e0e7ff;">
                 🔒 Payment slip confirm
               </div>
             </div>
           </div>
           <div class="hero-card-footer">
-            <span>Connected bot: <span class="highlight">@BIKA_Store_Bot</span></span>
+            <span>Connected bot: <span class="highlight">@BikaStoreBot</span></span>
             <span>Environment: <span class="highlight">Production</span></span>
           </div>
         </aside>
@@ -748,269 +432,105 @@
       <section id="products" class="section">
         <div class="section-header">
           <div class="section-title-block">
-            <div class="section-eyebrow">Services</div>
-            <div class="section-title">Available packages</div>
+            <div class="section-eyebrow">Price List</div>
+            <div class="section-title">MLBB & PUBG Official Rates</div>
             <div class="section-sub">
-              Telegram bot ထဲက real package များကို website ပေါ်မှာ အကျဉ်းချုပ်ပြသထားပါတယ်။
+              တကယ်သုံးမယ့်စျေးနဲ့ တိတိကျကျသတ်မှတ်ထားတဲ့ price list ကို အောက်မှာကြည့်နိုင်ပါတယ်။
             </div>
           </div>
           <div class="section-badge">
-            Updated from BIKA Store bot · MMK
+            Updated from BIKA Store Bot • Ks
           </div>
         </div>
 
         <div class="product-tabs">
-          <button class="product-tab active" data-tab="mlbb" onclick="selectTab('mlbb')">💎 MLBB Diamonds</button>
-          <button class="product-tab" data-tab="pubg" onclick="selectTab('pubg')">🎯 PUBG UC</button>
-          <button class="product-tab" data-tab="magicchess" onclick="selectTab('magicchess')">♟ Magic Chess</button>
-          <button class="product-tab" data-tab="tgpremium" onclick="selectTab('tgpremium')">⭐ Telegram Premium</button>
-          <button class="product-tab" data-tab="tgstar" onclick="selectTab('tgstar')">✨ Telegram Stars</button>
+          <button class="product-tab active" data-tab="mlbb" onclick="selectTab('mlbb')">💎 MLBB Diamonds & Pass</button>
+          <button class="product-tab" data-tab="pubg" onclick="selectTab('pubg')">🎯 PUBG UC & Prime</button>
         </div>
 
-        <!-- MLBB -->
-        <div class="product-grid product-panel" data-panel="mlbb">
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">86 Diamonds</div>
-                <div class="product-price">1,800 MMK</div>
-              </div>
-              <div class="product-tagline">Best for small top-up | global server</div>
-              <div class="product-chip-row">
-                <div class="chip highlight">🔥 Popular</div>
-                <div class="chip">Approx 1–5 mins</div>
-              </div>
-              <div class="product-foot">
-                <span>Min. order: 1×</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">172 Diamonds</div>
-                <div class="product-price">3,600 MMK</div>
-              </div>
-              <div class="product-tagline">Weekly pass / small skins</div>
-              <div class="product-chip-row">
-                <div class="chip">Bonus points</div>
-                <div class="chip">Low risk</div>
-              </div>
-              <div class="product-foot">
-                <span>Need ID + Server</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">257 Diamonds</div>
-                <div class="product-price">5,400 MMK</div>
-              </div>
-              <div class="product-tagline">Event / small bundle</div>
-              <div class="product-chip-row">
-                <div class="chip">Safe top-up</div>
-                <div class="chip">Fast delivery</div>
-              </div>
-              <div class="product-foot">
-                <span>Manual confirm</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">344 Diamonds</div>
-                <div class="product-price">7,200 MMK</div>
-              </div>
-              <div class="product-tagline">Bigger skins / events</div>
-              <div class="product-chip-row">
-                <div class="chip highlight">Best value</div>
-                <div class="chip">For regular players</div>
-              </div>
-              <div class="product-foot">
-                <span>Limited promo</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
+        <!-- MLBB table -->
+        <div class="product-panel" data-panel="mlbb">
+          <div class="price-table-wrap">
+            <table class="price-table">
+              <thead>
+                <tr>
+                  <th>MLBB Package</th>
+                  <th>Price (Ks)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>11 Diamonds</td><td>800</td></tr>
+                <tr><td>22 Diamonds</td><td>1,600</td></tr>
+                <tr><td>33 Diamonds</td><td>2,350</td></tr>
+                <tr><td>55 Diamonds</td><td>3,600</td></tr>
+                <tr><td>86 Diamonds</td><td>4,800</td></tr>
+                <tr><td>112 Diamonds</td><td>8,200</td></tr>
+                <tr><td>172 Diamonds</td><td>9,800</td></tr>
+                <tr><td>257 Diamonds</td><td>14,500</td></tr>
+                <tr><td>343 Diamonds</td><td>20,000</td></tr>
+                <tr><td>429 Diamonds</td><td>25,000</td></tr>
+                <tr><td>514 Diamonds</td><td>29,900</td></tr>
+                <tr><td>600 Diamonds</td><td>34,500</td></tr>
+                <tr><td>706 Diamonds</td><td>39,900</td></tr>
+                <tr><td>792 Diamonds</td><td>44,500</td></tr>
+                <tr><td>878 Diamonds</td><td>48,500</td></tr>
+                <tr><td>963 Diamonds</td><td>53,000</td></tr>
+                <tr><td>1049 Diamonds</td><td>59,900</td></tr>
+                <tr><td>1135 Diamonds</td><td>63,500</td></tr>
+                <tr><td>1412 Diamonds</td><td>77,000</td></tr>
+                <tr><td>1584 Diamonds</td><td>88,000</td></tr>
+                <tr><td>1669 Diamonds</td><td>94,000</td></tr>
+                <tr><td>2195 Diamonds</td><td>118,900</td></tr>
+                <tr><td>3158 Diamonds</td><td>172,000</td></tr>
+                <tr><td>3688 Diamonds</td><td>202,000</td></tr>
+                <tr><td>4390 Diamonds</td><td>237,000</td></tr>
+                <tr><td>5100 Diamonds</td><td>280,000</td></tr>
+                <tr><td>5532 Diamonds</td><td>300,000</td></tr>
+                <tr><td>6055 Diamonds</td><td>330,000</td></tr>
+                <tr><td>Weekly Pass 1 (wp1)</td><td>5,900</td></tr>
+                <tr><td>Weekly Pass 2 (wp2)</td><td>11,800</td></tr>
+                <tr><td>Weekly Pass 3 (wp3)</td><td>17,700</td></tr>
+                <tr><td>Weekly Pass 4 (wp4)</td><td>23,600</td></tr>
+                <tr><td>Weekly Pass 5 (wp5)</td><td>29,500</td></tr>
+                <tr><td>WEB (web)</td><td>3,500</td></tr>
+                <tr><td>MEB (meb)</td><td>16,500</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="price-note">
+            💡 MLBB အတွက် Game ID + Server + Player Name လိုအပ်ပါတယ်။ Price တွေကို အမြဲနီးပါး update ထားပေမယ့်
+            promotion ကြောင့်တချို့ package တွေစျေးနည်း/စျေးမြင့် ပြောင်းလဲနိုင်ပါတယ် – အတိအကျသေချာချင်ရင်
+            bot ထဲက order တင်မလုပ်ခင် စစ်ပေးရင်ပိုကောင်းမယ်။
+          </p>
         </div>
 
-        <!-- PUBG -->
-        <div class="product-grid product-panel" data-panel="pubg" style="display:none;">
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">60 UC</div>
-                <div class="product-price">1,800 MMK</div>
-              </div>
-              <div class="product-tagline">Small test top-up</div>
-              <div class="product-chip-row">
-                <div class="chip">Global / KR</div>
-                <div class="chip">Email / ID required</div>
-              </div>
-              <div class="product-foot">
-                <span>Delivery: 5–15 mins</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">325 UC</div>
-                <div class="product-price">9,000 MMK</div>
-              </div>
-              <div class="product-tagline">RP & classic crates</div>
-              <div class="product-chip-row">
-                <div class="chip highlight">Most chosen</div>
-                <div class="chip">Safe payment</div>
-              </div>
-              <div class="product-foot">
-                <span>WavePay / KBZ Pay</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">660 UC</div>
-                <div class="product-price">18,000 MMK</div>
-              </div>
-              <div class="product-tagline">Bundles & big crate opening</div>
-              <div class="product-chip-row">
-                <div class="chip">High value</div>
-                <div class="chip">Trusted seller</div>
-              </div>
-              <div class="product-foot">
-                <span>Manual verification</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-        </div>
-
-        <!-- Magic Chess -->
-        <div class="product-grid product-panel" data-panel="magicchess" style="display:none;">
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">100 Diamonds</div>
-                <div class="product-price">2,000 MMK</div>
-              </div>
-              <div class="product-tagline">Board skin / emotes</div>
-              <div class="product-chip-row">
-                <div class="chip">Magic Chess mode</div>
-                <div class="chip">Fast processing</div>
-              </div>
-              <div class="product-foot">
-                <span>Top-up via ID</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">200 Diamonds</div>
-                <div class="product-price">4,000 MMK</div>
-              </div>
-              <div class="product-tagline">Bigger bundles</div>
-              <div class="product-chip-row">
-                <div class="chip highlight">Top choice</div>
-              </div>
-              <div class="product-foot">
-                <span>Event ready</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-        </div>
-
-        <!-- Telegram Premium -->
-        <div class="product-grid product-panel" data-panel="tgpremium" style="display:none;">
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">Premium – 1 Month</div>
-                <div class="product-price">8,000 MMK</div>
-              </div>
-              <div class="product-tagline">Official Telegram subscription</div>
-              <div class="product-chip-row">
-                <div class="chip highlight">Gift available</div>
-                <div class="chip">Ad-free · 4 GB files</div>
-              </div>
-              <div class="product-foot">
-                <span>Need @username only</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">Premium – 3 Months</div>
-                <div class="product-price">22,000 MMK</div>
-              </div>
-              <div class="product-tagline">Long-term users</div>
-              <div class="product-chip-row">
-                <div class="chip">Save more</div>
-                <div class="chip">Trusted seller</div>
-              </div>
-              <div class="product-foot">
-                <span>Instant gift link</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-        </div>
-
-        <!-- Telegram Stars -->
-        <div class="product-grid product-panel" data-panel="tgstar" style="display:none;">
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">100 Stars</div>
-                <div class="product-price">1,500 MMK</div>
-              </div>
-              <div class="product-tagline">Test for mini apps / bots</div>
-              <div class="product-chip-row">
-                <div class="chip">Creator support</div>
-              </div>
-              <div class="product-foot">
-                <span>Pay via Wave / KBZ</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-inner">
-              <div class="product-meta">
-                <div class="product-name">300 Stars</div>
-                <div class="product-price">4,500 MMK</div>
-              </div>
-              <div class="product-tagline">More power for bots</div>
-              <div class="product-chip-row">
-                <div class="chip highlight">Best for creators</div>
-              </div>
-              <div class="product-foot">
-                <span>Support your fav bots</span>
-                <span class="link">Order in bot ↗</span>
-              </div>
-            </div>
-          </article>
+        <!-- PUBG table -->
+        <div class="product-panel" data-panel="pubg" style="display:none;">
+          <div class="price-table-wrap">
+            <table class="price-table">
+              <thead>
+                <tr>
+                  <th>PUBG Package</th>
+                  <th>Price (Ks)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>60 UC</td><td>4,500</td></tr>
+                <tr><td>325 UC</td><td>19,500</td></tr>
+                <tr><td>660 UC</td><td>38,000</td></tr>
+                <tr><td>1800 UC</td><td>90,500</td></tr>
+                <tr><td>3850 UC</td><td>185,000</td></tr>
+                <tr><td>8100 UC</td><td>363,000</td></tr>
+                <tr><td>Prime 1 Month</td><td>4,500</td></tr>
+                <tr><td>Prime Plus</td><td>39,500</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="price-note">
+            💡 PUBG UC အတွက် Region အလိုက် အချက်အလက် (Game ID / Character ID / Login method) တချို့
+            ဖော်ပြပေးရပါမယ်။ Prime / Prime Plus တွေကလည်း official subscription ဖြစ်ပြီး
+            Admin က သေချာအတည်ပြုပေးပါမယ်။
+          </p>
         </div>
       </section>
 
@@ -1022,7 +542,7 @@
             <div class="section-title">BIKA Store မှာ အော်ဒါတင်နည်း (Telegram)</div>
           </div>
           <div class="section-badge">
-            Payment via KBZ Pay · WavePay · Others
+            Payment via KBZ Pay · WavePay
           </div>
         </div>
 
@@ -1031,31 +551,28 @@
             <div class="step-number">1</div>
             <div class="step-title">Telegram bot ကိုဖွင့်</div>
             <p class="step-text">
-              <a href="https://t.me/BIKA_Store_Bot" target="_blank" rel="noopener">@BIKA_Store_Bot</a>
-              ကိုဖွင့်ပြီး <strong>Browse Items</strong> ကိုနှိပ်ပါ။<br/>
-              MLBB, PUBG, Magic Chess, Telegram Premium & Stars ထဲက ဆိုက်ရွေးနိုင်ပါတယ်။
+              <a href="https://t.me/BikaStoreBot?start=from_website" target="_blank" rel="noopener">@BikaStoreBot</a>
+              ကိုနှိပ်ဖွင့်ပါ။<br/>
+              Bot ထဲက **Browse Items** ကိုနှိပ်ပြီး MLBB / PUBG ထဲကလိုချင်တဲ့ game ကိုရွေးပါ။
             </p>
           </article>
 
           <article class="step-card">
             <div class="step-number">2</div>
-            <div class="step-title">Game ID / Player name ပေး</div>
+            <div class="step-title">ID & Player Name ဖြည့်</div>
             <p class="step-text">
-              ရွေးထားတဲ့ package နဲ့အတူ Bot က မင်းရဲ့ <strong>Game ID</strong>,
-              <strong>Player Name</strong>, <strong>Phone / Telegram</strong> စတဲ့ info
-              လေးတွေမေးရင် တိတိကျကျဖြည့်ပေးပါ။<br/>
-              ထို့နောက် Order summary ကို Confirm လုပ်ပါ။
+              ရွေးထားတဲ့ package နဲ့အတူ Bot က မင်းရဲ့ **Game ID / Player Name / Phone / Telegram** ဆိုတဲ့
+              အချက်အလက်တွေကို မေးလာပါမယ်။ တိတိကျကျ ဖြည့်ပေးပြီး Order summary ကိုစစ်ချင်ရင် စစ်ကြည့်ပါ။
             </p>
           </article>
 
           <article class="step-card">
             <div class="step-number">3</div>
-            <div class="step-title">ငွေပေးချေပြီး Slip ပို့</div>
+            <div class="step-title">ငွေလွှဲ & Slip ပို့</div>
             <p class="step-text">
-              Bot ထဲက ပြထားတဲ့ <strong>Payment instructions</strong> ကိုကြည့်ပြီး
-              KBZ Pay / WavePay နဲ့ ငွေလွှဲပါ။<br/>
-              ပြီးရင် <strong>"I have paid"</strong> ကိုနှိပ်ပြီး Slip ပို့လိုက်ရင်
-              Admin က အတည်ပြုပေးပြီး game ထဲအတွင်း top-up လာပါမယ်။
+              Bot ထဲက **Payment instructions** အတိုင်း KBZ Pay / WavePay နဲ့ ငွေလွှဲပါ။<br/>
+              ပြီးရင် **"I have paid"** ကိုနှိပ်ပြီး slip ပို့လိုက်ရင် Admin က confirm လုပ်ပေးပြီး
+              game ထဲမှာ item တွေ လာပါမယ်။
             </p>
           </article>
         </div>
@@ -1085,16 +602,16 @@
             <div class="faq-item">
               <div class="faq-q">Q: Payment method ဘာတွေထောက်ပံ့လဲ?</div>
               <div class="faq-a">
-                A: KBZ Pay, WavePay နဲ့ တခြား Local wallet မျိုးတွေကို Admin က ဆက်လက်ထည့်ပေးသွားပါမယ်။
-                ယခင် အော်ဒါတွေက slip confirm ဖြစ်ဖူးတဲ့ customer တွေအများကြီးရှိပြီးသားပါ။
+                A: KBZ Pay, WavePay စတဲ့ Local wallet မျိုးတွေကို အသုံးပြုပါတယ်။ Payment slip
+                ကို Bot ထဲပို့ပေးရင် Admin Panel ထဲမှာအလိုအလျောက် မှတ်တမ်းသွင်းထားပါတယ်။
               </div>
             </div>
             <div class="faq-item">
               <div class="faq-q">Q: Scam မဖြစ်လား?</div>
               <div class="faq-a">
-                A: BIKA STORE Bot ထဲကတော့ Admin Panel, Order Log, Payment confirmation system
-                လုပ်ထားပြီး order တစ်ပုဒ်စီကို ID နဲ့ သေချာမှတ်တမ်းထည့်ထားပါတယ်။
-                မသက်မသာဖြစ်ရင် လက်ရှိအော်ဒါအခြေအနေကို Admin ဆီ တိုက်ရိုက်အမေးဝင်လို့ရပါတယ်။
+                A: BIKA Store Bot ထဲမှာ Order ID, Payment confirmation, CSV Export စနစ်တွေ
+                ထည့်သွင်းထားပြီး Order တစ်ပုဒ်စီကို မှတ်တမ်းသေချာထားပါတယ်။
+                မသက်မသာ ဖြစ်ရင်လည်း Admin ကို တိုက်ရိုက် DM လုပ်ပြီး အခြေနေ စစ်လို့ရပါတယ်။
               </div>
             </div>
           </div>
@@ -1105,16 +622,16 @@
               <span>Contact admin</span>
             </div>
             <p style="margin-top:4px;margin-bottom:8px;">
-              Special package (အကြီးမြတ် diamond, UC bundle, Telegram Premium လများ) တွေ
-              သီးသန့်စျေးနှုန်းစုံစမ်းရင် Telegram မှာ တိုက်ရိုက် DM လုပ်လို့ရပါတယ်။
+              Special package (ကြီးမားတဲ့ Diamonds / UC bundles / long-term Prime) တွေ သီးသန့်စျေးနှုန်း
+              စုံစမ်းချင်ရင် Telegram မှာ တိုက်ရိုက် DM လုပ်လို့ရပါတယ်။
             </p>
 
             <p class="faq-a">
-              • Telegram bot: <a href="https://t.me/BIKA_Store_Bot" target="_blank" rel="noopener">@BIKA_Store_Bot</a><br/>
-              • Admin (DM): <em>Bot ထဲက contact info ကို လိုက်ကြည့်နိုင်ပါတယ်</em>
+              • Telegram bot: <a href="https://t.me/BikaStoreBot?start=from_website" target="_blank" rel="noopener">@BikaStoreBot</a><br/>
+              • Admin (DM): <em>Bot ထဲက contact info ကို လိုက်ကြည့်နိုင်ပါတယ်</em>
             </p>
 
-            <a class="btn-primary" style="margin-top:10px;" href="https://t.me/BIKA_Store_Bot" target="_blank" rel="noopener">
+            <a class="btn-primary" style="margin-top:10px;" href="https://t.me/BikaStoreBot?start=from_website" target="_blank" rel="noopener">
               🔗 Open BIKA Store Bot
             </a>
           </aside>
@@ -1123,7 +640,7 @@
 
       <!-- Footer -->
       <footer class="footer">
-        © <span id="year"></span> BIKA STORE · Powered by Telegram bot · Hosted on GitHub Pages
+        © <span id="year"></span> BIKA STORE · Powered by @BikaStoreBot · Hosted on GitHub Pages
         <br/>
         <small>Design inspired by BIKA Admin Dashboard (dark neon theme).</small>
       </footer>
@@ -1141,7 +658,7 @@
         btn.classList.toggle("active", btn.dataset.tab === key);
       });
       document.querySelectorAll(".product-panel").forEach(panel => {
-        panel.style.display = panel.dataset.panel === key ? "grid" : "none";
+        panel.style.display = panel.dataset.panel === key ? "block" : "none";
       });
     }
 
