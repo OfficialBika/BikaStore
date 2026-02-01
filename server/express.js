@@ -1,25 +1,22 @@
-// server/express.js — Express Server + Webhook Setup
+// src/server/express.js
 
 const express = require("express");
-const { bot } = require("../bot/bot");
-const { WEBHOOK_SECRET } = require("../config/env");
+const bodyParser = require("body-parser");
+const { bot } = require("../../bot");
 
 const app = express();
-app.use(express.json());
 
-const routePath = `/webhook/${WEBHOOK_SECRET}`;
+// Use JSON parser for incoming webhook updates
+app.use(bodyParser.json());
 
 // Webhook endpoint
-app.post(routePath, (req, res) => {
-  bot.handleUpdate(req.body, res);
+app.post("/webhook", (req, res) => {
+  try {
+    bot.processUpdate(req.body);
+  } catch (err) {
+    console.error("Error handling webhook:", err);
+  }
+  res.sendStatus(200);
 });
 
-// Health check route
-app.get("/", (req, res) => {
-  res.send("✅ BIKA Store Bot Webhook is running.");
-});
-
-module.exports = {
-  app,
-  routePath,
-};
+module.exports = { app };
