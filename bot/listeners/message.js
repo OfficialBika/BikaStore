@@ -1,13 +1,26 @@
-// bot/listeners/message.js — Handle Text Messages
+// bot/listeners/message.js — Handle incoming messages (text, screenshot, etc)
 
-const { bot } = require("../bot"); const { mentionUserHTML } = require("../../utils/html");
+const { bot } = require("../bot");
+const { Order } = require("../../models/Order");
+const { isPhoto } = require("../../utils/helpers");
 
-bot.on("message", async (ctx) => { const { message, from } = ctx;
+bot.on("message", async (msg) => {
+  const cid = msg.chat.id;
+  const uid = String(msg.from.id);
 
-// Only respond to text messages if (!message.text) return;
+  // Only process photo or caption as proof of payment
+  const isProof = msg.photo || (msg.document && msg.caption);
 
-const mention = mentionUserHTML(from); const text = message.text.trim();
+  if (!isProof) return;
 
-// Example greeting auto-reply if (/(hi|hello|hey|မင်္ဂလာပါ)/i.test(text)) { return bot.sendMessage( message.chat.id, 👋 မင်္ဂလာပါ ${mention}! Bika Store Bot မှကြိုဆိုပါတယ်။\n/menu မှာ သုံးနိုင်တဲ့ပစ္စည်းစာရင်းတွေရှိပါတယ်။, { parse_mode: "HTML" } ); }
+  const order = await Order.findOne({ userId: uid, status: "PENDING" }).sort({ createdAt: -1 });
+  if (!order) return;
 
-// Unknown message fallback return bot.sendMessage( message.chat.id, 🤖 မသိသော command တစ်ခုဖြစ်နေပါတယ်။ /start နဲ့စပြီးအသုံးပြုနိုင်ပါတယ်။ ); });
+  order.paymentProof = isPhoto(msg) ? msg.photo.at(-1).file_id : msg.document?.file_id;
+  order.status = "WAITING";
+  await order.save();
+
+  await bot.sendMessage(cid, "📩 Payment proof accepted. Admin will verify soon.", {
+    parse_mode: "HTML",
+  });
+});
