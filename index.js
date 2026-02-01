@@ -1,413 +1,186 @@
-// =========================
-// BIKA Store Bot - index.js
-// All-in-one Telegram Store Bot
-// Features:
-//  - Beautiful main menu (Professional Plus / Elegant + Detailed)
-//  - Game items store (MLBB Diamonds, PUBG UC, Magic Chess, Telegram Premium, Telegram Stars)
-//  - Order flow (item -> player info -> confirm -> payment details -> "I've Paid")
-//  - Admin panel (inside Telegram)
-//  - Promotions management
-//  - Order log & payment confirmation UI
-//  - Order Detail UI for admins
-//  - CSV export of all orders
-// =========================
+'use strict';
 
-require('dotenv').config();
+/**
+ * BIKA STORE BOT - Full index.js
+ * Single-file Telegram store bot for MLBB & PUBG
+ *
+ * ENV:
+ *  - TELEGRAM_BOT_TOKEN
+ *  - ADMIN_IDS  (comma separated user IDs, e.g. 123,456)
+ *  - STORE_CURRENCY (optional, default 'Ks')
+ */
+
 const TelegramBot = require('node-telegram-bot-api');
 
-// ----- Basic Config -----
-const token = process.env.BOT_TOKEN;
-if (!token) {
-  throw new Error('Missing BOT_TOKEN in .env');
+// ====== ENV ======
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
+if (!BOT_TOKEN || BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
+  console.warn('⚠️ Please set TELEGRAM_BOT_TOKEN in your environment!');
 }
 
-// Comma separated admin user IDs: ADMIN_IDS=123456789,987654321
+const STORE_CURRENCY = process.env.STORE_CURRENCY || 'Ks';
 const ADMIN_IDS = (process.env.ADMIN_IDS || '')
   .split(',')
   .map((id) => id.trim())
-  .filter(Boolean)
-  .map((id) => Number(id));
+  .filter((id) => id.length > 0);
 
-const PAYMENT_TEXT =
-  process.env.PAYMENT_TEXT ||
-  [
-    '🧾 Payment Instructions',
-    '',
-    'KBZ Pay : 09xxxxxxxxx',
-    'WavePay : 09yyyyyyyyy',
-    'KPay    : 09zzzzzzzzz',
-    '',
-    '💡 Note: Please send correct slip & in-game ID.',
-  ].join('\n');
+// ====== BOT INIT ======
+const bot = new TelegramBot(BOT_TOKEN, {
+  polling: true,
+});
 
-const STORE_CURRENCY = process.env.STORE_CURRENCY || 'MMK';
+// ====== IN-MEMORY DATA ======
 
-const bot = new TelegramBot(token, { polling: true });
+/**
+ * Session per user:
+ * {
+ *   step: 'WAIT_CATEGORY' | 'WAIT_GAME_ID' | 'WAIT_PLAYER_NAME' | 'WAIT_CONTACT' | null,
+ *   orderDraft: {...}
+ * }
+ */
+const sessions = new Map();
 
-// ----- In-memory Database (for demo / single-file version) -----
-// In production, replace with a real database.
-
-// All users that ever started the bot (for broadcast)
-const knownUserIds = new Set();
-
-// Auto-increment order ID
-let orderIdCounter = 1;
-
-// Order structure example:
-// {
-//   id: 1,
-//   userId: 123456,
-//   username: 'bika',
-//   firstName: 'Bika',
-//   categoryKey: 'mlbb',
-//   packageId: 'mlbb_86',
-//   packageName: '86 Diamonds',
-//   price: 1800,
-//   currency: 'MMK',
-//   gameId: '12345678',
-//   playerName: 'MyName',
-//   contact: '09xxxxxxxxx',
-//   status: 'AWAITING_PAYMENT' | 'PENDING_CONFIRMATION' | 'COMPLETED' | 'REJECTED',
-//   createdAt: '2026-02-01T...',
-//   paidAt: null | '2026-02-01T...',
-//   confirmedAt: null | '2026-02-01T...',
-//   adminNote: ''
-// }
+/**
+ * Order model:
+ * {
+ *   id, userId, username, firstName,
+ *   categoryKey, packageId, packageName, price, currency,
+ *   gameId, playerName, contact,
+ *   status, createdAt, paidAt, confirmedAt, adminNote
+ * }
+ */
+let nextOrderId = 1;
 const orders = [];
 
-// Per-user state/session
-// userId => { step, tempOrderData, isEditingPromotion, isBroadcasting }
-const userSessions = new Map();
+/**
+ * Known users for broadcast
+ */
+const knownUserIds = new Set();
 
-// Promotion config
+/**
+ * Promotion config
+ */
 const promoConfig = {
   isActive: true,
   text:
-    '🎉 Welcome to BIKA Store – Special Promo!\n\n' +
-    'MLBB Diamonds, PUBG UC, Magic Chess, Telegram Premium & Telegram Stars with fast delivery.\n' +
-    'Order now and enjoy special service 💎',
+    '🎉 Welcome to BIKA Store – Game Top-up Promo!\n\n' +
+    'MLBB Diamonds & Weekly Pass နှင့် PUBG UC ကို Telegram Bot လေးကနေပဲ မြန်မြန်ဆန်ဆန် top-up ပေးနေပါတယ်။\n' +
+    'Order တင်ချင်ရင် Browse Items ကိုနှိပ်ပြီး package ရွေးပေးလိုက်ရုံပါ 💎🎯',
 };
 
-// ----- Store Items / Categories -----
+// ====== STORE CATEGORIES (MLBB + PUBG) ======
 
 const CATEGORIES = {
   mlbb: {
     key: 'mlbb',
-    name: 'MLBB Diamonds',
-    description: 'Mobile Legends: Bang Bang top up service.',
+    name: 'MLBB Diamonds & Pass',
+    description: 'Mobile Legends: Bang Bang – Diamonds and Weekly Pass.',
     emoji: '💎',
     packages: [
-      { id: 'mlbb_86', name: '86 Diamonds', price: 1800 },
-      { id: 'mlbb_172', name: '172 Diamonds', price: 3600 },
-      { id: 'mlbb_257', name: '257 Diamonds', price: 5400 },
-      { id: 'mlbb_344', name: '344 Diamonds', price: 7200 },
+      // Diamonds
+      { id: 'mlbb_11', name: '11 Diamonds', price: 800 },
+      { id: 'mlbb_22', name: '22 Diamonds', price: 1600 },
+      { id: 'mlbb_33', name: '33 Diamonds', price: 2350 },
+      { id: 'mlbb_55', name: '55 Diamonds', price: 3600 },
+      { id: 'mlbb_86', name: '86 Diamonds', price: 4800 },
+      { id: 'mlbb_112', name: '112 Diamonds', price: 8200 },
+      { id: 'mlbb_172', name: '172 Diamonds', price: 9800 },
+      { id: 'mlbb_257', name: '257 Diamonds', price: 14500 },
+      { id: 'mlbb_343', name: '343 Diamonds', price: 20000 },
+      { id: 'mlbb_429', name: '429 Diamonds', price: 25000 },
+      { id: 'mlbb_514', name: '514 Diamonds', price: 29900 },
+      { id: 'mlbb_600', name: '600 Diamonds', price: 34500 },
+      { id: 'mlbb_706', name: '706 Diamonds', price: 39900 },
+      { id: 'mlbb_792', name: '792 Diamonds', price: 44500 },
+      { id: 'mlbb_878', name: '878 Diamonds', price: 48500 },
+      { id: 'mlbb_963', name: '963 Diamonds', price: 53000 },
+      { id: 'mlbb_1049', name: '1049 Diamonds', price: 59900 },
+      { id: 'mlbb_1135', name: '1135 Diamonds', price: 63500 },
+      { id: 'mlbb_1412', name: '1412 Diamonds', price: 77000 },
+      { id: 'mlbb_1584', name: '1584 Diamonds', price: 88000 },
+      { id: 'mlbb_1669', name: '1669 Diamonds', price: 94000 },
+      { id: 'mlbb_2195', name: '2195 Diamonds', price: 118900 },
+      { id: 'mlbb_3158', name: '3158 Diamonds', price: 172000 },
+      { id: 'mlbb_3688', name: '3688 Diamonds', price: 202000 },
+      { id: 'mlbb_4390', name: '4390 Diamonds', price: 237000 },
+      { id: 'mlbb_5100', name: '5100 Diamonds', price: 280000 },
+      { id: 'mlbb_5532', name: '5532 Diamonds', price: 300000 },
+      { id: 'mlbb_6055', name: '6055 Diamonds', price: 330000 },
+
+      // Weekly / special
+      { id: 'mlbb_wp1', name: 'Weekly Pass 1 (wp1)', price: 5900 },
+      { id: 'mlbb_wp2', name: 'Weekly Pass 2 (wp2)', price: 11800 },
+      { id: 'mlbb_wp3', name: 'Weekly Pass 3 (wp3)', price: 17700 },
+      { id: 'mlbb_wp4', name: 'Weekly Pass 4 (wp4)', price: 23600 },
+      { id: 'mlbb_wp5', name: 'Weekly Pass 5 (wp5)', price: 29500 },
+      { id: 'mlbb_web', name: 'WEB Pack (web)', price: 3500 },
+      { id: 'mlbb_meb', name: 'MEB Pack (meb)', price: 16500 },
     ],
   },
+
   pubg: {
     key: 'pubg',
-    name: 'PUBG UC',
-    description: 'PlayerUnknown’s Battlegrounds UC top up.',
+    name: 'PUBG UC & Prime',
+    description: 'PUBG Mobile – UC top-up and Prime subscriptions.',
     emoji: '🎯',
     packages: [
-      { id: 'pubg_60', name: '60 UC', price: 1800 },
-      { id: 'pubg_325', name: '325 UC', price: 9000 },
-      { id: 'pubg_660', name: '660 UC', price: 18000 },
-    ],
-  },
-  magicchess: {
-    key: 'magicchess',
-    name: 'Magic Chess Diamonds',
-    description: 'Magic Chess Diamond top up.',
-    emoji: '♟️',
-    packages: [
-      { id: 'mc_100', name: '100 Diamonds', price: 2000 },
-      { id: 'mc_200', name: '200 Diamonds', price: 4000 },
-    ],
-  },
-  tgpremium: {
-    key: 'tgpremium',
-    name: 'Telegram Premium',
-    description: 'Official Telegram Premium subscription.',
-    emoji: '⭐',
-    packages: [
-      { id: 'tg_prem_1m', name: 'Premium – 1 Month', price: 8000 },
-      { id: 'tg_prem_3m', name: 'Premium – 3 Months', price: 22000 },
-    ],
-  },
-  tgstar: {
-    key: 'tgstar',
-    name: 'Telegram Stars',
-    description: 'Telegram Stars for bots & mini-apps.',
-    emoji: '✨',
-    packages: [
-      { id: 'tg_star_100', name: '100 Stars', price: 1500 },
-      { id: 'tg_star_300', name: '300 Stars', price: 4500 },
+      { id: 'pubg_60', name: '60 UC', price: 4500 },
+      { id: 'pubg_325', name: '325 UC', price: 19500 },
+      { id: 'pubg_660', name: '660 UC', price: 38000 },
+      { id: 'pubg_1800', name: '1800 UC', price: 90500 },
+      { id: 'pubg_3850', name: '3850 UC', price: 185000 },
+      { id: 'pubg_8100', name: '8100 UC', price: 363000 },
+      { id: 'pubg_prime1m', name: 'Prime 1 Month', price: 4500 },
+      { id: 'pubg_primeplus', name: 'Prime Plus', price: 39500 },
     ],
   },
 };
 
-// ----- Helpers -----
+// Convenience list
+const CATEGORY_LIST = Object.values(CATEGORIES);
+
+// ====== UTILITIES ======
 
 function isAdmin(userId) {
-  return ADMIN_IDS.includes(Number(userId));
+  return ADMIN_IDS.includes(String(userId));
 }
 
-function formatPrice(amount) {
-  if (amount == null) return '-';
-  // Simple formatting with thousands separators
-  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ' + STORE_CURRENCY;
-}
-
-function getUserSession(userId) {
-  if (!userSessions.has(userId)) {
-    userSessions.set(userId, {
-      step: null,
-      tempOrderData: null,
-      isEditingPromotion: false,
-      isBroadcasting: false,
-    });
-  }
-  return userSessions.get(userId);
+function formatPrice(value) {
+  if (typeof value !== 'number') return value;
+  return value.toLocaleString('en-US') + ' ' + STORE_CURRENCY;
 }
 
 function resetUserSession(userId) {
-  userSessions.set(userId, {
-    step: null,
-    tempOrderData: null,
-    isEditingPromotion: false,
-    isBroadcasting: false,
-  });
+  sessions.delete(userId);
 }
 
-function buildMainMenu(isAdminUser) {
-  const keyboard = [
-    [
-      { text: '🛍 Browse Items', callback_data: 'm:browse' },
-      { text: '🎉 Promotions', callback_data: 'm:promos' },
-    ],
-    [
-      { text: '📦 My Orders', callback_data: 'm:myorders' },
-    ],
-    [
-      { text: '❓ Help', callback_data: 'm:help' },
-    ],
-  ];
-
-  if (isAdminUser) {
-    keyboard.push([
-      { text: '🛠 Admin Panel', callback_data: 'admin:panel' },
-    ]);
+function getUserSession(userId, createIfMissing = false) {
+  if (!sessions.has(userId) && createIfMissing) {
+    sessions.set(userId, { step: null, orderDraft: null });
   }
-
-  return {
-    reply_markup: {
-      inline_keyboard: keyboard,
-    },
-  };
+  return sessions.get(userId) || null;
 }
 
-function buildCategoryKeyboard() {
-  const rows = [];
-  Object.values(CATEGORIES).forEach((cat) => {
-    rows.push([
-      {
-        text: cat.emoji + ' ' + cat.name,
-        callback_data: 'cat:' + cat.key,
-      },
-    ]);
-  });
-  rows.push([{ text: '⬅️ Back to Main Menu', callback_data: 'm:main' }]);
-  return {
-    reply_markup: {
-      inline_keyboard: rows,
-    },
-  };
+function generateOrderId() {
+  const id = nextOrderId;
+  nextOrderId += 1;
+  return id;
 }
 
-function buildPackagesKeyboard(categoryKey) {
-  const cat = CATEGORIES[categoryKey];
-  if (!cat) {
-    return {
-      reply_markup: {
-        inline_keyboard: [[{ text: '⬅️ Back', callback_data: 'm:browse' }]],
-      },
-    };
-  }
-
-  const rows = cat.packages.map((pkg) => [
-    {
-      text: pkg.name + ' – ' + formatPrice(pkg.price),
-      callback_data: 'item:' + categoryKey + ':' + pkg.id,
-    },
-  ]);
-
-  rows.push([{ text: '⬅️ Back to Categories', callback_data: 'm:browse' }]);
-
-  return {
-    reply_markup: {
-      inline_keyboard: rows,
-    },
-  };
+function formatDateTime(dt) {
+  if (!dt) return '-';
+  if (typeof dt === 'string') dt = new Date(dt);
+  if (!(dt instanceof Date)) return String(dt);
+  return dt.toLocaleString('en-GB');
 }
 
-function buildOrderConfirmKeyboard() {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '✅ Confirm Order', callback_data: 'order:confirm' },
-          { text: '❌ Cancel', callback_data: 'order:cancel' },
-        ],
-      ],
-    },
-  };
+function shortUserLabel(order) {
+  const name = order.firstName || order.username || order.userId;
+  return `${name}`;
 }
 
-function buildOrderPaymentKeyboard(orderId) {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: '📸 I have paid (Send slip)',
-            callback_data: 'order:paid:' + orderId,
-          },
-        ],
-        [{ text: '⬅️ Back to Main Menu', callback_data: 'm:main' }],
-      ],
-    },
-  };
-}
+// ====== CSV Export Helpers ======
 
-function buildAdminPanelKeyboard() {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '📋 Recent Orders', callback_data: 'admin:orders' },
-          { text: '⏳ Pending Payments', callback_data: 'admin:pending' },
-        ],
-        [
-          { text: '🎯 Promotions', callback_data: 'admin:promo' },
-          { text: '📣 Broadcast Promo', callback_data: 'admin:broadcast' },
-        ],
-        [
-          { text: '📄 Export Orders (CSV)', callback_data: 'admin:export_csv' },
-        ],
-        [{ text: '⬅️ Back to Main Menu', callback_data: 'm:main' }],
-      ],
-    },
-  };
-}
-
-function buildAdminOrderActionKeyboard(orderId) {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: '✅ Confirm Payment',
-            callback_data: 'admin:ok:' + orderId,
-          },
-          {
-            text: '❌ Reject Payment',
-            callback_data: 'admin:reject:' + orderId,
-          },
-        ],
-      ],
-    },
-  };
-}
-
-function buildAdminOrderDetailKeyboard(order) {
-  const rows = [];
-  if (order.status === 'PENDING_CONFIRMATION' || order.status === 'AWAITING_PAYMENT') {
-    rows.push([
-      {
-        text: '✅ Confirm Payment',
-        callback_data: 'admin:ok:' + order.id,
-      },
-      {
-        text: '❌ Reject Payment',
-        callback_data: 'admin:reject:' + order.id,
-      },
-    ]);
-  }
-  rows.push([{ text: '⬅️ Back to Admin', callback_data: 'admin:panel' }]);
-  return {
-    reply_markup: {
-      inline_keyboard: rows,
-    },
-  };
-}
-
-function buildPromoAdminKeyboard() {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: promoConfig.isActive ? '🔴 Disable Promo' : '🟢 Enable Promo',
-            callback_data: 'admin:promo_toggle',
-          },
-        ],
-        [
-          {
-            text: '✏️ Edit Text',
-            callback_data: 'admin:promo_edit',
-          },
-        ],
-        [{ text: '⬅️ Back to Admin', callback_data: 'admin:panel' }],
-      ],
-    },
-  };
-}
-
-// Format single order as text
-function formatOrder(order) {
-  const cat = CATEGORIES[order.categoryKey];
-  const catName = cat ? cat.name : order.categoryKey;
-  let statusEmoji;
-  if (order.status === 'COMPLETED') statusEmoji = '✅';
-  else if (order.status === 'PENDING_CONFIRMATION') statusEmoji = '⏳';
-  else if (order.status === 'AWAITING_PAYMENT') statusEmoji = '💸';
-  else statusEmoji = '❌';
-
-  const lines = [
-    statusEmoji + ' Order #' + order.id,
-    '• Item : ' + catName + ' - ' + order.packageName,
-    '• Price: ' + formatPrice(order.price),
-    '• Game ID   : ' + order.gameId,
-    '• Player    : ' + order.playerName,
-    '• Contact   : ' + (order.contact || '-'),
-    '• Status    : ' + order.status,
-    '• CreatedAt : ' + order.createdAt,
-  ];
-
-  if (order.paidAt) {
-    lines.push('• PaidAt    : ' + order.paidAt);
-  }
-  if (order.confirmedAt) {
-    lines.push('• DoneAt    : ' + order.confirmedAt);
-  }
-
-  return lines.join('\n');
-}
-
-// Detailed order text (with user info, for admin)
-function formatOrderDetail(order) {
-  const base = formatOrder(order);
-  const extra = [
-    '',
-    '👤 Customer:',
-    '• User ID   : ' + order.userId,
-    '• Username  : ' + (order.username ? '@' + order.username : '(none)'),
-    '• FirstName : ' + (order.firstName || '(none)'),
-  ];
-  return base + '\n' + extra.join('\n');
-}
-
-// CSV helpers
 function escapeCSVValue(value) {
   if (value === null || value === undefined) return '';
   const str = String(value);
@@ -467,7 +240,179 @@ function ordersToCSV() {
   return lines.join('\n');
 }
 
-// ----- Main Menu -----
+// ====== UI BUILDERS ======
+
+function buildMainMenu(isAdminUser) {
+  const keyboard = [
+    [
+      { text: '🛍 Browse Items', callback_data: 'm:browse' },
+      { text: '📦 My Orders', callback_data: 'm:orders' },
+    ],
+    [{ text: '❓ Help', callback_data: 'm:help' }],
+  ];
+  if (promoConfig.isActive && promoConfig.text) {
+    keyboard.unshift([{ text: '🎉 Promo', callback_data: 'm:promo' }]);
+  }
+  if (isAdminUser) {
+    keyboard.push([{ text: '🛠 Admin Panel', callback_data: 'admin:panel' }]);
+  }
+
+  return {
+    reply_markup: {
+      inline_keyboard: keyboard,
+    },
+  };
+}
+
+function buildCategoryKeyboard() {
+  const rows = CATEGORY_LIST.map((cat) => [
+    {
+      text: `${cat.emoji} ${cat.name}`,
+      callback_data: `cat:${cat.key}:1`, // page 1
+    },
+  ]);
+  rows.push([{ text: '⬅️ Back to Main Menu', callback_data: 'm:main' }]);
+  return {
+    reply_markup: {
+      inline_keyboard: rows,
+    },
+  };
+}
+
+function buildPackagesKeyboard(categoryKey, page = 1, pageSize = 6) {
+  const cat = CATEGORIES[categoryKey];
+  if (!cat) return { reply_markup: { inline_keyboard: [] } };
+
+  const start = (page - 1) * pageSize;
+  const items = cat.packages.slice(start, start + pageSize);
+  const rows = items.map((pkg) => [
+    {
+      text: `${pkg.name} – ${formatPrice(pkg.price)}`,
+      callback_data: `pkg:${categoryKey}:${pkg.id}`,
+    },
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(cat.packages.length / pageSize));
+  const navRow = [];
+
+  if (page > 1) {
+    navRow.push({
+      text: '« Prev',
+      callback_data: `cat:${categoryKey}:${page - 1}`,
+    });
+  }
+  if (page < totalPages) {
+    navRow.push({
+      text: 'Next »',
+      callback_data: `cat:${categoryKey}:${page + 1}`,
+    });
+  }
+  if (navRow.length) rows.push(navRow);
+
+  rows.push([{ text: '⬅️ Back to Categories', callback_data: 'm:browse' }]);
+
+  return {
+    reply_markup: {
+      inline_keyboard: rows,
+    },
+  };
+}
+
+function buildAdminPanelKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '📋 Recent Orders', callback_data: 'admin:orders' },
+          { text: '⏳ Pending Payments', callback_data: 'admin:pending' },
+        ],
+        [
+          { text: '🎯 Promotions', callback_data: 'admin:promo' },
+          { text: '📣 Broadcast Promo', callback_data: 'admin:broadcast' },
+        ],
+        [
+          { text: '📄 Export Orders (CSV)', callback_data: 'admin:export_csv' },
+        ],
+        [{ text: '⬅️ Back to Main Menu', callback_data: 'm:main' }],
+      ],
+    },
+  };
+}
+
+function formatOrderSummary(order, options = {}) {
+  const showStatus = options.showStatus !== false;
+  const lines = [];
+  lines.push(`🧾 **Order #${order.id}**`);
+  if (showStatus) {
+    lines.push(`Status: \`${order.status}\``);
+  }
+  lines.push('');
+  lines.push(`Game: ${order.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'}`);
+  lines.push(`Package: ${order.packageName}`);
+  lines.push(`Price: ${formatPrice(order.price)}`);
+  lines.push('');
+  lines.push(`Game ID: \`${order.gameId || '-'}\``);
+  lines.push(`Player Name: ${order.playerName || '-'}`);
+  lines.push(`Contact: ${order.contact || '-'}`);
+  lines.push('');
+  lines.push(`Created at: ${formatDateTime(order.createdAt)}`);
+  if (order.paidAt) lines.push(`Paid at: ${formatDateTime(order.paidAt)}`);
+  if (order.confirmedAt) lines.push(`Confirmed at: ${formatDateTime(order.confirmedAt)}`);
+  if (order.adminNote) lines.push(`Admin note: ${order.adminNote}`);
+  return lines.join('\n');
+}
+
+function buildOrderDetailKeyboard(order, forAdmin) {
+  const rows = [];
+
+  if (forAdmin) {
+    if (order.status === 'PENDING_PAYMENT') {
+      rows.push([
+        {
+          text: 'Mark as Paid & Pending',
+          callback_data: `admin:markpaid:${order.id}`,
+        },
+      ]);
+    }
+    if (order.status === 'PENDING_CONFIRMATION') {
+      rows.push([
+        {
+          text: '✅ Mark as Completed',
+          callback_data: `admin:complete:${order.id}`,
+        },
+        {
+          text: '❌ Reject Order',
+          callback_data: `admin:reject:${order.id}`,
+        },
+      ]);
+    }
+  } else {
+    if (order.status === 'PENDING_PAYMENT') {
+      rows.push([
+        {
+          text: '💰 I have paid',
+          callback_data: `payment:paid:${order.id}`,
+        },
+      ]);
+    }
+  }
+
+  rows.push([
+    {
+      text: '⬅️ Back',
+      callback_data: forAdmin ? 'admin:orders' : 'm:orders',
+    },
+  ]);
+
+  return {
+    reply_markup: {
+      inline_keyboard: rows,
+    },
+    parse_mode: 'Markdown',
+  };
+}
+
+// ====== MESSAGES ======
 
 async function sendWelcome(chatId, user) {
   const isAdminUser = isAdmin(user.id);
@@ -476,12 +421,11 @@ async function sendWelcome(chatId, user) {
     '',
     'Game Items & Digital Services:',
     '• MLBB Diamonds & Weekly Pass',
-    '• PUBG UC',
-    '• Magic Chess Diamonds',
-    '• Telegram Premium',
-    '• Telegram Stars',
+    '• PUBG UC & Prime',
     '',
-    'Choose from the menu below to start your order ✨',
+    'Telegram Bot ကနေပဲ မြန်မြန်ဆန်ဆန် top-up ပေးနေတာဖြစ်ပါတယ်။',
+    '',
+    'အောက်က Menu ထဲက **🛍 Browse Items** ကိုနှိပ်ပြီး အော်ဒါတင်ရအောင် ✨',
   ];
 
   await bot.sendMessage(chatId, lines.join('\n'), {
@@ -490,660 +434,838 @@ async function sendWelcome(chatId, user) {
   });
 }
 
-// ----- Telegram Handlers -----
+async function sendPaymentInstructions(chatId, order) {
+  const lines = [];
+  lines.push(`💰 **Payment Instructions for Order #${order.id}**`);
+  lines.push('');
+  lines.push(`Amount to pay: *${formatPrice(order.price)}*`);
+  lines.push('');
+  lines.push('📌 Payment channels (example):');
+  lines.push('- KBZ Pay');
+  lines.push('- WavePay');
+  lines.push('- (Admin will specify exact account)');
+  lines.push('');
+  lines.push(
+    'ငွေလွှဲပြီးသွားရင် အောက်က **"I have paid"** button ကိုနှိပ်ပြီး slip ကို Bot ထဲပို့ပေးပါ။'
+  );
 
-// /start
-bot.onText(/\/start/, async (msg) => {
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '💰 I have paid', callback_data: `payment:paid:${order.id}` }],
+        [{ text: '❌ Cancel Order', callback_data: `order:cancel:${order.id}` }],
+      ],
+    },
+  });
+}
+
+// ====== BOT HANDLERS ======
+
+// /start with optional payload (/start from_website)
+bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
 
   knownUserIds.add(userId);
   resetUserSession(userId);
 
+  const payloadRaw = match && match[1] ? match[1].trim() : '';
+  const payload = payloadRaw ? payloadRaw.split(' ')[0] : '';
+
+  if (payload === 'from_website') {
+    await bot.sendMessage(
+      chatId,
+      '🌐 BIKA STORE Website ကနေ ဝင်လာတာကို ကြိုဆိုင်စွာကြိုဆိုပါတယ်!\n\n' +
+        'အော်ဒါတင်ရန်အတွက် အောက်က Menu ထဲက **🛍 Browse Items** ကိုနှိပ်ပြီး ' +
+        'MLBB Diamonds / Weekly Pass သို့မဟုတ် PUBG UC ကိုရွေးပြီး ဆက်လုပ်ပေးပါ 😊',
+      { parse_mode: 'Markdown' }
+    );
+  }
+
   await sendWelcome(chatId, msg.from);
 });
 
-// /menu
+// /menu shortcut
 bot.onText(/\/menu/, async (msg) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
-  const isAdminUser = isAdmin(userId);
-  await bot.sendMessage(
-    chatId,
-    '📋 Main Menu – What would you like to do?',
-    buildMainMenu(isAdminUser)
-  );
+  const isAdminUser = isAdmin(msg.from.id);
+  resetUserSession(msg.from.id);
+  await bot.sendMessage(chatId, '🏠 Main menu', buildMainMenu(isAdminUser));
 });
 
-// /admin
-bot.onText(/\/admin/, async (msg) => {
-  const chatId = msg.chat.id;
+// /setpromo <text> (admin only, quick edit)
+bot.onText(/\/setpromo(?:\s+([\s\S]+))?/, async (msg, match) => {
   const userId = msg.from.id;
+  if (!isAdmin(userId)) return;
 
-  if (!isAdmin(userId)) {
+  const chatId = msg.chat.id;
+  const text = match && match[1] ? match[1].trim() : '';
+
+  if (!text) {
     await bot.sendMessage(
       chatId,
-      '🚫 You are not allowed to access the admin panel.'
+      'Usage: `/setpromo your promotion text...`\n\nCurrent promo:\n' +
+        (promoConfig.text || '_none_'),
+      { parse_mode: 'Markdown' }
     );
     return;
   }
 
-  await bot.sendMessage(
-    chatId,
-    '🛠 Admin Panel – Choose an option:',
-    buildAdminPanelKeyboard()
-  );
+  promoConfig.text = text;
+  promoConfig.isActive = true;
+
+  await bot.sendMessage(chatId, '✅ Promotion text updated & enabled.');
 });
 
-// Generic message handler (for steps like asking ID, name, etc.)
+// Text messages for steps
 bot.on('message', async (msg) => {
-  try {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
+  if (!msg.text || msg.text.startsWith('/')) return;
 
-    // Ignore non-private or command-only messages here
-    if (msg.chat.type !== 'private') return;
-    if (!msg.text) return;
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
 
-    // Commands are already handled above
-    if (msg.text.startsWith('/')) return;
+  // track known users
+  knownUserIds.add(userId);
 
-    const session = getUserSession(userId);
+  const session = getUserSession(userId, false);
+  if (!session || !session.step) {
+    return; // no active flow
+  }
 
-    // Admin: editing promotion text
-    if (session.isEditingPromotion && isAdmin(userId)) {
-      promoConfig.text = msg.text;
-      session.isEditingPromotion = false;
-      await bot.sendMessage(
-        chatId,
-        '✅ Promotion text updated.',
-        buildPromoAdminKeyboard()
-      );
-      return;
-    }
+  const text = msg.text.trim();
 
-    // Admin: broadcast text (optional separate content)
-    if (session.isBroadcasting && isAdmin(userId)) {
-      session.isBroadcasting = false;
+  if (session.step === 'WAIT_GAME_ID') {
+    session.orderDraft.gameId = text;
+    session.step = 'WAIT_PLAYER_NAME';
 
-      const textToBroadcast = msg.text;
-      if (!textToBroadcast || !textToBroadcast.trim()) {
-        await bot.sendMessage(
-          chatId,
-          '⚠️ Empty message. Broadcast cancelled.'
-        );
-        return;
+    await bot.sendMessage(
+      chatId,
+      '👤 Player Name ထည့်ပေးပါ (in-game မှာမြင်ရတဲ့နာမည်။)',
+      {
+        reply_markup: {
+          keyboard: [[{ text: '❌ Cancel' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
       }
+    );
+    return;
+  }
 
-      let success = 0;
-      for (const uid of knownUserIds) {
-        try {
-          await bot.sendMessage(uid, textToBroadcast);
-          success += 1;
-        } catch (e) {
-          // ignore individual errors
-        }
+  if (session.step === 'WAIT_PLAYER_NAME') {
+    session.orderDraft.playerName = text;
+    session.step = 'WAIT_CONTACT';
+
+    await bot.sendMessage(
+      chatId,
+      '📱 Contact / Phone / Telegram link ထည့်ပေးပါ (သတ်မှတ်စေချင်တဲ့နံပါတ်။)',
+      {
+        reply_markup: {
+          keyboard: [[{ text: '❌ Cancel' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
       }
+    );
+    return;
+  }
 
-      await bot.sendMessage(
-        chatId,
-        '📣 Broadcast complete. Sent to ' + success + ' user(s).'
-      );
-      return;
-    }
-
-    // Customer order flow
-    if (!session.step) {
-      // No active flow -> ignore or gently remind
-      return;
-    }
-
-    if (session.step === 'WAITING_GAME_ID') {
-      session.tempOrderData.gameId = msg.text.trim();
-      session.step = 'WAITING_PLAYER_NAME';
-
-      await bot.sendMessage(
-        chatId,
-        '💳 Please send your **in-game name / nickname**.',
-        { parse_mode: 'Markdown' }
-      );
-      return;
-    }
-
-    if (session.step === 'WAITING_PLAYER_NAME') {
-      session.tempOrderData.playerName = msg.text.trim();
-      session.step = 'WAITING_CONTACT';
-
-      await bot.sendMessage(
-        chatId,
-        '📱 Please send your **Phone / Telegram contact** (or type "-" to skip).',
-        { parse_mode: 'Markdown' }
-      );
-      return;
-    }
-
-    if (session.step === 'WAITING_CONTACT') {
-      const contactText = msg.text.trim();
-      session.tempOrderData.contact = contactText === '-' ? '' : contactText;
-      session.step = 'WAITING_CONFIRM';
-
-      const temp = session.tempOrderData;
-      const cat = CATEGORIES[temp.categoryKey];
-
-      const summaryLines = [
-        '🧾 **Order Summary**',
-        '',
-        '• Item : ' + (cat ? cat.name : temp.categoryKey) + ' - ' + temp.packageName,
-        '• Price: ' + formatPrice(temp.price),
-        '',
-        '• Game ID : ' + temp.gameId,
-        '• Player  : ' + temp.playerName,
-        '• Contact : ' + (temp.contact || '-'),
-        '',
-        'If everything is correct, tap **Confirm Order** to receive payment details.',
-      ];
-
-      await bot.sendMessage(chatId, summaryLines.join('\n'), {
-        parse_mode: 'Markdown',
-        ...buildOrderConfirmKeyboard(),
+  if (session.step === 'WAIT_CONTACT') {
+    if (text === '❌ Cancel') {
+      resetUserSession(userId);
+      await bot.sendMessage(chatId, 'အော်ဒါကို ဖျက်ထားလိုက်ပြီ။', {
+        reply_markup: { remove_keyboard: true },
       });
-
       return;
     }
-  } catch (err) {
-    console.error('Error in message handler:', err);
+
+    session.orderDraft.contact = text;
+    session.step = 'WAIT_CONFIRM';
+    await bot.sendMessage(chatId, '✅ အချက်အလက်တွေကို အတည်ပြုပေးပါ...', {
+      reply_markup: { remove_keyboard: true },
+    });
+
+    const draft = session.orderDraft;
+    const summaryLines = [];
+    summaryLines.push('📦 **Confirm your order**');
+    summaryLines.push('');
+    summaryLines.push(
+      `Game: ${draft.categoryKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime'}`
+    );
+    summaryLines.push(`Package: ${draft.packageName}`);
+    summaryLines.push(`Price: ${formatPrice(draft.price)}`);
+    summaryLines.push('');
+    summaryLines.push(`Game ID: \`${draft.gameId}\``);
+    summaryLines.push(`Player Name: ${draft.playerName}`);
+    summaryLines.push(`Contact: ${draft.contact}`);
+    summaryLines.push('');
+    summaryLines.push('အထက်ပါအချက်အလက်တွေမှန်ကန်ရင် **Confirm** ကိုနှိပ်ပါ။');
+
+    await bot.sendMessage(chatId, summaryLines.join('\n'), {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✅ Confirm Order', callback_data: 'order:confirm' }],
+          [{ text: '❌ Cancel', callback_data: 'order:cancel_draft' }],
+        ],
+      },
+    });
+
+    return;
   }
 });
 
-// Callback queries (buttons)
+// ====== CALLBACK HANDLER ======
+
 bot.on('callback_query', async (query) => {
-  const data = query.data;
-  const msg = query.message;
-  const chatId = msg.chat.id;
-  const userId = query.from.id;
-
   try {
-    await bot.answerCallbackQuery(query.id);
+    const data = query.data || '';
+    const userId = query.from.id;
+    const chatId = query.message.chat.id;
+    const msgId = query.message.message_id;
 
-    // Main menu navigation
+    knownUserIds.add(userId);
+
+    // Helper functions
+    const acknowledge = () => bot.answerCallbackQuery(query.id).catch(() => {});
+    const isAdminUser = isAdmin(userId);
+
+    // Main navigation
     if (data === 'm:main') {
       resetUserSession(userId);
-      await sendWelcome(chatId, query.from);
+      await acknowledge();
+      await bot.editMessageText('🏠 Main menu', {
+        chat_id: chatId,
+        message_id: msgId,
+        ...buildMainMenu(isAdminUser),
+      });
+      return;
+    }
+
+    if (data === 'm:help') {
+      await acknowledge();
+      const lines = [
+        '❓ **How to Order (BIKA STORE)**',
+        '',
+        '1️⃣ **Browse Items** ကိုနှိပ်ပါ',
+        '2️⃣ ထဲကနေ **MLBB** (Diamonds / Pass) နဲ့ **PUBG UC** ထဲကလိုချင်တာရွေးပါ',
+        '3️⃣ Bot က မေးတဲ့ **Game ID / Player Name / Contact** တွေကို ဖြည့်ပေးပါ',
+        '4️⃣ Order summary ကို စစ်ပြီး **Confirm Order** ကိုနှိပ်ပါ',
+        '5️⃣ Payment info အတိုင်း KBZ Pay / WavePay နဲ့ ငွေလွှဲပါ',
+        '6️⃣ ပြီးသွားရင် **"I have paid"** ကိုနှိပ်ပြီး slip ပို့ပေးပါ',
+        '',
+        'Admin က payment confirm လုပ်ပြီး game ထဲက item တွေကို မြန်မြန်ပို့ပေးပါမယ် 💨',
+      ];
+      await bot.editMessageText(lines.join('\n'), {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+        ...buildMainMenu(isAdminUser),
+      });
+      return;
+    }
+
+    if (data === 'm:promo') {
+      await acknowledge();
+      const text =
+        (promoConfig.isActive ? '🎉 **Promotion is active**\n\n' : 'ℹ️ Promotion is currently off.\n\n') +
+        (promoConfig.text || 'No promotion text yet.');
+      await bot.editMessageText(text, {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+        ...buildMainMenu(isAdminUser),
+      });
       return;
     }
 
     if (data === 'm:browse') {
       resetUserSession(userId);
-      await bot.sendMessage(
-        chatId,
-        '🛍 Choose a category:',
-        buildCategoryKeyboard()
-      );
+      await acknowledge();
+      const lines = [
+        '🛍 **Browse Items**',
+        '',
+        'MLBB နဲ့ PUBG UC အတွက် လက်ရှိရရှိနိုင်တဲ့ package တွေပါ။',
+      ];
+      await bot.editMessageText(lines.join('\n'), {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+        ...buildCategoryKeyboard(),
+      });
       return;
     }
 
-    if (data === 'm:promos') {
-      const lines = [];
+    if (data === 'm:orders') {
+      await acknowledge();
+      const userOrders = orders
+        .filter((o) => o.userId === userId)
+        .sort((a, b) => b.id - a.id)
+        .slice(0, 10);
 
-      lines.push('🎉 Promotions');
-      lines.push('');
-
-      if (promoConfig.isActive && promoConfig.text) {
-        lines.push(promoConfig.text);
-      } else {
-        lines.push('No active promotion at the moment.');
+      if (!userOrders.length) {
+        await bot.editMessageText('📦 မင်းနဲ့ပတ်သက်တဲ့ order မရှိသေးပါ။', {
+          chat_id: chatId,
+          message_id: msgId,
+          ...buildMainMenu(isAdminUser),
+        });
+        return;
       }
 
-      await bot.sendMessage(chatId, lines.join('\n'), {
+      const lines = [];
+      lines.push('📦 **Your Recent Orders**');
+      lines.push('');
+      userOrders.forEach((o) => {
+        lines.push(
+          `#${o.id} • ${o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'} • ${o.packageName} • ${formatPrice(
+            o.price
+          )}`
+        );
+        lines.push(`   Status: ${o.status}`);
+      });
+      lines.push('');
+      lines.push('Order တစုံတခုကို အသေးစိတ်ကြည့်ချင်ရင် Admin ကို မေးနိုင်ပါတယ် (version simple).');
+
+      await bot.editMessageText(lines.join('\n'), {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+        ...buildMainMenu(isAdminUser),
+      });
+      return;
+    }
+
+    // Category pagination: cat:<key>:<page>
+    if (data.startsWith('cat:')) {
+      await acknowledge();
+      const [, key, pageStr] = data.split(':');
+      const page = parseInt(pageStr, 10) || 1;
+      const cat = CATEGORIES[key];
+
+      if (!cat) return;
+
+      const text = `**${cat.emoji} ${cat.name}**\n\n${cat.description}\n\nPackage တစ်ခုရွေးချယ်ပါ။`;
+      await bot.editMessageText(text, {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+        ...buildPackagesKeyboard(key, page),
+      });
+      return;
+    }
+
+    // Package selected: pkg:<catKey>:<pkgId>
+    if (data.startsWith('pkg:')) {
+      await acknowledge();
+
+      const parts = data.split(':');
+      const catKey = parts[1];
+      const pkgId = parts[2];
+
+      const cat = CATEGORIES[catKey];
+      if (!cat) return;
+      const pkg = cat.packages.find((p) => p.id === pkgId);
+      if (!pkg) return;
+
+      const session = getUserSession(userId, true);
+      session.step = 'WAIT_GAME_ID';
+      session.orderDraft = {
+        categoryKey: catKey,
+        packageId: pkg.id,
+        packageName: pkg.name,
+        price: pkg.price,
+        currency: STORE_CURRENCY,
+        gameId: '',
+        playerName: '',
+        contact: '',
+      };
+
+      const lines = [];
+      lines.push('📝 **Order Form**');
+      lines.push('');
+      lines.push(
+        `Game: ${catKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime'}\nPackage: ${
+          pkg.name
+        }\nPrice: ${formatPrice(pkg.price)}`
+      );
+      lines.push('');
+      lines.push('အရင်ဆုံး **Game ID** ထည့်ပေးပါ (MLBB / PUBG အတွက် in-game ID).');
+
+      await bot.editMessageText(lines.join('\n'), {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+      });
+
+      await bot.sendMessage(chatId, '👉 Game ID ကို ရိုက်ထည့်ပေးပါ။', {
         reply_markup: {
-          inline_keyboard: [[{ text: '⬅️ Back to Main Menu', callback_data: 'm:main' }]],
+          keyboard: [[{ text: '❌ Cancel' }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
         },
       });
 
       return;
     }
 
-    if (data === 'm:myorders') {
-      const myOrders = orders
-        .filter((o) => o.userId === userId)
-        .sort((a, b) => b.id - a.id)
-        .slice(0, 10);
-
-      if (!myOrders.length) {
-        await bot.sendMessage(chatId, '📦 You have no orders yet.');
-        return;
-      }
-
-      const lines = ['📦 Your recent orders:', ''];
-      myOrders.forEach((o) => {
-        lines.push(formatOrder(o));
-        lines.push(''); // spacing
-      });
-
-      await bot.sendMessage(chatId, lines.join('\n'));
-      return;
-    }
-
-    if (data === 'm:help') {
-      const lines = [
-        '❓ **How to Order**',
-        '',
-        '1️⃣ Tap **Browse Items**',
-        '2️⃣ Choose your game / item',
-        '3️⃣ Select the package you want',
-        '4️⃣ Send your in-game ID & name',
-        '5️⃣ Confirm order & see payment details',
-        '6️⃣ Pay and tap **I have paid**',
-        '',
-        'Admin will confirm your payment and deliver as fast as possible 💨',
-      ];
-      await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
-      return;
-    }
-
-    // Category selected
-    if (data.startsWith('cat:')) {
-      resetUserSession(userId);
-
-      const categoryKey = data.split(':')[1];
-      const cat = CATEGORIES[categoryKey];
-      if (!cat) {
-        await bot.sendMessage(
-          chatId,
-          '⚠️ Unknown category. Please try again.',
-          buildCategoryKeyboard()
-        );
-        return;
-      }
-
-      const lines = [
-        cat.emoji + ' *' + cat.name + '*',
-        '',
-        cat.description,
-        '',
-        'Choose a package:',
-      ];
-
-      await bot.sendMessage(chatId, lines.join('\n'), {
-        parse_mode: 'Markdown',
-        ...buildPackagesKeyboard(categoryKey),
-      });
-
-      return;
-    }
-
-    // Item selected
-    if (data.startsWith('item:')) {
-      const parts = data.split(':');
-      const categoryKey = parts[1];
-      const packageId = parts[2];
-      const cat = CATEGORIES[categoryKey];
-      if (!cat) {
-        await bot.sendMessage(chatId, '⚠️ Category not found.');
-        return;
-      }
-      const pkg = cat.packages.find((p) => p.id === packageId);
-      if (!pkg) {
-        await bot.sendMessage(chatId, '⚠️ Package not found.');
-        return;
-      }
-
-      const session = getUserSession(userId);
-      session.step = 'WAITING_GAME_ID';
-      session.tempOrderData = {
-        categoryKey,
-        packageId,
-        packageName: pkg.name,
-        price: pkg.price,
-      };
-
-      const lines = [
-        '🧾 You selected:',
-        '',
-        '• Item : ' + cat.name + ' - ' + pkg.name,
-        '• Price: ' + formatPrice(pkg.price),
-        '',
-        'Please send your **in-game ID**.',
-      ];
-
-      await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
-      return;
-    }
-
-    // Order confirm / cancel (from summary)
+    // Order confirm / cancel (draft)
     if (data === 'order:confirm') {
-      const session = getUserSession(userId);
-      if (!session.tempOrderData || session.step !== 'WAITING_CONFIRM') {
-        await bot.sendMessage(chatId, '⚠️ No order to confirm. Please start again.');
-        return;
-      }
+      await acknowledge();
+      const session = getUserSession(userId, false);
+      if (!session || !session.orderDraft) return;
 
-      const temp = session.tempOrderData;
-      const newOrder = {
-        id: orderIdCounter++,
+      const draft = session.orderDraft;
+      const order = {
+        id: generateOrderId(),
         userId,
         username: query.from.username || '',
         firstName: query.from.first_name || '',
-        categoryKey: temp.categoryKey,
-        packageId: temp.packageId,
-        packageName: temp.packageName,
-        price: temp.price,
-        currency: STORE_CURRENCY,
-        gameId: temp.gameId,
-        playerName: temp.playerName,
-        contact: temp.contact || '',
-        status: 'AWAITING_PAYMENT',
-        createdAt: new Date().toISOString(),
+        categoryKey: draft.categoryKey,
+        packageId: draft.packageId,
+        packageName: draft.packageName,
+        price: draft.price,
+        currency: draft.currency,
+        gameId: draft.gameId,
+        playerName: draft.playerName,
+        contact: draft.contact,
+        status: 'PENDING_PAYMENT',
+        createdAt: new Date(),
         paidAt: null,
         confirmedAt: null,
         adminNote: '',
       };
 
-      orders.push(newOrder);
-
-      // Clear session
+      orders.push(order);
       resetUserSession(userId);
 
-      const lines = [
-        '✅ Order #' + newOrder.id + ' created.',
-        '',
-        'Please pay using the details below and then tap **I have paid**.',
-        '',
-        PAYMENT_TEXT,
-      ];
+      await bot.editMessageText(
+        `✅ Order #${order.id} ကို ပြုလုပ်ပြီးပါပြီ!\n\nPayment instructions ကို အောက်တွင် ပို့ပေးမယ်။`,
+        {
+          chat_id: chatId,
+          message_id: msgId,
+        }
+      );
 
-      await bot.sendMessage(chatId, lines.join('\n'), {
-        parse_mode: 'Markdown',
-        ...buildOrderPaymentKeyboard(newOrder.id),
+      await sendPaymentInstructions(chatId, order);
+      return;
+    }
+
+    if (data === 'order:cancel_draft') {
+      await acknowledge();
+      resetUserSession(userId);
+      await bot.editMessageText('Order draft ကို ဖျက်ထားလိုက်ပါတယ်။', {
+        chat_id: chatId,
+        message_id: msgId,
+        ...buildMainMenu(isAdminUser),
       });
-
       return;
     }
 
-    if (data === 'order:cancel') {
-      resetUserSession(userId);
-      await bot.sendMessage(chatId, '❌ Order cancelled.');
+    if (data.startsWith('order:cancel:')) {
+      await acknowledge();
+      const [, , idStr] = data.split(':');
+      const orderId = parseInt(idStr, 10);
+      const order = orders.find((o) => o.id === orderId && o.userId === userId);
+      if (!order) return;
+
+      order.status = 'CANCELLED_BY_USER';
+
+      await bot.editMessageText('❌ Order ကို customer ထဲကနေ cancel လုပ်လိုက်ပြီ။', {
+        chat_id: chatId,
+        message_id: msgId,
+      });
       return;
     }
 
-    // User pressed "I have paid"
-    if (data.startsWith('order:paid:')) {
-      const orderId = Number(data.split(':')[2]);
+    // Payment: user says "I have paid"
+    if (data.startsWith('payment:paid:')) {
+      await acknowledge();
+      const [, , idStr] = data.split(':');
+      const orderId = parseInt(idStr, 10);
       const order = orders.find((o) => o.id === orderId);
-      if (!order || order.userId !== userId) {
-        await bot.sendMessage(chatId, '⚠️ Order not found.');
+      if (!order || order.userId !== userId) return;
+
+      if (order.status !== 'PENDING_PAYMENT') {
+        await bot.answerCallbackQuery(query.id, { text: 'This order is not awaiting payment.', show_alert: true });
         return;
       }
 
       order.status = 'PENDING_CONFIRMATION';
-      order.paidAt = new Date().toISOString();
+      order.paidAt = new Date();
 
-      await bot.sendMessage(
-        chatId,
-        '⏳ Thank you! Your payment for Order #' + order.id + ' is pending admin confirmation.'
+      await bot.editMessageText(
+        `✅ Order #${order.id} အတွက် "I have paid" ကို လက်ခံရရှိပါပြီ။\nAdmin က slip ကို စစ်ဆေးပြီး Confirm လုပ်ပေးမယ်။`,
+        {
+          chat_id: chatId,
+          message_id: msgId,
+        }
       );
 
       // Notify admins
-      const textForAdmin =
-        '💰 New payment pending confirmation:\n\n' +
-        formatOrder(order) +
-        '\n\nUse the buttons below to confirm or reject.';
-
       for (const adminId of ADMIN_IDS) {
         try {
-          await bot.sendMessage(adminId, textForAdmin, buildAdminOrderActionKeyboard(order.id));
+          await bot.sendMessage(
+            adminId,
+            `💳 **Payment to confirm**\n\n${formatOrderSummary(order)}`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: '✅ Confirm (Complete)',
+                      callback_data: `admin:complete:${order.id}`,
+                    },
+                    {
+                      text: '❌ Reject',
+                      callback_data: `admin:reject:${order.id}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: '📄 View in Admin Panel',
+                      callback_data: `admin:order:${order.id}`,
+                    },
+                  ],
+                ],
+              },
+            }
+          );
         } catch (e) {
-          // ignore
+          console.error('Failed to notify admin', adminId, e.message);
         }
       }
-
       return;
     }
 
-    // ----- Admin Area -----
-    if (data === 'admin:panel') {
-      if (!isAdmin(userId)) {
-        await bot.sendMessage(chatId, '🚫 You are not an admin.');
+    // ====== ADMIN HANDLERS ======
+    if (data.startsWith('admin:')) {
+      if (!isAdminUser) {
+        await acknowledge();
         return;
       }
 
-      await bot.sendMessage(
-        chatId,
-        '🛠 Admin Panel – Choose an option:',
-        buildAdminPanelKeyboard()
-      );
-      return;
-    }
-
-    if (data === 'admin:orders') {
-      if (!isAdmin(userId)) return;
-
-      const recent = orders
-        .slice()
-        .sort((a, b) => b.id - a.id)
-        .slice(0, 15);
-
-      if (!recent.length) {
-        await bot.sendMessage(chatId, '📋 No orders yet.');
+      // admin:panel
+      if (data === 'admin:panel') {
+        await acknowledge();
+        await bot.editMessageText('🛠 **Admin Panel**', {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          ...buildAdminPanelKeyboard(),
+        });
         return;
       }
 
-      for (const o of recent) {
-        const text = formatOrder(o);
-        const keyboard = {
+      // admin:orders
+      if (data === 'admin:orders') {
+        await acknowledge();
+        const latest = orders.slice().sort((a, b) => b.id - a.id).slice(0, 15);
+        if (!latest.length) {
+          await bot.editMessageText('📋 Orders မရှိသေးပါ။', {
+            chat_id: chatId,
+            message_id: msgId,
+            ...buildAdminPanelKeyboard(),
+          });
+          return;
+        }
+
+        const lines = [];
+        lines.push('📋 **Recent Orders**');
+        lines.push('');
+        latest.forEach((o) => {
+          lines.push(
+            `#${o.id} • ${o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'} • ${o.packageName} • ${formatPrice(
+              o.price
+            )}`
+          );
+          lines.push(`   ${shortUserLabel(o)} • ${o.status}`);
+        });
+
+        await bot.editMessageText(lines.join('\n'), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          ...buildAdminPanelKeyboard(),
+        });
+        return;
+      }
+
+      // admin:pending
+      if (data === 'admin:pending') {
+        await acknowledge();
+        const pending = orders
+          .filter((o) => o.status === 'PENDING_CONFIRMATION')
+          .sort((a, b) => a.id - b.id);
+        if (!pending.length) {
+          await bot.editMessageText('⏳ Pending confirm orders မရှိသေးပါ။', {
+            chat_id: chatId,
+            message_id: msgId,
+            ...buildAdminPanelKeyboard(),
+          });
+          return;
+        }
+
+        const lines = [];
+        lines.push('⏳ **Pending Payments / Confirmation**');
+        lines.push('');
+        pending.forEach((o) => {
+          lines.push(
+            `#${o.id} • ${o.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'} • ${o.packageName} • ${formatPrice(
+              o.price
+            )}`
+          );
+          lines.push(`   ${shortUserLabel(o)} • Paid at: ${formatDateTime(o.paidAt)}`);
+        });
+
+        await bot.editMessageText(lines.join('\n'), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          ...buildAdminPanelKeyboard(),
+        });
+        return;
+      }
+
+      // admin:promo
+      if (data === 'admin:promo') {
+        await acknowledge();
+        const status = promoConfig.isActive ? 'ON ✅' : 'OFF ⏸';
+        const lines = [];
+        lines.push('🎯 **Promotion Settings**');
+        lines.push('');
+        lines.push(`Status: *${status}*`);
+        lines.push('');
+        lines.push(promoConfig.text || '_no promo text_');
+        lines.push('');
+        lines.push('Text ကိုပြင်ချင်ရင် `/setpromo your text` လို့သုံးနိုင်ပါတယ်။');
+
+        await bot.editMessageText(lines.join('\n'), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
               [
                 {
-                  text: '👁 View Detail',
-                  callback_data: 'admin:detail:' + o.id,
+                  text: promoConfig.isActive ? '⏸ Disable Promo' : '▶ Enable Promo',
+                  callback_data: 'admin:promo_toggle',
                 },
               ],
+              [{ text: '⬅️ Back', callback_data: 'admin:panel' }],
             ],
           },
-        };
-        await bot.sendMessage(chatId, text, keyboard);
-      }
-
-      return;
-    }
-
-    if (data === 'admin:pending') {
-      if (!isAdmin(userId)) return;
-
-      const pending = orders
-        .filter((o) => o.status === 'PENDING_CONFIRMATION')
-        .sort((a, b) => a.id - b.id)
-        .slice(0, 20);
-
-      if (!pending.length) {
-        await bot.sendMessage(chatId, '⏳ No pending payments.');
+        });
         return;
       }
 
-      for (const o of pending) {
-        await bot.sendMessage(
-          chatId,
-          formatOrder(o),
-          buildAdminOrderActionKeyboard(o.id)
+      if (data === 'admin:promo_toggle') {
+        await acknowledge();
+        promoConfig.isActive = !promoConfig.isActive;
+        const status = promoConfig.isActive ? 'ON ✅' : 'OFF ⏸';
+        await bot.editMessageText(
+          `🎯 Promotion status ကို *${status}* လို့ပြောင်းလိုက်ပြီးပါပြီ။`,
+          {
+            chat_id: chatId,
+            message_id: msgId,
+            parse_mode: 'Markdown',
+            ...buildAdminPanelKeyboard(),
+          }
         );
-      }
-
-      return;
-    }
-
-    if (data.startsWith('admin:detail:')) {
-      if (!isAdmin(userId)) return;
-
-      const orderId = Number(data.split(':')[2]);
-      const order = orders.find((o) => o.id === orderId);
-      if (!order) {
-        await bot.sendMessage(chatId, '⚠️ Order not found.');
         return;
       }
 
-      const text = '📄 Order Detail\n\n' + formatOrderDetail(order);
-      await bot.sendMessage(chatId, text, buildAdminOrderDetailKeyboard(order));
-      return;
-    }
+      // admin:broadcast
+      if (data === 'admin:broadcast') {
+        await acknowledge();
+        const count = knownUserIds.size;
+        const lines = [];
+        lines.push('📣 **Broadcast Promotion**');
+        lines.push('');
+        lines.push(`Recipients: *${count}* users`);
+        lines.push('');
+        lines.push('အောက်ပါ Promotion text ကိုပို့မယ်👇');
+        lines.push('');
+        lines.push(promoConfig.text || '_no promo_');
 
-    if (data.startsWith('admin:ok:')) {
-      if (!isAdmin(userId)) return;
-
-      const orderId = Number(data.split(':')[2]);
-      const order = orders.find((o) => o.id === orderId);
-      if (!order) {
-        await bot.sendMessage(chatId, '⚠️ Order not found.');
+        await bot.editMessageText(lines.join('\n'), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📣 Send now', callback_data: 'admin:broadcast_send' }],
+              [{ text: '⬅️ Back', callback_data: 'admin:panel' }],
+            ],
+          },
+        });
         return;
       }
 
-      order.status = 'COMPLETED';
-      order.confirmedAt = new Date().toISOString();
-
-      await bot.sendMessage(chatId, '✅ Order #' + order.id + ' marked as COMPLETED.');
-
-      // Notify customer
-      try {
-        await bot.sendMessage(
-          order.userId,
-          '🎉 Your Order #' + order.id + ' has been confirmed. Thank you for shopping with BIKA Store!'
-        );
-      } catch (e) {
-        // ignore
-      }
-
-      return;
-    }
-
-    if (data.startsWith('admin:reject:')) {
-      if (!isAdmin(userId)) return;
-
-      const orderId = Number(data.split(':')[2]);
-      const order = orders.find((o) => o.id === orderId);
-      if (!order) {
-        await bot.sendMessage(chatId, '⚠️ Order not found.');
-        return;
-      }
-
-      order.status = 'REJECTED';
-      order.confirmedAt = new Date().toISOString();
-
-      await bot.sendMessage(chatId, '❌ Order #' + order.id + ' marked as REJECTED.');
-
-      // Notify customer
-      try {
-        await bot.sendMessage(
-          order.userId,
-          '⚠️ Your payment for Order #' + order.id + ' was rejected. Please contact admin for more details.'
-        );
-      } catch (e) {
-        // ignore
-      }
-
-      return;
-    }
-
-    // Promotion admin
-    if (data === 'admin:promo') {
-      if (!isAdmin(userId)) return;
-
-      const lines = [
-        '🎯 Promotion Settings',
-        '',
-        'Status: ' + (promoConfig.isActive ? '🟢 Active' : '🔴 Inactive'),
-        '',
-        'Current Text:',
-        promoConfig.text || '(empty)',
-      ];
-
-      await bot.sendMessage(chatId, lines.join('\n'), buildPromoAdminKeyboard());
-      return;
-    }
-
-    if (data === 'admin:promo_toggle') {
-      if (!isAdmin(userId)) return;
-
-      promoConfig.isActive = !promoConfig.isActive;
-
-      const lines = [
-        '✅ Promotion status updated.',
-        '',
-        'Now: ' + (promoConfig.isActive ? '🟢 Active' : '🔴 Inactive'),
-      ];
-
-      await bot.sendMessage(chatId, lines.join('\n'), buildPromoAdminKeyboard());
-      return;
-    }
-
-    if (data === 'admin:promo_edit') {
-      if (!isAdmin(userId)) return;
-
-      const session = getUserSession(userId);
-      session.isEditingPromotion = true;
-
-      await bot.sendMessage(
-        chatId,
-        '✏️ Please send the new promotion text now.\n\n(Your next message will replace the existing promo text.)'
-      );
-      return;
-    }
-
-    // Broadcast
-    if (data === 'admin:broadcast') {
-      if (!isAdmin(userId)) return;
-
-      const session = getUserSession(userId);
-      session.isBroadcasting = true;
-
-      const lines = [
-        '📣 Broadcast Message',
-        '',
-        'Please send the message you want to broadcast to all users.\n',
-        '⚠️ Use carefully. This will send to everyone who started the bot.',
-      ];
-
-      await bot.sendMessage(chatId, lines.join('\n'));
-      return;
-    }
-
-    // CSV Export
-    if (data === 'admin:export_csv') {
-      if (!isAdmin(userId)) return;
-
-      if (!orders.length) {
-        await bot.sendMessage(chatId, '📄 No orders to export yet.');
-        return;
-      }
-
-      const csv = ordersToCSV();
-      const buffer = Buffer.from(csv, 'utf-8');
-
-      await bot.sendDocument(
-        chatId,
-        buffer,
-        {},
-        {
-          filename: 'orders.csv',
-          contentType: 'text/csv',
+      if (data === 'admin:broadcast_send') {
+        await acknowledge();
+        const text =
+          (promoConfig.text || '') +
+          '\n\n— Sent from BIKA Store Bot\n(ဒီ message ကိုရရှိထားရင် bot ကို block ထားမထားပဲ ရှိနေတယ်ဟုNကို လုံးဝမပြောဘူး 😄)';
+        let sent = 0;
+        for (const uid of knownUserIds) {
+          try {
+            await bot.sendMessage(uid, text, { disable_notification: true });
+            sent += 1;
+          } catch (e) {
+            console.error('Broadcast failed to', uid, e.message);
+          }
         }
-      );
+        await bot.editMessageText(`✅ Broadcast sent to ~${sent} users.`, {
+          chat_id: chatId,
+          message_id: msgId,
+          ...buildAdminPanelKeyboard(),
+        });
+        return;
+      }
+
+      // admin:export_csv
+      if (data === 'admin:export_csv') {
+        await acknowledge();
+        if (!orders.length) {
+          await bot.answerCallbackQuery(query.id, {
+            text: 'No orders to export yet.',
+            show_alert: true,
+          });
+          return;
+        }
+
+        const csv = ordersToCSV();
+        const buffer = Buffer.from(csv, 'utf-8');
+
+        await bot.sendDocument(chatId, buffer, {}, { filename: 'orders.csv', contentType: 'text/csv' });
+        return;
+      }
+
+      // admin:order:<id>
+      if (data.startsWith('admin:order:')) {
+        await acknowledge();
+        const [, , idStr] = data.split(':');
+        const orderId = parseInt(idStr, 10);
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) {
+          await bot.answerCallbackQuery(query.id, {
+            text: 'Order not found.',
+            show_alert: true,
+          });
+          return;
+        }
+
+        await bot.editMessageText(formatOrderSummary(order), {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          ...buildOrderDetailKeyboard(order, true),
+        });
+        return;
+      }
+
+      // admin:complete:<id>
+      if (data.startsWith('admin:complete:')) {
+        await acknowledge();
+        const [, , idStr] = data.split(':');
+        const orderId = parseInt(idStr, 10);
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+
+        order.status = 'COMPLETED';
+        order.confirmedAt = new Date();
+
+        await bot.editMessageText(`✅ Order #${order.id} ကို Completed လို့မှတ်လိုက်ပါတယ်။`, {
+          chat_id: chatId,
+          message_id: msgId,
+          ...buildAdminPanelKeyboard(),
+        });
+
+        // notify user
+        try {
+          await bot.sendMessage(
+            order.userId,
+            `✅ BIKA Store – Order #${order.id} Completed!\n\n` +
+              'Game ထဲကို ဝင်စစ်ကြည့်ပါ။ မရှိသေးရင် Admin ကို အချိုမေးနိုင်ပါတယ်။'
+          );
+        } catch (e) {
+          console.error('Notify user failed', order.userId, e.message);
+        }
+
+        return;
+      }
+
+      // admin:reject:<id>
+      if (data.startsWith('admin:reject:')) {
+        await acknowledge();
+        const [, , idStr] = data.split(':');
+        const orderId = parseInt(idStr, 10);
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+
+        order.status = 'REJECTED';
+        order.confirmedAt = new Date();
+        order.adminNote = 'Rejected by admin';
+
+        await bot.editMessageText(`❌ Order #${order.id} ကို Rejected လုပ်လိုက်ပါတယ်။`, {
+          chat_id: chatId,
+          message_id: msgId,
+          ...buildAdminPanelKeyboard(),
+        });
+
+        try {
+          await bot.sendMessage(
+            order.userId,
+            `❌ BIKA Store – Order #${order.id} Rejected.\n\nငွေလွှဲအဆင့်/အချက်အလက်တွေကို Admin နဲ့ ထပ်မံဆွေးနွေးပါ။`
+          );
+        } catch (e) {
+          console.error('Notify user failed', order.userId, e.message);
+        }
+
+        return;
+      }
+
+      // admin:markpaid:<id> (force set paid)
+      if (data.startsWith('admin:markpaid:')) {
+        await acknowledge();
+        const [, , idStr] = data.split(':');
+        const orderId = parseInt(idStr, 10);
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+
+        order.status = 'PENDING_CONFIRMATION';
+        order.paidAt = new Date();
+
+        await bot.editMessageText(
+          `💳 Order #${order.id} ကို admin မှ manual paid & pending confirm လို ပြောင်းလိုက်ပါတယ်။`,
+          {
+            chat_id: chatId,
+            message_id: msgId,
+            ...buildAdminPanelKeyboard(),
+          }
+        );
+        return;
+      }
 
       return;
     }
   } catch (err) {
     console.error('Error in callback_query handler:', err);
+    try {
+      await bot.answerCallbackQuery(query.id, {
+        text: 'Something went wrong. Please try again.',
+        show_alert: true,
+      });
+    } catch (_) {
+      // ignore
+    }
   }
 });
 
-// ----- Global Error Handlers -----
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
-});
+// ====== STARTUP LOG ======
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
-
-// ----- Startup Log -----
-console.log('✅ BIKA Store Bot is running...');
-console.log('Admin IDs:', ADMIN_IDS);
+console.log('🚀 BIKA Store Bot is running...');
+console.log('Admins:', ADMIN_IDS.join(', ') || '(none configured)');
+```0
