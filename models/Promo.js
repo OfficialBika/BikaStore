@@ -1,17 +1,30 @@
-// models/Promo.js — Promo Code Schema
+// models/Promo.js — Giveaway Promo Schema
 
 const mongoose = require("mongoose");
 
-const promoSchema = new mongoose.Schema( { code: { type: String, required: true, unique: true }, reward: { type: String, required: true }, // e.g. '100 Diamonds', '1-Week Premium'
+const promoSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    active: { type: Boolean, default: true },
+    claimed: { type: Boolean, default: false },
+    stage: {
+      type: String,
+      enum: ["OPEN", "CLAIMED", "DONE"],
+      default: "OPEN",
+    },
 
-maxUse: { type: Number, default: 1 },
-usedCount: { type: Number, default: 0 },
+    // Winner Info
+    winnerUserId: String,
+    winnerUsername: String,
+    winnerFirstName: String,
 
-expiresAt: { type: Date },
-active: { type: Boolean, default: true },
+    expireAt: { type: Date, required: true },
+  },
+  { timestamps: true }
+);
 
-createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+promoSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
-}, { timestamps: true } );
-
-module.exports = mongoose.model("Promo", promoSchema);
+module.exports = {
+  Promo: mongoose.model("Promo", promoSchema),
+};
