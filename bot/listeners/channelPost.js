@@ -1,9 +1,20 @@
-// bot/listeners/channelPost.js — Handle Channel Giveaway Post Entry
+// bot/listeners/channelPost.js — Handle posts from linked channels
 
-const { bot } = require("../bot"); const { handleGiveawayEntry } = require("../../services/giveaway.service");
+const { bot } = require("../bot");
+const { GiveawayPost } = require("../../models/GiveawayPost");
 
-bot.on("channel_post", async (ctx) => { const { channelPost } = ctx; if (!channelPost || !channelPost.text) return;
+bot.on("channel_post", async (msg) => {
+  const cid = msg.chat.id;
 
-// Detect special giveaway format or hashtag like #BIKA_GIVEAWAY const isGiveaway = /#BIKA_GIVEAWAY/i.test(channelPost.text); if (!isGiveaway) return;
+  // Only process posts with PROMO tag
+  if (!msg.text || !msg.text.includes("#PROMO")) return;
 
-// Register post as a giveaway entry try { await handleGiveawayEntry(channelPost); } catch (err) { console.error("❌ Error handling giveaway post:", err); } });
+  const record = new GiveawayPost({
+    channelId: cid,
+    messageId: msg.message_id,
+    text: msg.text,
+    createdAt: new Date(),
+  });
+
+  await record.save();
+});
