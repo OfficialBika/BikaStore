@@ -1,16 +1,19 @@
-// models/GiveawayPost.js — Channel Giveaway Post Schema
+// models/GiveawayPost.js — Tracks forwarded giveaway post from channel/group
 
 const mongoose = require("mongoose");
 
-const giveawayPostSchema = new mongoose.Schema( { messageId: { type: Number, required: true }, channelId: { type: Number, required: true }, hashtag: { type: String }, reward: { type: String },
+const giveawayPostSchema = new mongoose.Schema(
+  {
+    messageId: { type: Number, required: true }, // Telegram message ID
+    chatId: { type: String, required: true },    // Channel or group chat ID
+    forwardedByUserId: { type: String, required: true }, // The user who forwarded
+    promoId: { type: mongoose.Schema.Types.ObjectId, ref: "Promo", required: true },
+  },
+  { timestamps: true }
+);
 
-postText: { type: String },
-participants: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-entryCount: { type: Number, default: 0 },
-endsAt: { type: Date },
+giveawayPostSchema.index({ messageId: 1, chatId: 1 }, { unique: true });
 
-createdAt: { type: Date, default: Date.now },
-
-}, { timestamps: true } );
-
-module.exports = mongoose.model("GiveawayPost", giveawayPostSchema);
+module.exports = {
+  GiveawayPost: mongoose.model("GiveawayPost", giveawayPostSchema),
+};
