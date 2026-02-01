@@ -1,11 +1,32 @@
-// utils/parser.js — Parsing Helpers for Game Items & Orders
+// utils/parser.js — Game ID + Item Parser
 
-function parseGameId(text = "") { const lower = text.toLowerCase(); if (lower.includes("ml") || lower.includes("mobile")) return "mlbb"; if (lower.includes("pubg")) return "pubg"; return null; }
+function parseGameId(text) {
+  const clean = text.replace(/[^\d]/g, "").trim();
+  return clean.length >= 6 ? clean : null;
+}
 
-function parseItems(text = "") { const [gameRaw, itemRaw, uidRaw, serverRaw] = text.split("|").map((s) => s.trim());
+function parseItems(text) {
+  const parts = text
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => x !== "");
 
-return { game: parseGameId(gameRaw), itemCode: itemRaw, gameId: uidRaw, serverId: serverRaw || null, }; }
+  const items = [];
+  for (const part of parts) {
+    const match = /^(\d+)\s*x\s*(\w+)$/.exec(part);
+    if (match) {
+      const qty = parseInt(match[1], 10);
+      const code = match[2];
+      if (qty > 0) {
+        items.push({ code, qty });
+      }
+    }
+  }
 
-function parseNumber(text = "") { const num = parseInt(text); return isNaN(num) ? null : num; }
+  return items.length ? items : null;
+}
 
-module.exports = { parseGameId, parseItems, parseNumber, };
+module.exports = {
+  parseGameId,
+  parseItems,
+};
