@@ -2,102 +2,82 @@
 'use strict';
 
 /**
- * Per-chat Auto Clean (keep last 2 bot messages)
+ * Auto clean helper
  *
- * Idea:
- *   - Chat တစ်ခါစီ마다 bot က မက်ဆေ့အသစ်ပို့တိုင်း
- *     အရင်က bot messages တွေထဲက "အဟောင်းဆုံး" ကို ဖြုတ်ပေးမယ်
- *   - အမြဲနေတတ်မှာက "နောက်ဆုံး 2 ခု" ပဲ
- *
- * Usage (index.js ထဲ):
- *   const attachAutoClean = require('./autoClean');
- *   attachAutoClean(bot, { skipChatIds: ADMIN_IDS });
+ * - index.js ကနေ attachAutoClean(bot, { skipChatIds }) လို့ ခေါ်သုံးမယ်
+ * - Bot / User messages အားလုံးကို per chatId ဆိုပြီး မှတ်ထားမယ်
+ * - index.js ထဲက order complete ဖြစ်သွားတဲ့အချိန်
+ *      autoClean.cleanChat(chatId, { keepLast: 1 })
+ *   လို့ ခေါ်လိုက်ရင်
+ *      => အဲဒီ chat ထဲက message တွေအားလုံးကို ဖျတ်ပြီး နောက်ဆုံး 1 ခုပဲ ကျန်စေမယ်
  */
 
 module.exports = function attachAutoClean(bot, options = {}) {
-  // auto clean မလုပ်ချင်တဲ့ chatId list (ဥပမာ admin user ids)
-  const skipChatIds = new Set(
-    (options.skipChatIds || []).map((id) => String(id))
-  );
+  const skipChatIds = new Set((options.skipChatIds || []).map(String));
 
-  // chatId => [msgId1, msgId2]  (အများဆုံး 2 ခု만 သိမ်းမယ်)
-  const lastMsgsByChat = new Map();
+  // chatId => [messageId, ...]
+  const chatHistory = new Map();
 
-  async function safeDelete(chatId, msgId) {
-    if (!msgId) return;
+  function trackMessage(chatId, messageId) {
+    const key = String(chatId);
+    if (skipChatIds.has(key)) return; // admin တွေကို skip
+    const list = chatHistory.get(key) || [];
+    list.push(messageId);
+    chatHistory.set(key, list);
+  }
+
+  // 📨 user / bot ရဲ့ incoming messages မှတ်မယ်
+  bot.on('message', (msg) => {
+    const chatId = msg.chat.id;
+    trackMessage(chatId, msg.message_id);
+  });
+
+  // 📨 bot.sendMessage ကို wrap လုပ်ပြီး bot ပို့တဲ့ messages အစုံကိုလည်း track မယ်
+  const origSendMessage = bot.sendMessage.bind(bot);
+  bot.sendMessage = async (...args) => {
+    const chatId = args[0];
+    const res = await origSendMessage(...args);
     try {
-      await bot.deleteMessage(chatId, msgId);
-    } catch (e) {
-      if (process.env.DEBUG_AUTOCLEAN === '1') {
-        console.error(
-          'AutoClean delete failed:',
-          chatId,
-          msgId,
-          e.message
-        );
+      if (res && res.message_id != null) {
+        trackMessage(chatId, res.message_id);
+      }
+    } catch (_) {}
+    return res;
+  };
+
+  /**
+   * cleanChat(chatId, { keepLast })
+   *  - chatHistory ထဲက chatId အတွက် message IDs တွေထဲက
+   *    နောက်ဆုံး keepLast ခု ချန်ပြီး လျှော်တာ
+   */
+  async function cleanChat(chatId, opts = {}) {
+    const key = String(chatId);
+    const keepLast =
+      typeof opts.keepLast === 'number' && opts.keepLast >= 0
+        ? opts.keepLast
+        : 1;
+
+    const list = chatHistory.get(key);
+    if (!list || !list.length) return;
+
+    const cutIndex = Math.max(0, list.length - keepLast);
+    const toDelete = list.slice(0, cutIndex);
+    const toKeep = list.slice(cutIndex);
+
+    for (const mid of toDelete) {
+      try {
+        await bot.deleteMessage(chatId, mid);
+      } catch (e) {
+        // delete မရရင်လည်း ထပ်မသိမ်းတော့ဘူး (too old / permission / already deleted)
+        // console.log('delete fail', chatId, mid, e.message);
       }
     }
+
+    chatHistory.set(key, toKeep);
   }
 
-  function wrap(methodName) {
-    if (typeof bot[methodName] !== 'function') return;
-    const original = bot[methodName].bind(bot);
-
-    bot[methodName] = async (...args) => {
-      const chatId = args[0];
-      const key = String(chatId);
-
-      // skip list ထဲမပါတဲ့ chat တွေကိုပဲ auto clean
-      if (!skipChatIds.has(key)) {
-        const list = lastMsgsByChat.get(key) || [];
-
-        // အသစ်ပို့ဖို့မတိုင်မီ လက်ရှိရှိပြီးသားက 2ခု/2ခုထက်ပိုသွားရင်
-        // အဟောင်းဆုံးတွေကို စနစ်လိုက် ဖျတ်မယ် (oldest first)
-        while (list.length >= 2) {
-          const oldId = list.shift();
-          await safeDelete(chatId, oldId);
-        }
-
-        lastMsgsByChat.set(key, list);
-      }
-
-      // အခုမှ သာမန် sendMessage / sendPhoto စတာတွေ run မယ်
-      const sent = await original(...args);
-
-      // ပို့အောင်မြင်ရင် အသစ် msgId ကို ရရှိတဲ့ chat ရဲ့ list ထဲ push
-      if (sent && sent.message_id && sent.chat && sent.chat.id) {
-        const cId = sent.chat.id;
-        const k = String(cId);
-
-        if (!skipChatIds.has(k)) {
-          const list = lastMsgsByChat.get(k) || [];
-          list.push(sent.message_id);
-
-          // တစ်ခါတလေ logic race ကြောင့် 3 ခုကျော်သွားရင်လည်း
-          // နောက်ထပ် oldest မက်ဆေ့ကို ဖျတ်ပြီး နောက်ဆုံး 2 ခုပဲ ဆက်ထားမယ်
-          while (list.length > 2) {
-            const oldId = list.shift();
-            await safeDelete(cId, oldId);
-          }
-
-          lastMsgsByChat.set(k, list);
-        }
-      }
-
-      return sent;
-    };
-  }
-
-  // အများဆုံးသုံးဖြစ်မယ့် methods တွေကို wrap လုပ်ထားမယ်
-  [
-    'sendMessage',
-    'sendPhoto',
-    'sendDocument',
-    'sendVideo',
-    'sendAnimation',
-  ].forEach(wrap);
-
-  console.log(
-    '🧼 AutoClean enabled – each chat keeps only the latest 2 bot messages.'
-  );
+  // index.js ကနေ cleanChat ကိုသုံးဖို့ expose လုပ်ပေးမယ်
+  return {
+    cleanChat,
+  };
 };
