@@ -1,83 +1,75 @@
-// autoClean.js
 'use strict';
 
 /**
- * Auto clean helper
+ * attachAutoClean(bot, { skipChatIds })
  *
- * - index.js ကနေ attachAutoClean(bot, { skipChatIds }) လို့ ခေါ်သုံးမယ်
- * - Bot / User messages အားလုံးကို per chatId ဆိုပြီး မှတ်ထားမယ်
- * - index.js ထဲက order complete ဖြစ်သွားတဲ့အချိန်
- *      autoClean.cleanChat(chatId, { keepLast: 1 })
- *   လို့ ခေါ်လိုက်ရင်
- *      => အဲဒီ chat ထဲက message တွေအားလုံးကို ဖျတ်ပြီး နောက်ဆုံး 1 ခုပဲ ကျန်စေမယ်
+ * - Messages ကို သာရီသိမ်းထားပေးတယ် (chat အလိုက် message_id list)
+ * - ဘာ message ကိုမှ auto delete မလုပ်ပါ
+ * - index.js ထဲကနေ autoClean.cleanChat(chatId, { keepLast })
+ *   ကိုခေါ်မရင် ဘာမှ မဖျက်ပါ
  */
 
 module.exports = function attachAutoClean(bot, options = {}) {
-  const skipChatIds = new Set((options.skipChatIds || []).map(String));
+  const { skipChatIds = [], memoryLimit = 200 } = options;
 
-  // chatId => [messageId, ...]
-  const chatHistory = new Map();
+  const skipSet = new Set(skipChatIds.map(String));
+  const chatMessages = new Map(); // key: chatId(string) -> [messageId...]
 
-  function trackMessage(chatId, messageId) {
+  function remember(chatId, messageId) {
     const key = String(chatId);
-    if (skipChatIds.has(key)) return; // admin တွေကို skip
-    const list = chatHistory.get(key) || [];
+    if (skipSet.has(key)) return;
+    if (!chatMessages.has(key)) chatMessages.set(key, []);
+    const list = chatMessages.get(key);
     list.push(messageId);
-    chatHistory.set(key, list);
+    // များလွန်းရင် အဟောင်းအောက်ဆုံးတွေ ဖျက်ထုတ်ပစ်
+    if (list.length > memoryLimit) {
+      list.splice(0, list.length - memoryLimit);
+    }
   }
 
-  // 📨 user / bot ရဲ့ incoming messages မှတ်မယ်
-  bot.on('message', (msg) => {
-    const chatId = msg.chat.id;
-    trackMessage(chatId, msg.message_id);
-  });
+  // send* methods တွေကို "မှတ်တမ်းစာရင်းပဲ ထည့်မယ်" ဆိုပြီး wrap လုပ်ထားမယ်
+  function wrapSend(methodName) {
+    if (typeof bot[methodName] !== 'function') return;
+    const original = bot[methodName].bind(bot);
 
-  // 📨 bot.sendMessage ကို wrap လုပ်ပြီး bot ပို့တဲ့ messages အစုံကိုလည်း track မယ်
-  const origSendMessage = bot.sendMessage.bind(bot);
-  bot.sendMessage = async (...args) => {
-    const chatId = args[0];
-    const res = await origSendMessage(...args);
-    try {
-      if (res && res.message_id != null) {
-        trackMessage(chatId, res.message_id);
-      }
-    } catch (_) {}
-    return res;
-  };
+    bot[methodName] = async (...args) => {
+      const res = await original(...args);
+      try {
+        const chatId = args[0];
+        if (res && typeof res.message_id !== 'undefined') {
+          remember(chatId, res.message_id);
+        }
+      } catch (_) {}
+      return res;
+    };
+  }
 
-  /**
-   * cleanChat(chatId, { keepLast })
-   *  - chatHistory ထဲက chatId အတွက် message IDs တွေထဲက
-   *    နောက်ဆုံး keepLast ခု ချန်ပြီး လျှော်တာ
-   */
+  wrapSend('sendMessage');
+  wrapSend('sendPhoto');
+  wrapSend('sendDocument');
+  wrapSend('sendAnimation');
+  wrapSend('sendVideo');
+
+  // Manual clean – chat ထဲက message တွေကို သုတ်ဖို့
   async function cleanChat(chatId, opts = {}) {
+    const { keepLast = 0 } = opts;
     const key = String(chatId);
-    const keepLast =
-      typeof opts.keepLast === 'number' && opts.keepLast >= 0
-        ? opts.keepLast
-        : 1;
-
-    const list = chatHistory.get(key);
+    const list = chatMessages.get(key);
     if (!list || !list.length) return;
 
     const cutIndex = Math.max(0, list.length - keepLast);
     const toDelete = list.slice(0, cutIndex);
-    const toKeep = list.slice(cutIndex);
+    const keep = list.slice(cutIndex);
+    chatMessages.set(key, keep);
 
-    for (const mid of toDelete) {
+    for (const msgId of toDelete) {
       try {
-        await bot.deleteMessage(chatId, mid);
+        await bot.deleteMessage(chatId, msgId);
       } catch (e) {
-        // delete မရရင်လည်း ထပ်မသိမ်းတော့ဘူး (too old / permission / already deleted)
-        // console.log('delete fail', chatId, mid, e.message);
+        // already deleted / too old / etc. → ငြင်းပယ်ထားပါ
       }
     }
-
-    chatHistory.set(key, toKeep);
   }
 
-  // index.js ကနေ cleanChat ကိုသုံးဖို့ expose လုပ်ပေးမယ်
-  return {
-    cleanChat,
-  };
+  return { cleanChat };
 };
