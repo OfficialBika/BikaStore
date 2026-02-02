@@ -160,7 +160,9 @@ const promoConfig = {
 let activePromo = null; 
 // shape: {
 //   createdBy, createdAt, expiresAt,
-//   winnerUserId, winnerUsername, winnerFirstName
+//   winnerUserId, winnerUsername, winnerFirstName,
+//   winnerChatId,
+//   winnerGameId, winnerServerId
 // }
 
 function startNewPromo(adminId) {
@@ -174,6 +176,9 @@ function startNewPromo(adminId) {
     winnerUserId: null,
     winnerUsername: null,
     winnerFirstName: null,
+    winnerChatId: null,
+    winnerGameId: null,
+    winnerServerId: null,
   };
 }
 
@@ -195,7 +200,7 @@ async function handlePromoRequest(chatId, fromUser) {
   if (!promo) {
     await bot.sendMessage(
       chatId,
-      '😢 ယခုအချိန်မှာ Claim လုပ်လို့ရမယ့် Promo မရှိသေးဘူးနော်။\n\nOwner က Giveaway ပေးရင် /promo နှိပ်ကြည့်လိုက်ပါ 😎',
+      '😢 ယခုအချိန်မှာ Claim လုပ်လို့ရမယ့် Promo မရှိသေးဘူးနော်။\n\nအားတိုင်း promo ပဲနှိပ်မနေကြနဲ့ 😎',
       {
         ...buildMainMenu(isAdminUser),
       }
@@ -211,7 +216,7 @@ async function handlePromoRequest(chatId, fromUser) {
 
     const text =
       '😢 ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
-      `ပထမဆုံး Claim လိုက်တဲ့ ကံကြမ္မာကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
+      `ပထမဆုံး Claim လိုက်တဲ့ ကံကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
       'နောက်ကျရင် ကောင်းတာဆိုလို့ သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
 
     await bot.sendMessage(chatId, text, {
@@ -826,8 +831,8 @@ async function sendPaymentInstructions(chatId, order) {
   lines.push(`Amount to pay: *${formatPrice(order.price)}*`);
   lines.push('');
   lines.push('📌 Payment Methods ():');
-  lines.push('Payment Acc Name');
-  lines.push('Shine Htet Aung');
+  lines.push(' Payment Acc Name');
+  lines.push('  Shine Htet Aung');
   lines.push('- KBZ Pay - 09264202637'); 
   lines.push('- WavePay - 09264202637');
   lines.push('- (Admin will specify exact account)');
@@ -1033,7 +1038,7 @@ bot.onText(/\/myrank/, async (msg) => {
   lines.push(`💰 Total MMK: *${formatPrice(stat.totalAmount)}*`);
   lines.push(`📦 Completed Orders: *${stat.orderCount}*`);
   lines.push('');
-  lines.push('ရေရှည်မှာ မင်းက BIKA Store whale လားမလား 😎');
+  lines.push('ရေရှည်မှာ မင်းက BIKA Store ရဲ့ Top1 Buyer ဖြစ်လာနိူင်ပါတယ်😎');
 
   await bot.sendMessage(chatId, lines.join('\n'), {
     parse_mode: 'Markdown',
@@ -1190,6 +1195,87 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // 2) Promo winner – MLBB ID + Server ID ကြေညာဖို့
+  const promo = getActivePromo();
+  if (
+    promo &&
+    promo.winnerUserId === userId &&
+    !promo.winnerGameId && // winner game info not set yet
+    msg.text &&
+    !msg.text.startsWith('/')
+  ) {
+    const raw = msg.text.trim();
+    const parts = raw.split(/[\s,]+/).filter(Boolean);
+
+    let gameId = parts[0] || '';
+    let serverId = parts[1] || '';
+
+    promo.winnerGameId = gameId;
+    promo.winnerServerId = serverId;
+    promo.winnerChatId = chatId;
+    activePromo = promo; // update global
+
+    // winner ကို confirm message ပို့မယ်
+    await bot.sendMessage(
+      chatId,
+      '✅ သင့် MLBB ID + Server ID ကို လက်ခံရရှိပြီးပါပြီ။\n' +
+        'Admin မှာ confirm လုပ်သလို သင့်လက်ဆောင် diamonds ကို ထုတ်ပေးမှာဖြစ်ပါတယ် 💎'
+    );
+
+    // Admin တွေကို winner info + Approve button ပို့မယ်
+    const winnerLabel = promo.winnerUsername
+      ? '@' + promo.winnerUsername
+      : promo.winnerFirstName || `User ${promo.winnerUserId}`;
+
+    const adminText =
+      '🎁 **Promo Winner MLBB Info**\n\n' +
+      `👤 Winner: *${winnerLabel}*\n` +
+      `🆔 User ID: \`${promo.winnerUserId}\`\n\n` +
+      `MLBB ID: \`${promo.winnerGameId || '-'}\`\n` +
+      `Server ID: \`${promo.winnerServerId || '-'}\`\n\n` +
+      'Gift ကို confirm လုပ်ဖို့ အောက်က button ကိုနှိပ်ပါ။';
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: '✅ Approve Gift',
+            callback_data: `promo:approve:${promo.winnerUserId}`,
+          },
+        ],
+      ],
+    };
+
+    for (const adminId of ADMIN_IDS) {
+      try {
+        await bot.sendMessage(adminId, adminText, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } catch (e) {
+        console.error('Failed to send promo info to admin', adminId, e.message);
+      }
+    }
+
+    return; // အောက်က order form flow ကို မဆက်သွားတော့ဘူး
+  }
+
+  // For other flows we only care about text (ignore photos if not WAIT_SLIP)
+  if (!msg.text || msg.text.startsWith('/')) return;
+  if (!session || !session.step) return;
+
+  const text = msg.text.trim();
+  const draft = session.orderDraft || {};
+
+  // optional cancel
+  if (text === '❌ Cancel') {
+    ...
+  }
+
+  // 3) MLBB (ID + SVID in one message)
+  ...
+});
+
   // For other flows we only care about text (ignore photos if not WAIT_SLIP)
   if (!msg.text || msg.text.startsWith('/')) return;
   if (!session || !session.step) return;
@@ -1345,7 +1431,8 @@ bot.on('callback_query', async (query) => {
       return;
     }
 
-    // Promo claim – first click wins
+    
+      // Promo claim – first click wins
     if (data === 'promo:claim') {
       await acknowledge();
 
@@ -1377,7 +1464,7 @@ bot.on('callback_query', async (query) => {
         const loseText =
           '😢 ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
           `ပထမဆုံး Claim လိုက်တဲ့ ကံကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
-          'နောက်ထပ် Promo တွေကို စောင့်ကြည့်ထားပေးပါနော် 😎';
+          'နောက်ကျရင် ကောင်းတာဆို သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
 
         try {
           await bot.editMessageText(loseText, {
@@ -1395,14 +1482,17 @@ bot.on('callback_query', async (query) => {
       promo.winnerUserId = userId;
       promo.winnerUsername = query.from.username || '';
       promo.winnerFirstName = query.from.first_name || '';
-      // keep activePromo updated
+      promo.winnerChatId = chatId;
+      promo.winnerGameId = null;
+      promo.winnerServerId = null;
       activePromo = promo;
 
       const winText =
         '🎉 **ဂုဏ်ယူပါတယ်! သင်ကံထူးသွားပါပြီ**\n\n' +
-        'MLBB free diamonds claim လုပ်ဖို့\n' +
+        'MLBB free diamonds ကို claim လုပ်ဖို့\n' +
         '**ကိုယ့် MLBB ID + Server ID ကို တစ်ကြိမ်တည်း space နဲ့ ခွဲပြီး ဒီ chat ထဲမှာ ပို့ပေးပါ။**\n\n' +
-        'Admin မှာ စာရင် Top-up လုပ်ပေးမယ် 💎';
+        'ဥပမာ: `12345678 1234`\n\n' +
+        'Admin မှာ ID + SV ID ကိုပဲ အခြေခံပြီး Top-up လုပ်ပေးမှာ ဖြစ်ပါတယ် 💎';
 
       try {
         await bot.editMessageText(winText, {
@@ -1413,13 +1503,13 @@ bot.on('callback_query', async (query) => {
         });
       } catch (_) {}
 
-      // Admin တွေကို winner info ပို့ပေးမယ်
+      // Admin တွေကို "winner ဆီက ID+SV ထပ်စောင့်ရ ещё" စာတိုပဲ ပို့မယ် (optional)
       const adminInfo =
         '🎁 **Promo Winner Found!**\n\n' +
         `User: @${promo.winnerUsername || 'unknown'} (${promo.winnerFirstName ||
           'User ' + promo.winnerUserId})\n` +
         `User ID: \`${promo.winnerUserId}\`\n\n` +
-        'MLBB ID + Server ID ကို winner က စောင့်ပို့နေပါတယ်။';
+        'Winner ဆီက MLBB ID + Server ID ကို စောင့်ယူနေပါတယ်...';
 
       for (const adminId of ADMIN_IDS) {
         try {
@@ -1427,9 +1517,75 @@ bot.on('callback_query', async (query) => {
             parse_mode: 'Markdown',
           });
         } catch (e) {
-          console.error('Failed to notify admin promo winner', adminId, e.message);
+          console.error('Failed to notify admin promo winner base', adminId, e.message);
         }
       }
+
+      return;
+    }
+
+    // Promo approve – admin confirms gift
+    if (data.startsWith('promo:approve:')) {
+      await acknowledge();
+
+      const [, , uidStr] = data.split(':');
+      const targetUserId = parseInt(uidStr, 10);
+
+      if (!isAdminUser) {
+        return;
+      }
+
+      const promo = getActivePromo();
+      if (
+        !promo ||
+        !promo.winnerUserId ||
+        promo.winnerUserId !== targetUserId
+      ) {
+        try {
+          await bot.answerCallbackQuery(query.id, {
+            text: 'Promo မှတ်တမ်း မရှိတော့ပါဘူး (သို့) သက်တမ်းကုန်သွားပါပြီ။',
+            show_alert: true,
+          });
+        } catch (_) {}
+        return;
+      }
+
+      const winnerLabel = promo.winnerUsername
+        ? '@' + promo.winnerUsername
+        : promo.winnerFirstName || `User ${promo.winnerUserId}`;
+
+      const newText =
+        '✅ **Promo Gift Approved**\n\n' +
+        `👤 Winner: *${winnerLabel}*\n` +
+        `🆔 User ID: \`${promo.winnerUserId}\`\n\n` +
+        `MLBB ID: \`${promo.winnerGameId || '-'}\`\n` +
+        `Server ID: \`${promo.winnerServerId || '-'}\`\n\n` +
+        'Admin မှာ gift ကို ထုတ်ပေးပြီးသား ဖြစ်ပါတယ်။';
+
+      // Admin message ကနေ button ဖယ်ပြီး Approved စာပြ
+      try {
+        await bot.editMessageText(newText, {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [] },
+        });
+      } catch (_) {}
+
+      // Winner ကို final gift message ပို့မယ်
+      const winnerChatId = promo.winnerChatId || promo.winnerUserId;
+      try {
+        await bot.sendMessage(
+          winnerChatId,
+          '🎁 သင့်လက်ဆောင်ဆုမဲကို ကို Bika ထုတ်ပေးလိုက်ပါပြီ 💎\n\n' +
+            'ကံကောင်းတဲ့ gamers တစ်ယောက်ဖြစ်လာတာကို ဂုဏ်ယူပါတယ် 😎'
+        );
+      } catch (e) {
+        console.error('Failed to notify promo winner final', winnerChatId, e.message);
+      }
+
+      // Promo session ကို ပြီးတော့အောင် clear လုပ်မယ်
+      activePromo = null;
 
       return;
     }
