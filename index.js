@@ -93,6 +93,10 @@ const Order = mongoose.model('Order', orderSchema);
 // ====== BOT INIT (Webhook mode) ======
 const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
 
+// 🧼 Auto clean – normal users only (admins skipped)
+const attachAutoClean = require('./autoClean');
+attachAutoClean(bot, { skipChatIds: ADMIN_IDS });
+
 // Webhook setup (if PUBLIC_URL provided)
 if (PUBLIC_URL) {
   const cleanBase = PUBLIC_URL.replace(/\/+$/, '');
