@@ -2151,8 +2151,7 @@ bot.on('callback_query', async (query) => {
         return;
       }
 
-      // COMPLETE / REJECT (with caption change)
-      // COMPLETE / REJECT (with caption change + auto clean)
+// COMPLETE / REJECT (with caption change + auto clean)
       if (
         data.startsWith('admin:complete:') ||
         data.startsWith('admin:reject:')
@@ -2174,30 +2173,39 @@ bot.on('callback_query', async (query) => {
         }
         await order.save();
 
-        // Admin message (slip) ကို update လုပ်မယ် – buttons ဖယ် + status text ပြောင်း
+        // Admin message ကို update လုပ်မယ်
         const newText = formatOrderSummary(order, {
           title: isComplete ? 'COMPLETE' : 'REJECTED',
         });
 
-        if (query.message && query.message.photo) {
-          await bot.editMessageCaption(newText, {
-            chat_id: chatId,
-            message_id: msgId,
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [] },
-          });
-        } else {
-          await bot.editMessageText(newText, {
-            chat_id: chatId,
-            message_id: msgId,
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [] },
-          });
+        // ⛑ editMessage* မှာ "message to edit not found" error ထွက်ရင် ကိုယ်တိုင် handle လုပ်မယ်
+        try {
+          if (query.message && query.message.photo) {
+            await bot.editMessageCaption(newText, {
+              chat_id: chatId,
+              message_id: msgId,
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: [] },
+            });
+          } else {
+            await bot.editMessageText(newText, {
+              chat_id: chatId,
+              message_id: msgId,
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: [] },
+            });
+          }
+        } catch (e) {
+          const desc = e?.response?.body?.description || '';
+          if (!desc.includes('message to edit not found')) {
+            console.error('Failed to edit admin message', e.message || e);
+          }
+          // message ကို admin ချိန်ဖျက်လိုက်တာ / group ထဲက message မရှိတာ
+          // စတဲ့ case တွေအတွက်တော့ simply ignore လုပ်မယ်
         }
 
         if (isComplete) {
           try {
-            // User ထဲကို order complete summary ပို့မယ်
             await bot.sendMessage(
               order.userId,
               formatOrderSummary(order, {
@@ -2206,10 +2214,8 @@ bot.on('callback_query', async (query) => {
               { parse_mode: 'Markdown' }
             );
 
-            // ✅ Order Complete ဖြစ်သွားတဲ့အချိန်
-            //    user chat ထဲက အဟောင်း messages တွေ အကုန်ဖျက်ပြီး နောက်ဆုံးစာတစ်ခုပဲ ကျန်စေမယ်
+            // ✅ Order complete ဖြစ်ပြီဆိုတော့ customer chat ကို သုတ်မယ်
             if (autoClean && autoClean.cleanChat) {
-              // Private chat ဖြစ်နေတာကတော့ order.userId က chatId ဖြစ်နိုင်ရမယ်
               autoClean.cleanChat(order.userId, { keepLast: 1 }).catch(() => {});
             }
           } catch (e) {
