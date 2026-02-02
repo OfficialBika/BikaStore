@@ -94,6 +94,7 @@ const Order = mongoose.model('Order', orderSchema);
 const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
 
 // 🧼 Auto clean – normal users only (admins skipped)
+//    -> only used manually when order COMPLETED
 const attachAutoClean = require('./autoClean');
 const autoClean = attachAutoClean(bot, { skipChatIds: ADMIN_IDS });
 
@@ -411,6 +412,38 @@ async function sendStepMessage(userId, chatId, text, options = {}) {
   const sent = await bot.sendMessage(chatId, text, options);
   userLastStepMessage.set(userId, { chatId, messageId: sent.message_id });
   return sent;
+}
+
+// ✅ Safe edit helpers (to avoid 400 "message to edit not found")
+
+async function safeEditMessageText(botInstance, chatId, messageId, text, extra = {}) {
+  try {
+    await botInstance.editMessageText(text, {
+      chat_id: chatId,
+      message_id: messageId,
+      ...extra,
+    });
+  } catch (e) {
+    const desc = e && e.response && e.response.body && e.response.body.description;
+    if (desc !== 'Bad Request: message to edit not found') {
+      console.error('editMessageText error:', desc || e.message || e);
+    }
+  }
+}
+
+async function safeEditMessageCaption(botInstance, chatId, messageId, caption, extra = {}) {
+  try {
+    await botInstance.editMessageCaption(caption, {
+      chat_id: chatId,
+      message_id: messageId,
+      ...extra,
+    });
+  } catch (e) {
+    const desc = e && e.response && e.response.body && e.response.body.description;
+    if (desc !== 'Bad Request: message to edit not found') {
+      console.error('editMessageCaption error:', desc || e.message || e);
+    }
+  }
 }
 
 // ====== CSV EXPORT ======
@@ -1405,9 +1438,7 @@ bot.on('callback_query', async (query) => {
     if (data === 'm:main') {
       resetUserSession(userId);
       await acknowledge();
-      await bot.editMessageText('🏠 Main menu', {
-        chat_id: chatId,
-        message_id: msgId,
+      await safeEditMessageText(bot, chatId, msgId, '🏠 Main menu', {
         ...buildMainMenu(isAdminUser),
       });
       return;
@@ -1427,9 +1458,7 @@ bot.on('callback_query', async (query) => {
         '7️⃣ **I have paid** ကိုနှိပ်ပြီး Bot ပြောသလို Slip ပုံ ပို့ပါ',
         '8️⃣ Admin confirm လုပ်လိုက်တာနဲ့ Order Complete ဖြစ်သွားမယ် 💨',
       ];
-      await bot.editMessageText(lines.join('\n'), {
-        chat_id: chatId,
-        message_id: msgId,
+      await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
         parse_mode: 'Markdown',
         ...buildMainMenu(isAdminUser),
       });
@@ -1450,17 +1479,16 @@ bot.on('callback_query', async (query) => {
 
       if (!promo) {
         // expired or not active
-        try {
-          await bot.editMessageText(
-            '😢 ဒီ Promo က သက်တမ်းကုန်သွားပြီ ဖြစ်လို့ Claim လုပ်လို့ မရတော့ပါ။',
-            {
-              chat_id: chatId,
-              message_id: msgId,
-              parse_mode: 'Markdown',
-              reply_markup: { inline_keyboard: [] },
-            }
-          );
-        } catch (_) {}
+        await safeEditMessageText(
+          bot,
+          chatId,
+          msgId,
+          '😢 ဒီ Promo က သက်တမ်းကုန်သွားပြီ ဖြစ်လို့ Claim လုပ်လို့ မရတော့ပါ။',
+          {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [] },
+          }
+        );
         return;
       }
 
@@ -1475,15 +1503,10 @@ bot.on('callback_query', async (query) => {
           `ပထမဆုံး Claim လိုက်တဲ့ ကံကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
           'နောက်မကျစေနဲ့ နောက်ကျရင် ကောင်းတာဆိုလို့ သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
 
-        try {
-          await bot.editMessageText(loseText, {
-            chat_id: chatId,
-            message_id: msgId,
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [] },
-          });
-        } catch (_) {}
-
+        await safeEditMessageText(bot, chatId, msgId, loseText, {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [] },
+        });
         return;
       }
 
@@ -1503,14 +1526,10 @@ bot.on('callback_query', async (query) => {
         'ဥပမာ: `12345678 1234`\n\n' +
         'Admin မှာ ID + SV ID ကိုပဲ အခြေခံပြီး Top-up လုပ်ပေးမှာ ဖြစ်ပါတယ် 💎';
 
-      try {
-        await bot.editMessageText(winText, {
-          chat_id: chatId,
-          message_id: msgId,
-          parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [] },
-        });
-      } catch (_) {}
+      await safeEditMessageText(bot, chatId, msgId, winText, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [] },
+      });
 
       // Admin တွေကို "winner ဆီက ID+SV ထပ်စောင့််ရ" စာတိုပဲ ပို့မယ် (optional)
       const adminInfo =
@@ -1554,12 +1573,10 @@ bot.on('callback_query', async (query) => {
         !promo.winnerUserId ||
         promo.winnerUserId !== targetUserId
       ) {
-        try {
-          await bot.answerCallbackQuery(query.id, {
-            text: 'Promo မှတ်တမ်း မရှိတော့ပါဘူး (သို့) သက်တမ်းကုန်သွားပါပြီ။',
-            show_alert: true,
-          });
-        } catch (_) {}
+        await bot.answerCallbackQuery(query.id, {
+          text: 'Promo မှတ်တမ်း မရှိတော့ပါဘူး (သို့) သက်တမ်းကုန်သွားပါပြီ။',
+          show_alert: true,
+        });
         return;
       }
 
@@ -1576,14 +1593,10 @@ bot.on('callback_query', async (query) => {
         'Admin မှာ gift ကို ထုတ်ပေးပြီးသား ဖြစ်ပါတယ်။';
 
       // Admin message ကနေ button ဖယ်ပြီး Approved စာပြ
-      try {
-        await bot.editMessageText(newText, {
-          chat_id: chatId,
-          message_id: msgId,
-          parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [] },
-        });
-      } catch (_) {}
+      await safeEditMessageText(bot, chatId, msgId, newText, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [] },
+      });
 
       // Winner ကို final gift message ပို့မယ်
       const winnerChatId = promo.winnerChatId || promo.winnerUserId;
@@ -1615,9 +1628,7 @@ bot.on('callback_query', async (query) => {
         '',
         'MLBB နဲ့ PUBG UC အတွက် လက်ရှိရရှိနိုင်တဲ့ package တွေပါ။',
       ];
-      await bot.editMessageText(lines.join('\n'), {
-        chat_id: chatId,
-        message_id: msgId,
+      await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
         parse_mode: 'Markdown',
         ...buildCategoryKeyboard(),
       });
@@ -1632,11 +1643,15 @@ bot.on('callback_query', async (query) => {
         .lean();
 
       if (!userOrders.length) {
-        await bot.editMessageText('📦 မင်းနဲ့ပတ်သက်တဲ့ order မရှိသေးပါ။', {
-          chat_id: chatId,
-          message_id: msgId,
-          ...buildMainMenu(isAdminUser),
-        });
+        await safeEditMessageText(
+          bot,
+          chatId,
+          msgId,
+          '📦 မင်းနဲ့ပတ်သက်တဲ့ order မရှိသေးပါ။',
+          {
+            ...buildMainMenu(isAdminUser),
+          }
+        );
         return;
       }
 
@@ -1652,9 +1667,7 @@ bot.on('callback_query', async (query) => {
         lines.push(`   Status: ${o.status}`);
       });
 
-      await bot.editMessageText(lines.join('\n'), {
-        chat_id: chatId,
-        message_id: msgId,
+      await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
         parse_mode: 'Markdown',
         ...buildMainMenu(isAdminUser),
       });
@@ -1671,9 +1684,7 @@ bot.on('callback_query', async (query) => {
       if (!cat) return;
 
       const text = `**${cat.emoji} ${cat.name}**\n\n${cat.description}\n\nPackage တစ်ခုရွေးချယ်ပါ။`;
-      await bot.editMessageText(text, {
-        chat_id: chatId,
-        message_id: msgId,
+      await safeEditMessageText(bot, chatId, msgId, text, {
         parse_mode: 'Markdown',
         ...buildPackagesKeyboard(key, page),
       });
@@ -1720,9 +1731,7 @@ bot.on('callback_query', async (query) => {
           '**MLBB ID + Server ID** ကို တစ်ကြိမ်တည်း space နဲ့ ခွဲရေးပြီး ထည့်ပါ (ဥပမာ `12345678 1234`)'
         );
 
-        await bot.editMessageText(introLines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, introLines.join('\n'), {
           parse_mode: 'Markdown',
         });
 
@@ -1753,9 +1762,7 @@ bot.on('callback_query', async (query) => {
         );
         introLines.push('**PUBG ID (Character ID)** ကို ထည့်ပါ။');
 
-        await bot.editMessageText(introLines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, introLines.join('\n'), {
           parse_mode: 'Markdown',
         });
 
@@ -1808,12 +1815,12 @@ bot.on('callback_query', async (query) => {
 
       resetUserSession(userId);
 
-      await bot.editMessageText(
+      await safeEditMessageText(
+        bot,
+        chatId,
+        msgId,
         `✅ Order #${order.id} ကို ပြုလုပ်ပြီးပါပြီ!\n\nPayment instructions ကို အောက်တွင် ပို့ပေးမယ်။`,
-        {
-          chat_id: chatId,
-          message_id: msgId,
-        }
+        {}
       );
 
       await sendPaymentInstructions(chatId, order);
@@ -1823,11 +1830,15 @@ bot.on('callback_query', async (query) => {
     if (data === 'order:cancel_draft') {
       await acknowledge();
       resetUserSession(userId);
-      await bot.editMessageText('Order draft ကို ဖျက်ထားလိုက်ပါတယ်။', {
-        chat_id: chatId,
-        message_id: msgId,
-        ...buildMainMenu(isAdminUser),
-      });
+      await safeEditMessageText(
+        bot,
+        chatId,
+        msgId,
+        'Order draft ကို ဖျက်ထားလိုက်ပါတယ်။',
+        {
+          ...buildMainMenu(isAdminUser),
+        }
+      );
       return;
     }
 
@@ -1841,12 +1852,12 @@ bot.on('callback_query', async (query) => {
       order.status = 'CANCELLED_BY_USER';
       await order.save();
 
-      await bot.editMessageText(
+      await safeEditMessageText(
+        bot,
+        chatId,
+        msgId,
         '❌ Order ကို customer ထဲကနေ cancel လုပ်လိုက်ပြီ။',
-        {
-          chat_id: chatId,
-          message_id: msgId,
-        }
+        {}
       );
       return;
     }
@@ -1875,13 +1886,13 @@ bot.on('callback_query', async (query) => {
       session.step = 'WAIT_SLIP';
       session.pendingOrderId = order.id;
 
-      await bot.editMessageText(
+      await safeEditMessageText(
+        bot,
+        chatId,
+        msgId,
         `💳 Order #${order.id} အတွက် "I have paid" ကို လက်ခံရရှိပြီ။\n\n` +
           '👉 အောက်တွင် KBZ/WavePay စသဖြင့် ငွေလွှဲပြေစာ screenshot ကို **တစ်ပုံပဲ** ပို့ပေးပါ။',
-        {
-          chat_id: chatId,
-          message_id: msgId,
-        }
+        {}
       );
 
       await sendStepMessage(
@@ -1912,9 +1923,7 @@ bot.on('callback_query', async (query) => {
         lines.push(`📦 Completed Orders: *${stats.totalOrders}*`);
         lines.push(`💰 Total MMK: *${formatPrice(stats.totalMmk)}*`);
 
-        await bot.editMessageText(lines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
           parse_mode: 'Markdown',
           ...buildAdminPanelKeyboard(),
         });
@@ -1929,11 +1938,15 @@ bot.on('callback_query', async (query) => {
           .lean();
 
         if (!latest.length) {
-          await bot.editMessageText('📋 Orders မရှိသေးပါ။', {
-            chat_id: chatId,
-            message_id: msgId,
-            ...buildAdminPanelKeyboard(),
-          });
+          await safeEditMessageText(
+            bot,
+            chatId,
+            msgId,
+            '📋 Orders မရှိသေးပါ။',
+            {
+              ...buildAdminPanelKeyboard(),
+            }
+          );
           return;
         }
 
@@ -1949,9 +1962,7 @@ bot.on('callback_query', async (query) => {
           lines.push(`   ${shortUserLabel(o)} • ${o.status}`);
         });
 
-        await bot.editMessageText(lines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
           parse_mode: 'Markdown',
           ...buildAdminPanelKeyboard(),
         });
@@ -1967,11 +1978,12 @@ bot.on('callback_query', async (query) => {
           .lean();
 
         if (!pending.length) {
-          await bot.editMessageText(
+          await safeEditMessageText(
+            bot,
+            chatId,
+            msgId,
             '⏳ Pending confirm orders မရှိသေးပါ။',
             {
-              chat_id: chatId,
-              message_id: msgId,
               ...buildAdminPanelKeyboard(),
             }
           );
@@ -1992,9 +2004,7 @@ bot.on('callback_query', async (query) => {
           );
         });
 
-        await bot.editMessageText(lines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
           parse_mode: 'Markdown',
           ...buildAdminPanelKeyboard(),
         });
@@ -2015,9 +2025,7 @@ bot.on('callback_query', async (query) => {
           'Text ကိုပြင်ချင်ရင် `/setpromo your text` လို့သုံးနိုင်ပါတယ်။'
         );
 
-        await bot.editMessageText(lines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
@@ -2040,11 +2048,12 @@ bot.on('callback_query', async (query) => {
         await acknowledge();
         promoConfig.isActive = !promoConfig.isActive;
         const status = promoConfig.isActive ? 'ON ✅' : 'OFF ⏸';
-        await bot.editMessageText(
+        await safeEditMessageText(
+          bot,
+          chatId,
+          msgId,
           `🎯 Promotion status ကို *${status}* လို့ပြောင်းလိုက်ပြီးပါပြီ။`,
           {
-            chat_id: chatId,
-            message_id: msgId,
             parse_mode: 'Markdown',
             ...buildAdminPanelKeyboard(),
           }
@@ -2064,9 +2073,7 @@ bot.on('callback_query', async (query) => {
         lines.push('');
         lines.push(promoConfig.text || '_no promo_');
 
-        await bot.editMessageText(lines.join('\n'), {
-          chat_id: chatId,
-          message_id: msgId,
+        await safeEditMessageText(bot, chatId, msgId, lines.join('\n'), {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
@@ -2098,11 +2105,15 @@ bot.on('callback_query', async (query) => {
             console.error('Broadcast failed to', uid, e.message);
           }
         }
-        await bot.editMessageText(`✅ Broadcast sent to ~${sent} users.`, {
-          chat_id: chatId,
-          message_id: msgId,
-          ...buildAdminPanelKeyboard(),
-        });
+        await safeEditMessageText(
+          bot,
+          chatId,
+          msgId,
+          `✅ Broadcast sent to ~${sent} users.`,
+          {
+            ...buildAdminPanelKeyboard(),
+          }
+        );
         return;
       }
 
@@ -2142,16 +2153,20 @@ bot.on('callback_query', async (query) => {
           return;
         }
 
-        await bot.editMessageText(formatOrderSummary(order), {
-          chat_id: chatId,
-          message_id: msgId,
-          parse_mode: 'Markdown',
-          ...buildOrderDetailKeyboard(order, true),
-        });
+        await safeEditMessageText(
+          bot,
+          chatId,
+          msgId,
+          formatOrderSummary(order),
+          {
+            parse_mode: 'Markdown',
+            ...buildOrderDetailKeyboard(order, true),
+          }
+        );
         return;
       }
 
-// COMPLETE / REJECT (with caption change + auto clean)
+      // COMPLETE / REJECT (with caption change)
       if (
         data.startsWith('admin:complete:') ||
         data.startsWith('admin:reject:')
@@ -2173,35 +2188,21 @@ bot.on('callback_query', async (query) => {
         }
         await order.save();
 
-        // Admin message ကို update လုပ်မယ်
+        // Update admin message caption / text (remove buttons)
         const newText = formatOrderSummary(order, {
           title: isComplete ? 'COMPLETE' : 'REJECTED',
         });
 
-        // ⛑ editMessage* မှာ "message to edit not found" error ထွက်ရင် ကိုယ်တိုင် handle လုပ်မယ်
-        try {
-          if (query.message && query.message.photo) {
-            await bot.editMessageCaption(newText, {
-              chat_id: chatId,
-              message_id: msgId,
-              parse_mode: 'Markdown',
-              reply_markup: { inline_keyboard: [] },
-            });
-          } else {
-            await bot.editMessageText(newText, {
-              chat_id: chatId,
-              message_id: msgId,
-              parse_mode: 'Markdown',
-              reply_markup: { inline_keyboard: [] },
-            });
-          }
-        } catch (e) {
-          const desc = e?.response?.body?.description || '';
-          if (!desc.includes('message to edit not found')) {
-            console.error('Failed to edit admin message', e.message || e);
-          }
-          // message ကို admin ချိန်ဖျက်လိုက်တာ / group ထဲက message မရှိတာ
-          // စတဲ့ case တွေအတွက်တော့ simply ignore လုပ်မယ်
+        if (query.message && query.message.photo) {
+          await safeEditMessageCaption(bot, chatId, msgId, newText, {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [] },
+          });
+        } else {
+          await safeEditMessageText(bot, chatId, msgId, newText, {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [] },
+          });
         }
 
         if (isComplete) {
@@ -2214,9 +2215,12 @@ bot.on('callback_query', async (query) => {
               { parse_mode: 'Markdown' }
             );
 
-            // ✅ Order complete ဖြစ်ပြီဆိုတော့ customer chat ကို သုတ်မယ်
-            if (autoClean && autoClean.cleanChat) {
-              autoClean.cleanChat(order.userId, { keepLast: 1 }).catch(() => {});
+            // ✅ Order Complete ဖြစ်သွားတဲ့အချိန်
+            //    အပေါ်က စာတွေ အကုန်ဖျက်ပြီး နောက်ဆုံး summary တစ်ခုပဲ ကျန်စေမယ်
+            if (autoClean && typeof autoClean.cleanChat === 'function') {
+              autoClean
+                .cleanChat(order.userId, { keepLast: 1 })
+                .catch(() => {});
             }
           } catch (e) {
             console.error('Notify user failed', order.userId, e.message);
@@ -2237,7 +2241,6 @@ bot.on('callback_query', async (query) => {
 
         return;
       }
-      ////////////////////////////////////////
 
       if (data.startsWith('admin:markpaid:')) {
         await acknowledge();
@@ -2250,11 +2253,12 @@ bot.on('callback_query', async (query) => {
         order.paidAt = new Date();
         await order.save();
 
-        await bot.editMessageText(
+        await safeEditMessageText(
+          bot,
+          chatId,
+          msgId,
           `💳 Order #${order.id} ကို admin မှ manual paid & pending confirm လို ပြောင်းလိုက်ပါတယ်။`,
           {
-            chat_id: chatId,
-            message_id: msgId,
             ...buildAdminPanelKeyboard(),
           }
         );
