@@ -41,6 +41,8 @@ const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bika_store_bot';
 
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
+// 🕒 Timezone (env: TZ)
+const TIME_ZONE = process.env.TZ || 'Asia/Yangon';
 
 // ====== MONGOOSE INIT ======
 mongoose
@@ -257,9 +259,25 @@ async function getNextOrderId() {
 
 function formatDateTime(dt) {
   if (!dt) return '-';
-  if (typeof dt === 'string') dt = new Date(dt);
-  if (!(dt instanceof Date)) return String(dt);
-  return dt.toLocaleString('en-GB');
+
+  let d = dt;
+  if (!(d instanceof Date)) {
+    d = new Date(dt);
+  }
+  if (Number.isNaN(d.getTime())) {
+    return '-';
+  }
+
+  return d.toLocaleString('en-GB', {
+    timeZone: TIME_ZONE,      // 👉 env.TZ ကို သုံးမယ်
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
 }
 
 function shortUserLabel(order) {
@@ -446,44 +464,87 @@ function buildAdminPanelKeyboard() {
 
 function formatOrderSummary(order, options = {}) {
   const showStatus = options.showStatus !== false;
+  const titleVariant = options.title || 'DEFAULT';
+
   const lines = [];
-  if (options.title === 'COMPLETE') {
-    lines.push(`✅ **Order #${order.id} Complete**`);
-  } else if (options.title === 'REJECTED') {
-    lines.push(`❌ **Order #${order.id} Rejected**`);
-  } else if (options.title === 'NEW') {
-    lines.push(`🆕 **Order #${order.id} အသစ်လက်ခံရရှိပါသည်**`);
+
+  // Header title
+  if (titleVariant === 'COMPLETE') {
+    lines.push('✅ **BIKA STORE – Order Complete**');
+  } else if (titleVariant === 'REJECTED') {
+    lines.push('❌ **BIKA STORE – Order Rejected**');
+  } else if (titleVariant === 'NEW') {
+    lines.push('🆕 **BIKA STORE – New Order**');
   } else {
-    lines.push(`🧾 **Order #${order.id}**`);
+    lines.push('🧾 **BIKA STORE – Order Detail**');
   }
 
+  lines.push('');
+  lines.push(`**Order ID:** \`#${order.id}\``);
+
+  // Status line
   if (showStatus) {
-    lines.push(`Status: \`${order.status}\``);
+    const statusLabel =
+      {
+        PENDING_PAYMENT: '⏳ Pending Payment',
+        AWAITING_SLIP: '📸 Awaiting Slip',
+        PENDING_CONFIRMATION: '🕒 Waiting Admin Confirmation',
+        COMPLETED: '✅ Completed',
+        REJECTED: '❌ Rejected',
+        CANCELLED_BY_USER: '🚫 Cancelled by Customer',
+      }[order.status] || order.status;
+
+    lines.push(`**Status:** ${statusLabel}`);
   }
-  lines.push('');
 
-  lines.push(`Game: ${order.categoryKey === 'mlbb' ? 'MLBB' : 'PUBG'}`);
-  lines.push(`Package: ${order.packageName}`);
-  lines.push(`Price: ${formatPrice(order.price)}`);
-  lines.push('');
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
 
+  // Game & Package
+  lines.push('🎮 **Game & Package**');
+  const gameLabel =
+    order.categoryKey === 'mlbb'
+      ? 'MLBB Diamonds & Weekly Pass'
+      : 'PUBG UC & Prime';
+
+  lines.push(`• Game: *${gameLabel}*`);
+  lines.push(`• Package: *${order.packageName}*`);
+  lines.push(`• Price: *${formatPrice(order.price)}*`);
+
+  // Account Info
+  lines.push('');
+  lines.push('👤 **Account Info**');
   if (order.categoryKey === 'mlbb') {
-    lines.push(`MLBB ID: \`${order.gameId || '-'}\``);
-    lines.push(`Server ID: \`${order.serverId || '-'}\``);
-  } else if (order.categoryKey === 'pubg') {
-    lines.push(`PUBG ID: \`${order.gameId || '-'}\``);
+    lines.push(`• MLBB ID: \`${order.gameId || '-'}\``);
+    lines.push(`• Server ID: \`${order.serverId || '-'}\``);
+  } else {
+    lines.push(`• PUBG ID: \`${order.gameId || '-'}\``);
   }
 
+  // Telegram user
   lines.push('');
+  lines.push('💬 **Telegram User**');
   lines.push(
-    `Telegram: @${order.username || 'unknown'} (${order.firstName || 'User'})`
+    `• @${order.username || 'unknown'} (${order.firstName || 'User'})`
   );
+
+  // Timeline
   lines.push('');
-  lines.push(`Created at: ${formatDateTime(order.createdAt)}`);
-  if (order.paidAt) lines.push(`Paid at: ${formatDateTime(order.paidAt)}`);
-  if (order.confirmedAt)
-    lines.push(`Confirmed at: ${formatDateTime(order.confirmedAt)}`);
-  if (order.adminNote) lines.push(`Admin note: ${order.adminNote}`);
+  lines.push('🕓 **Timeline**');
+  lines.push(`• Created:   ${formatDateTime(order.createdAt)}`);
+  if (order.paidAt) {
+    lines.push(`• Paid:      ${formatDateTime(order.paidAt)}`);
+  }
+  if (order.confirmedAt) {
+    lines.push(`• Confirmed: ${formatDateTime(order.confirmedAt)}`);
+  }
+
+  // Admin note
+  if (order.adminNote) {
+    lines.push('');
+    lines.push('📝 **Admin Note**');
+    lines.push(order.adminNote);
+  }
+
   return lines.join('\n');
 }
 
