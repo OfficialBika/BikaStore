@@ -3,14 +3,22 @@
 /**
  * BIKA STORE BOT - MongoDB + Webhook Version (MLBB & PUBG only)
  *
- * New in this version:
+ * Features:
  *  - MLBB: ask MLBB ID + Server ID together in one message (e.g. "12345678 1234")
  *  - Payment slip flow:
  *      User taps "I have paid" -> bot asks for screenshot -> user sends photo
- *      Then admins receive: "Order အသစ်လက်ခံရရှိပါသည်" + slip + order info + Approve / Reject buttons
+ *      Then admins receive: slip + order info + Approve / Reject buttons
  *  - When admin Approve / Reject:
  *      - Buttons disappear on that admin message, caption changes to "Order Complete" or "Order Rejected"
- *      - If Approve -> user receives "Your order is complete" + order info
+ *      - If Approve -> user receives "Order Complete" summary
+ *  - Promo system:
+ *      /promocreate (admin) -> 1 hour MLBB promo
+ *      /promo or Promo button -> first Claim wins
+ *      Winner sends MLBB ID + Server ID -> goes to admin with Approve Gift button
+ *  - Leaderboard:
+ *      /top10 (last 3 months, COMPLETED only)
+ *      /myrank (all-time COMPLETED)
+ *  - /admin dashboard + /broadcast
  *
  * ENV:
  *  - TELEGRAM_BOT_TOKEN
@@ -18,6 +26,7 @@
  *  - STORE_CURRENCY  (optional, default 'Ks')
  *  - MONGODB_URI
  *  - PUBLIC_URL      (e.g. https://mybot.onrender.com)
+ *  - TZ              (IANA timezone, e.g. Asia/Yangon)
  */
 
 const TelegramBot = require('node-telegram-bot-api');
@@ -143,7 +152,7 @@ const userLastStepMessage = new Map();
 const knownUserIds = new Set();
 
 /**
- * Promotion config
+ * Promotion config (normal bot-wide promo text)
  */
 const promoConfig = {
   isActive: true,
@@ -156,14 +165,18 @@ const promoConfig = {
 /**
  * One-hour MLBB free diamonds promo state
  * Admin will use /promocreate to start.
+ *
+ * shape:
+ * {
+ *   createdBy, createdAt, expiresAt,
+ *   winnerUserId, winnerUsername, winnerFirstName,
+ *   winnerChatId,
+ *   winnerGameId, winnerServerId
+ * }
  */
-let activePromo = null; 
-// shape: {
-//   createdBy, createdAt, expiresAt,
-//   winnerUserId, winnerUsername, winnerFirstName,
-//   winnerChatId,
-//   winnerGameId, winnerServerId
-// }
+let activePromo = null;
+
+// ====== PROMO HELPERS ======
 
 function startNewPromo(adminId) {
   const now = new Date();
@@ -323,7 +336,12 @@ function formatPrice(value) {
   return value.toLocaleString('en-US') + ' ' + STORE_CURRENCY;
 }
 
+// Reset session + auto delete last step message
 function resetUserSession(userId) {
+  const last = userLastStepMessage.get(userId);
+  if (last) {
+    bot.deleteMessage(last.chatId, last.messageId).catch(() => {});
+  }
   sessions.delete(userId);
   userLastStepMessage.delete(userId);
 }
@@ -360,7 +378,7 @@ function formatDateTime(dt) {
   }
 
   return d.toLocaleString('en-GB', {
-    timeZone: TIME_ZONE,      // 👉 env.TZ ကို သုံးမယ်
+    timeZone: TIME_ZONE, // 👉 env.TZ ကို သုံးမယ်
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -565,7 +583,7 @@ async function getAdminStats() {
   }
 
   return { totalUsers, totalOrders, totalMmk };
-      }
+}
 
 // ====== UI BUILDERS ======
 
@@ -833,7 +851,7 @@ async function sendPaymentInstructions(chatId, order) {
   lines.push('📌 Payment Methods ():');
   lines.push(' Payment Acc Name');
   lines.push('  Shine Htet Aung');
-  lines.push('- KBZ Pay - 09264202637'); 
+  lines.push('- KBZ Pay - 09264202637');
   lines.push('- WavePay - 09264202637');
   lines.push('- (Admin will specify exact account)');
   lines.push('');
@@ -853,7 +871,46 @@ async function sendPaymentInstructions(chatId, order) {
   });
 }
 
-// ====== BOT HANDLERS ======
+// Helper – best-looking order confirm UI
+async function sendOrderConfirmMessage(userId, chatId, draft) {
+  const gameLabel =
+    draft.categoryKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime';
+
+  const lines = [];
+  lines.push('📦 **Review & Confirm your order**');
+  lines.push('');
+  lines.push('**1. Game & Package**');
+  lines.push(`• Game: *${gameLabel}*`);
+  lines.push(`• Package: *${draft.packageName}*`);
+  lines.push(`• Price: *${formatPrice(draft.price)}*`);
+  lines.push('');
+  lines.push('**2. Account Info**');
+
+  if (draft.categoryKey === 'mlbb') {
+    lines.push(`• MLBB ID: \`${draft.gameId}\``);
+    lines.push(`• Server ID: \`${draft.serverId || '-'}\``);
+  } else {
+    lines.push(`• PUBG ID: \`${draft.gameId}\``);
+  }
+
+  lines.push('');
+  lines.push('အထက်ပါ အချက်အလက်တွေ **မှန်ကန်တယ်** လို့သေချာရင်');
+  lines.push(
+    'အောက်က "✅ Confirm Order" ကိုနှိပ်ပြီး order ကို အတည်ပြုပါ။'
+  );
+
+  await sendStepMessage(userId, chatId, lines.join('\n'), {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '✅ Confirm Order', callback_data: 'order:confirm' }],
+        [{ text: '❌ Cancel', callback_data: 'order:cancel_draft' }],
+      ],
+    },
+  });
+}
+
+// ====== BOT HANDLERS (TEXT COMMANDS) ======
 
 // /start with optional payload (/start from_website)
 bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
@@ -1132,8 +1189,7 @@ bot.onText(/\/(?:broadcast|broadcat)(?:\s+([\s\S]+))?/, async (msg, match) => {
   );
 });
 
-
-// ====== MESSAGE HANDLER (ID+SV, PUBG ID, Slip Photo) ======
+// ====== MESSAGE HANDLER (ID+SV, PUBG ID, Slip Photo, Promo winner ID) ======
 
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
@@ -1207,8 +1263,8 @@ bot.on('message', async (msg) => {
     const raw = msg.text.trim();
     const parts = raw.split(/[\s,]+/).filter(Boolean);
 
-    let gameId = parts[0] || '';
-    let serverId = parts[1] || '';
+    const gameId = parts[0] || '';
+    const serverId = parts[1] || '';
 
     promo.winnerGameId = gameId;
     promo.winnerServerId = serverId;
@@ -1269,22 +1325,6 @@ bot.on('message', async (msg) => {
 
   // optional cancel
   if (text === '❌ Cancel') {
-    ...
-  }
-
-  // 3) MLBB (ID + SVID in one message)
-  ...
-});
-
-  // For other flows we only care about text (ignore photos if not WAIT_SLIP)
-  if (!msg.text || msg.text.startsWith('/')) return;
-  if (!session || !session.step) return;
-
-  const text = msg.text.trim();
-  const draft = session.orderDraft || {};
-
-  // optional cancel
-  if (text === '❌ Cancel') {
     resetUserSession(userId);
     await bot.sendMessage(chatId, '❌ Order ကို cancel လုပ်ထားပါတယ်။', {
       reply_markup: { remove_keyboard: true },
@@ -1292,7 +1332,7 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // 2) MLBB (ID + SVID in one message)
+  // MLBB (ID + SVID in one message)
   if (session.step === 'WAIT_MLBB_ID_SVID') {
     const parts = text.split(/[\s,]+/).filter(Boolean);
     let gameId = '';
@@ -1302,7 +1342,7 @@ bot.on('message', async (msg) => {
       gameId = parts[0];
       serverId = parts[1];
     } else {
-      // user တစ်ခုတည်းပဲ ထည့်ရင် ID အနေနဲ့ယူပြီး ServerId ကို ထပ်မေးမနေတော့ – အရင်တန် ID မှာပဲ သိမ်းထားမယ်
+      // user တစ်ခုတည်းပဲ ထည့်ရင် ID အနေနဲ့ယူပြီး ServerId ကို ထပ်မေးမနေတော့
       gameId = text;
       serverId = '';
     }
@@ -1314,7 +1354,7 @@ bot.on('message', async (msg) => {
 
     await bot.sendMessage(
       chatId,
-      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီးပါပြီ။ Order ကို အတည်ပြုဖို့ Id နဲ့ sever Id ကို စစ်ဆေးကြည့်ပါ။',
+      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီးပါပြီ။ Order ကို အတည်ပြုဖို့ Id နဲ့ Server ID ကို စစ်ဆေးကြည့်ပါ။',
       { reply_markup: { remove_keyboard: true } }
     );
 
@@ -1322,7 +1362,7 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // 3) PUBG (ID only)
+  // PUBG (ID only)
   if (session.step === 'WAIT_PUBG_ID') {
     draft.gameId = text;
     draft.serverId = '';
@@ -1341,45 +1381,6 @@ bot.on('message', async (msg) => {
 
   // WAIT_CONFIRM – ignore random text
 });
-
-// Helper – best-looking order confirm UI
-async function sendOrderConfirmMessage(userId, chatId, draft) {
-  const gameLabel =
-    draft.categoryKey === 'mlbb' ? 'MLBB Diamonds & Pass' : 'PUBG UC & Prime';
-
-  const lines = [];
-  lines.push('📦 **Review & Confirm your order**');
-  lines.push('');
-  lines.push('**1. Game & Package**');
-  lines.push(`• Game: *${gameLabel}*`);
-  lines.push(`• Package: *${draft.packageName}*`);
-  lines.push(`• Price: *${formatPrice(draft.price)}*`);
-  lines.push('');
-  lines.push('**2. Account Info**');
-
-  if (draft.categoryKey === 'mlbb') {
-    lines.push(`• MLBB ID: \`${draft.gameId}\``);
-    lines.push(`• Server ID: \`${draft.serverId || '-'}\``);
-  } else {
-    lines.push(`• PUBG ID: \`${draft.gameId}\``);
-  }
-
-  lines.push('');
-  lines.push('အထက်ပါ အချက်အလက်တွေ **မှန်ကန်တယ်** လို့သေချာရင်');
-  lines.push(
-    'အောက်က "✅ Confirm Order" ကိုနှိပ်ပြီး order ကို အတည်ပြုပါ။'
-  );
-
-  await sendStepMessage(userId, chatId, lines.join('\n'), {
-    parse_mode: 'Markdown',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '✅ Confirm Order', callback_data: 'order:confirm' }],
-        [{ text: '❌ Cancel', callback_data: 'order:cancel_draft' }],
-      ],
-    },
-  });
-}
 
 // ====== CALLBACK HANDLER ======
 
@@ -1431,13 +1432,17 @@ bot.on('callback_query', async (query) => {
       return;
     }
 
-    
-      // Promo claim – first click wins
+    if (data === 'm:promo') {
+      await acknowledge();
+      await handlePromoRequest(chatId, query.from);
+      return;
+    }
+
+    // Promo claim – first click wins
     if (data === 'promo:claim') {
       await acknowledge();
 
       const promo = getActivePromo();
-      const isAdminUser = isAdmin(userId);
 
       if (!promo) {
         // expired or not active
@@ -1462,9 +1467,9 @@ bot.on('callback_query', async (query) => {
           : promo.winnerFirstName || `User ${promo.winnerUserId}`;
 
         const loseText =
-          '😢 ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
+          'ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
           `ပထမဆုံး Claim လိုက်တဲ့ ကံကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
-          'နောက်ကျရင် ကောင်းတာဆို သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
+          'နောက်မကျစေနဲ့ နောက်ကျရင် ကောင်းတာဆိုလို့ သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
 
         try {
           await bot.editMessageText(loseText, {
@@ -1490,7 +1495,7 @@ bot.on('callback_query', async (query) => {
       const winText =
         '🎉 **ဂုဏ်ယူပါတယ်! သင်ကံထူးသွားပါပြီ**\n\n' +
         'MLBB free diamonds ကို claim လုပ်ဖို့\n' +
-        '**ကိုယ့် MLBB ID + Server ID ကို တစ်ကြိမ်တည်း space နဲ့ ခွဲပြီး ဒီ chat ထဲမှာ ပို့ပေးပါ။**\n\n' +
+        '**မိမိရဲ့ MLBB ID + Server ID ကို တစ်ကြိမ်တည်း space နဲ့ ခွဲပြီး ဒီ chat ထဲမှာ ပို့ပေးပါ။**\n\n' +
         'ဥပမာ: `12345678 1234`\n\n' +
         'Admin မှာ ID + SV ID ကိုပဲ အခြေခံပြီး Top-up လုပ်ပေးမှာ ဖြစ်ပါတယ် 💎';
 
@@ -1503,7 +1508,7 @@ bot.on('callback_query', async (query) => {
         });
       } catch (_) {}
 
-      // Admin တွေကို "winner ဆီက ID+SV ထပ်စောင့်ရ ещё" စာတိုပဲ ပို့မယ် (optional)
+      // Admin တွေကို "winner ဆီက ID+SV ထပ်စောင့််ရ" စာတိုပဲ ပို့မယ် (optional)
       const adminInfo =
         '🎁 **Promo Winner Found!**\n\n' +
         `User: @${promo.winnerUsername || 'unknown'} (${promo.winnerFirstName ||
@@ -1517,7 +1522,11 @@ bot.on('callback_query', async (query) => {
             parse_mode: 'Markdown',
           });
         } catch (e) {
-          console.error('Failed to notify admin promo winner base', adminId, e.message);
+          console.error(
+            'Failed to notify admin promo winner base',
+            adminId,
+            e.message
+          );
         }
       }
 
@@ -1578,10 +1587,14 @@ bot.on('callback_query', async (query) => {
         await bot.sendMessage(
           winnerChatId,
           '🎁 သင့်လက်ဆောင်ဆုမဲကို ကို Bika ထုတ်ပေးလိုက်ပါပြီ 💎\n\n' +
-            'ကံကောင်းတဲ့ gamers တစ်ယောက်ဖြစ်လာတာကို ဂုဏ်ယူပါတယ် 😎'
+            'ကံကောင်းသွားတဲ့အတွက် ဂုဏ်ယူပါတယ်'
         );
       } catch (e) {
-        console.error('Failed to notify promo winner final', winnerChatId, e.message);
+        console.error(
+          'Failed to notify promo winner final',
+          winnerChatId,
+          e.message
+        );
       }
 
       // Promo session ကို ပြီးတော့အောင် clear လုပ်မယ်
@@ -2135,7 +2148,10 @@ bot.on('callback_query', async (query) => {
       }
 
       // COMPLETE / REJECT (with caption change)
-      if (data.startsWith('admin:complete:') || data.startsWith('admin:reject:')) {
+      if (
+        data.startsWith('admin:complete:') ||
+        data.startsWith('admin:reject:')
+      ) {
         await acknowledge();
         const isComplete = data.startsWith('admin:complete:');
         const [, , idStr] = data.split(':');
