@@ -1,19 +1,10 @@
 'use strict';
 
-/**
- * attachAutoClean(bot, { skipChatIds })
- *
- * - Messages ကို သာရီသိမ်းထားပေးတယ် (chat အလိုက် message_id list)
- * - ဘာ message ကိုမှ auto delete မလုပ်ပါ
- * - index.js ထဲကနေ autoClean.cleanChat(chatId, { keepLast })
- *   ကိုခေါ်မရင် ဘာမှ မဖျက်ပါ
- */
-
 module.exports = function attachAutoClean(bot, options = {}) {
   const { skipChatIds = [], memoryLimit = 200 } = options;
 
   const skipSet = new Set(skipChatIds.map(String));
-  const chatMessages = new Map(); // key: chatId(string) -> [messageId...]
+  const chatMessages = new Map(); // chatId -> [messageId...]
 
   function remember(chatId, messageId) {
     const key = String(chatId);
@@ -21,13 +12,11 @@ module.exports = function attachAutoClean(bot, options = {}) {
     if (!chatMessages.has(key)) chatMessages.set(key, []);
     const list = chatMessages.get(key);
     list.push(messageId);
-    // များလွန်းရင် အဟောင်းအောက်ဆုံးတွေ ဖျက်ထုတ်ပစ်
     if (list.length > memoryLimit) {
       list.splice(0, list.length - memoryLimit);
     }
   }
 
-  // send* methods တွေကို "မှတ်တမ်းစာရင်းပဲ ထည့်မယ်" ဆိုပြီး wrap လုပ်ထားမယ်
   function wrapSend(methodName) {
     if (typeof bot[methodName] !== 'function') return;
     const original = bot[methodName].bind(bot);
@@ -50,7 +39,6 @@ module.exports = function attachAutoClean(bot, options = {}) {
   wrapSend('sendAnimation');
   wrapSend('sendVideo');
 
-  // Manual clean – chat ထဲက message တွေကို သုတ်ဖို့
   async function cleanChat(chatId, opts = {}) {
     const { keepLast = 0 } = opts;
     const key = String(chatId);
@@ -66,7 +54,7 @@ module.exports = function attachAutoClean(bot, options = {}) {
       try {
         await bot.deleteMessage(chatId, msgId);
       } catch (e) {
-        // already deleted / too old / etc. → ငြင်းပယ်ထားပါ
+        // already deleted / too old → မလုပ်ဘူး
       }
     }
   }
