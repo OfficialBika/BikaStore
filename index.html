@@ -220,7 +220,16 @@
       background:rgba(15,23,42,0.96); color:var(--text-soft);
     }
 
-    /* Product tabs + tables */
+    /* Product layout + tabs + tables */
+    .product-layout {
+      display:grid;
+      grid-template-columns:minmax(0,1.6fr) minmax(0,1.1fr);
+      gap:16px;
+      align-items:flex-start;
+      margin-top:6px;
+    }
+    .product-main { display:block; }
+
     .product-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
     .product-tab {
       padding:6px 11px; border-radius:999px;
@@ -268,6 +277,173 @@
       font-size:11px;
       color:var(--text-soft);
       margin-top:8px;
+    }
+
+    /* Cart (web multi-order) */
+    .cart-card {
+      border-radius:16px;
+      border:1px solid var(--border-subtle);
+      background:radial-gradient(circle at top, rgba(30,64,175,0.6), rgba(15,23,42,0.98) 60%);
+      padding:14px 14px 12px;
+      box-shadow:var(--shadow-soft);
+      font-size:12px;
+    }
+    .cart-title-row {
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      align-items:flex-start;
+      margin-bottom:8px;
+    }
+    .cart-title { font-size:13px; font-weight:600; }
+    .cart-sub { font-size:11px; color:var(--text-soft); }
+    .cart-pill {
+      font-size:10px;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid rgba(56,189,248,0.7);
+      background:rgba(15,23,42,0.98);
+      color:#e5e7eb;
+    }
+    .cart-empty {
+      font-size:11px;
+      color:var(--text-soft);
+      margin-bottom:10px;
+    }
+    .cart-items {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin-bottom:10px;
+    }
+    .cart-item {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      padding:7px 8px;
+      border-radius:12px;
+      border:1px solid rgba(51,65,85,0.9);
+      background:rgba(15,23,42,0.98);
+    }
+    .cart-item-main { flex:1 1 auto; }
+    .cart-item-name { font-size:12px; font-weight:500; }
+    .cart-item-meta { font-size:11px; color:var(--text-soft); }
+    .cart-item-meta span { color:#e5e7eb; }
+    .cart-item-qty {
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .qty-btn {
+      width:22px;
+      height:22px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,0.8);
+      background:rgba(15,23,42,1);
+      color:var(--text-main);
+      font-size:13px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .qty-btn:hover { background:rgba(30,64,175,0.9); }
+    .cart-item-count {
+      min-width:16px;
+      text-align:center;
+      font-size:12px;
+    }
+    .cart-bottom {
+      border-top:1px dashed rgba(148,163,184,0.5);
+      padding-top:8px;
+    }
+    .cart-summary-row {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      margin-bottom:6px;
+    }
+    .cart-summary-row span:last-child { font-weight:600; }
+    .cart-confirm {
+      width:100%;
+      margin-top:4px;
+      justify-content:center;
+    }
+    .cart-confirm[disabled] {
+      opacity:0.5;
+      cursor:not-allowed;
+      box-shadow:none !important;
+      transform:none !important;
+    }
+    .cart-hint {
+      font-size:11px;
+      color:var(--text-soft);
+      margin-top:6px;
+    }
+    .add-btn {
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid rgba(56,189,248,0.7);
+      background:rgba(15,23,42,0.98);
+      color:#e0f2fe;
+      font-size:11px;
+      cursor:pointer;
+    }
+    .add-btn:hover { background:rgba(30,64,175,0.9); }
+
+    .cart-confirmed {
+      margin-top:6px;
+      border-top:1px dashed rgba(148,163,184,0.6);
+      padding-top:8px;
+      font-size:11px;
+      color:var(--text-soft);
+    }
+    .cart-confirm-text { margin-bottom:6px; }
+    .cart-summary-text {
+      background:rgba(15,23,42,0.98);
+      border-radius:10px;
+      border:1px solid rgba(51,65,85,0.9);
+      padding:8px 9px;
+      font-size:11px;
+      white-space:pre-wrap;
+      max-height:160px;
+      overflow:auto;
+      margin-bottom:6px;
+    }
+    .cart-actions {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-bottom:8px;
+    }
+    .cart-actions .btn-outline {
+      font-size:11px;
+      padding:7px 12px;
+    }
+    .cart-payment {
+      border-radius:10px;
+      border:1px dashed rgba(148,163,184,0.7);
+      padding:6px 8px;
+      background:rgba(15,23,42,0.98);
+    }
+    .cart-payment-title {
+      font-size:11px;
+      font-weight:600;
+      margin-bottom:4px;
+    }
+    .cart-payment ul {
+      margin:0 0 4px 16px;
+      padding:0;
+      font-size:11px;
+    }
+    .cart-payment li { margin-bottom:2px; }
+    .cart-note {
+      font-size:10px;
+      color:var(--text-soft);
+      margin-top:4px;
     }
 
     /* Steps */
@@ -331,6 +507,10 @@
     @media (max-width: 960px) {
       .hero { grid-template-columns:minmax(0,1fr); }
       .hero-card { order:-1; }
+    }
+    @media (max-width: 900px) {
+      .product-layout { grid-template-columns:minmax(0,1fr); }
+      .cart-card { margin-top:12px; }
     }
     @media (max-width: 800px) {
       .steps-grid { grid-template-columns:minmax(0,1fr); }
@@ -440,92 +620,379 @@
           </div>
         </div>
 
-        <div class="product-tabs">
-          <button class="product-tab active" data-tab="mlbb" onclick="selectTab('mlbb')">💎 MLBB Diamonds & Pass</button>
-          <button class="product-tab" data-tab="pubg" onclick="selectTab('pubg')">🎯 PUBG UC & Prime</button>
-        </div>
+        <div class="product-layout">
+          <div class="product-main">
+            <div class="product-tabs">
+              <button class="product-tab active" data-tab="mlbb" onclick="selectTab('mlbb')">💎 MLBB Diamonds & Pass</button>
+              <button class="product-tab" data-tab="pubg" onclick="selectTab('pubg')">🎯 PUBG UC & Prime</button>
+            </div>
 
-        <!-- MLBB table -->
-        <div class="product-panel" data-panel="mlbb">
-          <div class="price-table-wrap">
-            <table class="price-table">
-              <thead>
-                <tr>
-                  <th>MLBB Package</th>
-                  <th>Price (Ks)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>11 Diamonds</td><td>800</td></tr>
-                <tr><td>22 Diamonds</td><td>1,600</td></tr>
-                <tr><td>33 Diamonds</td><td>2,350</td></tr>
-                <tr><td>55 Diamonds</td><td>3,600</td></tr>
-                <tr><td>86 Diamonds</td><td>4,800</td></tr>
-                <tr><td>112 Diamonds</td><td>8,200</td></tr>
-                <tr><td>172 Diamonds</td><td>9,800</td></tr>
-                <tr><td>257 Diamonds</td><td>14,500</td></tr>
-                <tr><td>343 Diamonds</td><td>20,000</td></tr>
-                <tr><td>429 Diamonds</td><td>25,000</td></tr>
-                <tr><td>514 Diamonds</td><td>29,900</td></tr>
-                <tr><td>600 Diamonds</td><td>34,500</td></tr>
-                <tr><td>706 Diamonds</td><td>39,900</td></tr>
-                <tr><td>792 Diamonds</td><td>44,500</td></tr>
-                <tr><td>878 Diamonds</td><td>48,500</td></tr>
-                <tr><td>963 Diamonds</td><td>53,000</td></tr>
-                <tr><td>1049 Diamonds</td><td>59,900</td></tr>
-                <tr><td>1135 Diamonds</td><td>63,500</td></tr>
-                <tr><td>1412 Diamonds</td><td>77,000</td></tr>
-                <tr><td>1584 Diamonds</td><td>88,000</td></tr>
-                <tr><td>1669 Diamonds</td><td>94,000</td></tr>
-                <tr><td>2195 Diamonds</td><td>118,900</td></tr>
-                <tr><td>3158 Diamonds</td><td>172,000</td></tr>
-                <tr><td>3688 Diamonds</td><td>202,000</td></tr>
-                <tr><td>4390 Diamonds</td><td>237,000</td></tr>
-                <tr><td>5100 Diamonds</td><td>280,000</td></tr>
-                <tr><td>5532 Diamonds</td><td>300,000</td></tr>
-                <tr><td>6055 Diamonds</td><td>330,000</td></tr>
-                <tr><td>Weekly Pass 1 (wp1)</td><td>5,900</td></tr>
-                <tr><td>Weekly Pass 2 (wp2)</td><td>11,800</td></tr>
-                <tr><td>Weekly Pass 3 (wp3)</td><td>17,700</td></tr>
-                <tr><td>Weekly Pass 4 (wp4)</td><td>23,600</td></tr>
-                <tr><td>Weekly Pass 5 (wp5)</td><td>29,500</td></tr>
-                <tr><td>WEB (web)</td><td>3,500</td></tr>
-                <tr><td>MEB (meb)</td><td>16,500</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="price-note">
-            💡 MLBB အတွက် <strong>Game ID + Server ID (SV ID)</strong> ပဲလိုအပ်ပါတယ်။
-            Price တွေကို အမြဲ update ထားပေမယ့် promotion ကြောင့် တချို့ package စျေးနည်း/စျေးမြင့် ပြောင်းလဲနိုင်ပါတယ်။
-          </p>
-        </div>
+            <!-- MLBB table -->
+            <div class="product-panel" data-panel="mlbb">
+              <div class="price-table-wrap">
+                <table class="price-table">
+                  <thead>
+                    <tr>
+                      <th>MLBB Package</th>
+                      <th>Price (Ks)</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>11 Diamonds</td><td>800</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_11" data-name="11 Diamonds" data-price="800">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>22 Diamonds</td><td>1,600</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_22" data-name="22 Diamonds" data-price="1600">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>33 Diamonds</td><td>2,350</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_33" data-name="33 Diamonds" data-price="2350">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>55 Diamonds</td><td>3,600</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_55" data-name="55 Diamonds" data-price="3600">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>86 Diamonds</td><td>4,800</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_86" data-name="86 Diamonds" data-price="4800">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>112 Diamonds</td><td>8,200</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_112" data-name="112 Diamonds" data-price="8200">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>172 Diamonds</td><td>9,800</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_172" data-name="172 Diamonds" data-price="9800">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>257 Diamonds</td><td>14,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_257" data-name="257 Diamonds" data-price="14500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>343 Diamonds</td><td>20,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_343" data-name="343 Diamonds" data-price="20000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>429 Diamonds</td><td>25,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_429" data-name="429 Diamonds" data-price="25000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>514 Diamonds</td><td>29,900</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_514" data-name="514 Diamonds" data-price="29900">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>600 Diamonds</td><td>34,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_600" data-name="600 Diamonds" data-price="34500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>706 Diamonds</td><td>39,900</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_706" data-name="706 Diamonds" data-price="39900">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>792 Diamonds</td><td>44,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_792" data-name="792 Diamonds" data-price="44500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>878 Diamonds</td><td>48,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_878" data-name="878 Diamonds" data-price="48500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>963 Diamonds</td><td>53,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_963" data-name="963 Diamonds" data-price="53000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>1049 Diamonds</td><td>59,900</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_1049" data-name="1049 Diamonds" data-price="59900">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>1135 Diamonds</td><td>63,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_1135" data-name="1135 Diamonds" data-price="63500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>1412 Diamonds</td><td>77,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_1412" data-name="1412 Diamonds" data-price="77000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>1584 Diamonds</td><td>88,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_1584" data-name="1584 Diamonds" data-price="88000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>1669 Diamonds</td><td>94,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_1669" data-name="1669 Diamonds" data-price="94000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>2195 Diamonds</td><td>118,900</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_2195" data-name="2195 Diamonds" data-price="118900">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>3158 Diamonds</td><td>172,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_3158" data-name="3158 Diamonds" data-price="172000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>3688 Diamonds</td><td>202,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_3688" data-name="3688 Diamonds" data-price="202000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>4390 Diamonds</td><td>237,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_4390" data-name="4390 Diamonds" data-price="237000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>5100 Diamonds</td><td>280,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_5100" data-name="5100 Diamonds" data-price="280000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>5532 Diamonds</td><td>300,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_5532" data-name="5532 Diamonds" data-price="300000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>6055 Diamonds</td><td>330,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_6055" data-name="6055 Diamonds" data-price="330000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Weekly Pass 1 (wp1)</td><td>5,900</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_wp1" data-name="Weekly Pass 1 (wp1)" data-price="5900">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Weekly Pass 2 (wp2)</td><td>11,800</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_wp2" data-name="Weekly Pass 2 (wp2)" data-price="11800">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Weekly Pass 3 (wp3)</td><td>17,700</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_wp3" data-name="Weekly Pass 3 (wp3)" data-price="17700">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Weekly Pass 4 (wp4)</td><td>23,600</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_wp4" data-name="Weekly Pass 4 (wp4)" data-price="23600">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Weekly Pass 5 (wp5)</td><td>29,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_wp5" data-name="Weekly Pass 5 (wp5)" data-price="29500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>WEB (web)</td><td>3,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_web" data-name="WEB (web)" data-price="3500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>MEB (meb)</td><td>16,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="mlbb" data-id="mlbb_meb" data-name="MEB (meb)" data-price="16500">＋ Add</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="price-note">
+                💡 MLBB အတွက် <strong>Game ID + Server ID (SV ID)</strong> ပဲလိုအပ်ပါတယ်။
+                Price တွေကို အမြဲ update ထားပေမယ့် promotion ကြောင့် တချို့ package စျေးနည်း/စျေးမြင့် ပြောင်းလဲနိုင်ပါတယ်။
+              </p>
+            </div>
 
-        <!-- PUBG table -->
-        <div class="product-panel" data-panel="pubg" style="display:none;">
-          <div class="price-table-wrap">
-            <table class="price-table">
-              <thead>
-                <tr>
-                  <th>PUBG Package</th>
-                  <th>Price (Ks)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>60 UC</td><td>4,500</td></tr>
-                <tr><td>325 UC</td><td>19,500</td></tr>
-                <tr><td>660 UC</td><td>38,000</td></tr>
-                <tr><td>1800 UC</td><td>90,500</td></tr>
-                <tr><td>3850 UC</td><td>185,000</td></tr>
-                <tr><td>8100 UC</td><td>363,000</td></tr>
-                <tr><td>Prime 1 Month</td><td>4,500</td></tr>
-                <tr><td>Prime Plus</td><td>39,500</td></tr>
-              </tbody>
-            </table>
+            <!-- PUBG table -->
+            <div class="product-panel" data-panel="pubg" style="display:none;">
+              <div class="price-table-wrap">
+                <table class="price-table">
+                  <thead>
+                    <tr>
+                      <th>PUBG Package</th>
+                      <th>Price (Ks)</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>60 UC</td><td>4,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_60" data-name="60 UC" data-price="4500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>325 UC</td><td>19,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_325" data-name="325 UC" data-price="19500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>660 UC</td><td>38,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_660" data-name="660 UC" data-price="38000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>1800 UC</td><td>90,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_1800" data-name="1800 UC" data-price="90500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>3850 UC</td><td>185,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_3850" data-name="3850 UC" data-price="185000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>8100 UC</td><td>363,000</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_8100" data-name="8100 UC" data-price="363000">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Prime 1 Month</td><td>4,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_prime1m" data-name="Prime 1 Month" data-price="4500">＋ Add</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Prime Plus</td><td>39,500</td>
+                      <td style="text-align:right;">
+                        <button class="add-btn" data-category="pubg" data-id="pubg_primeplus" data-name="Prime Plus" data-price="39500">＋ Add</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="price-note">
+                💡 PUBG UC အတွက် <strong>PUBG ID (Character ID)</strong> တစ်ခုပဲလိုအပ်ပါတယ်။
+                Region / login method တချို့ကိုတော့ admin က အလိုအလျောက် confirm လုပ်ပေးသွားမယ်။
+              </p>
+            </div>
           </div>
-          <p class="price-note">
-            💡 PUBG UC အတွက် <strong>PUBG ID (Character ID)</strong> တစ်ခုပဲလိုအပ်ပါတယ်။
-            Region / login method တချို့ကိုတော့ admin က အလိုအလျောက် confirm လုပ်ပေးသွားမယ်။
-          </p>
+
+          <!-- Cart / Web order -->
+          <aside class="cart-card" id="cartCard">
+            <div class="cart-title-row">
+              <div>
+                <div class="cart-title">Web Order (Multi items)</div>
+                <div class="cart-sub">
+                  MLBB / PUBG package တွေကို တစ်ကြိမ်တည်းပဲ ရွေးပြီး<br/>
+                  Website မှာပဲ Total ကို စစ်ဆေးလို့ရပါတယ်။
+                </div>
+              </div>
+              <div class="cart-pill">Step 1 of 2</div>
+            </div>
+
+            <div id="cartEmpty" class="cart-empty">
+              Package မရွေးရသေးပါဘူး။ ဘေးဘက် Price List ထဲက <strong>「＋ Add」</strong> ကို နှိပ်ပြီး စပြုလုပ်နိုင်ပါတယ်။
+            </div>
+
+            <div id="cartItems" class="cart-items" style="display:none;"></div>
+
+            <div class="cart-bottom" id="cartBottom">
+              <div class="cart-summary-row">
+                <span>Total</span>
+                <span id="cartTotal">0 Ks</span>
+              </div>
+              <button id="cartConfirmBtn" class="btn-primary cart-confirm" disabled>
+                ✅ Order Confirm (Step 2)
+              </button>
+              <p class="cart-hint">
+                Confirm ကိုနှိပ်လိုက်ရင် သင်ရွေးထားတဲ့ items နဲ့ Total MMK ကို summary အနေနဲ့ ပြပေးမယ်။
+                Payment info နဲ့ Telegram bot link လည်း ထည့်ပေးထားပါတယ်။
+              </p>
+            </div>
+
+            <div id="cartConfirmed" class="cart-confirmed" style="display:none;">
+              <div class="cart-title">Order Confirmed on Website</div>
+              <p class="cart-confirm-text">
+                အောက်က summary ကို Telegram bot <strong>@BikaStoreBot</strong> ထဲမှာ
+                copy/paste လုပ်ပို့လို့ရပါတယ်။<br/>
+                သတ်မှတ်ထားတဲ့ Total ကိုပဲ KBZ / Wave နဲ့ ငွေလွှဲပြီး Screenshot ပို့ပေးပါ။
+              </p>
+              <pre id="cartSummaryText" class="cart-summary-text"></pre>
+              <div class="cart-actions">
+                <button id="cartCopyBtn" class="btn-outline">📋 Copy summary text</button>
+                <a class="btn-primary" href="https://t.me/BikaStoreBot?start=from_website" target="_blank" rel="noopener">
+                  ↗ Open @BikaStoreBot
+                </a>
+              </div>
+              <div class="cart-payment">
+                <div class="cart-payment-title">Payment info (BIKA STORE)</div>
+                <ul>
+                  <li>💳 <strong>KBZ Pay</strong> – 09264202637 (Shine Htet Aung)</li>
+                  <li>💳 <strong>WavePay</strong> – 09264202637 (Shine Htet Aung)</li>
+                </ul>
+                <div class="cart-summary-row">
+                  <span>📌 Total (website)</span>
+                  <span id="cartConfirmedTotal">0 Ks</span>
+                </div>
+              </div>
+              <p class="cart-note">
+                Bot ထဲကို ဝင်သွားပြီး <strong>Browse Items</strong> နဲ့ အော်ဒါတင်နည်းကတော့
+                အရင်လိုပဲ ဆက်လုပ်ရပါမယ် (I have paid → Slip ပို့)။ Web summary ကတော့
+                ကိုယ်ငွေလွှဲမယ့် amount ကို သေချာစေဖို့အတွက်ပဲ ဖြစ်ပါတယ်။
+              </p>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -658,6 +1125,189 @@
     }
 
     document.getElementById("year").textContent = new Date().getFullYear();
+
+    // === Web cart (multi order) ===
+    const cartState = {}; // key -> { category, id, name, unitPrice, qty }
+
+    function formatKs(amount) {
+      const n = Number(amount) || 0;
+      return n.toLocaleString("en-US") + " Ks";
+    }
+
+    function renderCart() {
+      const itemsContainer = document.getElementById("cartItems");
+      const emptyEl = document.getElementById("cartEmpty");
+      const totalEl = document.getElementById("cartTotal");
+      const confirmTotalEl = document.getElementById("cartConfirmedTotal");
+      const confirmBtn = document.getElementById("cartConfirmBtn");
+
+      const keys = Object.keys(cartState);
+      let total = 0;
+
+      if (!keys.length) {
+        if (itemsContainer) {
+          itemsContainer.innerHTML = "";
+          itemsContainer.style.display = "none";
+        }
+        if (emptyEl) emptyEl.style.display = "block";
+        if (totalEl) totalEl.textContent = "0 Ks";
+        if (confirmTotalEl) confirmTotalEl.textContent = "0 Ks";
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+      }
+
+      if (itemsContainer) {
+        itemsContainer.innerHTML = "";
+        itemsContainer.style.display = "flex";
+      }
+      if (emptyEl) emptyEl.style.display = "none";
+
+      keys.forEach(key => {
+        const item = cartState[key];
+        if (!item || !itemsContainer) return;
+        const subtotal = item.unitPrice * item.qty;
+        total += subtotal;
+
+        const typeLabel = item.category === "mlbb" ? "MLBB" : "PUBG";
+
+        const row = document.createElement("div");
+        row.className = "cart-item";
+        row.innerHTML = `
+          <div class="cart-item-main">
+            <div class="cart-item-name">${typeLabel} – ${item.name}</div>
+            <div class="cart-item-meta">
+              <span>${formatKs(item.unitPrice)}</span> · subtotal ${formatKs(subtotal)}
+            </div>
+          </div>
+          <div class="cart-item-qty">
+            <button class="qty-btn" data-qty-btn="dec" data-key="${key}">−</button>
+            <span class="cart-item-count">${item.qty}</span>
+            <button class="qty-btn" data-qty-btn="inc" data-key="${key}">＋</button>
+          </div>
+        `;
+        itemsContainer.appendChild(row);
+      });
+
+      if (totalEl) totalEl.textContent = formatKs(total);
+      if (confirmTotalEl) confirmTotalEl.textContent = formatKs(total);
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+
+    function addToCart(category, id, name, price) {
+      const key = category + ":" + id;
+      const unitPrice = Number(price) || 0;
+      if (!cartState[key]) {
+        cartState[key] = { category, id, name, unitPrice, qty: 0 };
+      }
+      cartState[key].qty += 1;
+      renderCart();
+    }
+
+    function changeQty(key, diff) {
+      const item = cartState[key];
+      if (!item) return;
+      item.qty += diff;
+      if (item.qty <= 0) {
+        delete cartState[key];
+      }
+      renderCart();
+    }
+
+    document.addEventListener("click", function (event) {
+      const addBtn = event.target.closest(".add-btn");
+      if (addBtn) {
+        const category = addBtn.dataset.category;
+        const id = addBtn.dataset.id;
+        const name = addBtn.dataset.name;
+        const price = addBtn.dataset.price;
+        addToCart(category, id, name, price);
+        return;
+      }
+
+      const qtyBtn = event.target.closest("[data-qty-btn]");
+      if (qtyBtn) {
+        const key = qtyBtn.dataset.key;
+        const action = qtyBtn.dataset.qtyBtn;
+        const diff = action === "inc" ? 1 : -1;
+        changeQty(key, diff);
+      }
+    });
+
+    const cartConfirmBtn = document.getElementById("cartConfirmBtn");
+    const cartBottom = document.getElementById("cartBottom");
+    const cartConfirmed = document.getElementById("cartConfirmed");
+    const cartSummaryTextEl = document.getElementById("cartSummaryText");
+
+    if (cartConfirmBtn) {
+      cartConfirmBtn.addEventListener("click", function () {
+        const keys = Object.keys(cartState);
+        if (!keys.length) return;
+
+        let total = 0;
+        const lines = [];
+        const now = new Date();
+        lines.push("BIKA STORE – Web order summary");
+        lines.push("Date: " + now.toLocaleString("en-GB"));
+        lines.push("");
+
+        keys.forEach(key => {
+          const item = cartState[key];
+          const typeLabel = item.category === "mlbb" ? "MLBB" : "PUBG";
+          const subtotal = item.unitPrice * item.qty;
+          total += subtotal;
+          lines.push(
+            `• ${typeLabel} – ${item.name} x${item.qty} = ${formatKs(subtotal)}`
+          );
+        });
+
+        lines.push("");
+        lines.push("Total to pay: " + formatKs(total));
+        lines.push("");
+        lines.push(
+          "Payment via KBZ Pay / WavePay. After transfer, send screenshot to @BikaStoreBot together with this summary."
+        );
+
+        if (cartSummaryTextEl) {
+          cartSummaryTextEl.textContent = lines.join("\n");
+        }
+
+        if (cartBottom) cartBottom.style.display = "none";
+        if (cartConfirmed) cartConfirmed.style.display = "block";
+      });
+    }
+
+    const cartCopyBtn = document.getElementById("cartCopyBtn");
+    if (cartCopyBtn) {
+      cartCopyBtn.addEventListener("click", function () {
+        const text = cartSummaryTextEl ? cartSummaryTextEl.textContent || "" : "";
+        if (!text) return;
+
+        function markCopied() {
+          const original = cartCopyBtn.textContent;
+          cartCopyBtn.textContent = "✅ Copied";
+          setTimeout(() => {
+            cartCopyBtn.textContent = original;
+          }, 1500);
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(markCopied).catch(markCopied);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          try { document.execCommand("copy"); } catch (e) {}
+          document.body.removeChild(textarea);
+          markCopied();
+        }
+      });
+    }
+
+    // initial render
+    renderCart();
   </script>
 </body>
 </html>
