@@ -567,10 +567,10 @@ async function getAdminStats() {
 function buildMainMenu(isAdminUser) {
   const keyboard = [
     [
-      { text: '🛍 Browse Items', callback_data: 'm:browse' },
+      { text: '🛍 Game Items', callback_data: 'm:browse' },
       { text: '📦 My Orders', callback_data: 'm:orders' },
     ],
-    [{ text: '❓ Help', callback_data: 'm:help' }],
+    [{ text: ' Help', callback_data: 'm:help' }],
   ];
   if (promoConfig.isActive && promoConfig.text) {
     keyboard.unshift([{ text: '🎉 Promo', callback_data: 'm:promo' }]);
