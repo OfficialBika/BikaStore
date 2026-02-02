@@ -150,8 +150,94 @@ const promoConfig = {
   text:
     '🎉 Welcome to BIKA Store – Game Top-up Promo!\n\n' +
     'MLBB Diamonds & Weekly Pass နှင့် PUBG UC ကို Telegram Bot လေးကနေပဲ မြန်မြန်ဆန်ဆန် top-up ပေးနေပါတယ်။\n' +
-    'Order တင်ချင်ရင် Browse Items ကိုနှိပ်ပြီး package ရွေးပေးလိုက်ရုံပါ 💎🎯',
+    'Order တင်ချင်ရင် Game Items ကိုနှိပ်ပြီး package ရွေးပေးလိုက်ရုံပါ ကိုယ်ဂယ်မဲ့ဟာ မပေါ်မချင်း Next ကိုနှိပ်သွားပါ 💎🎯',
 };
+
+/**
+ * One-hour MLBB free diamonds promo state
+ * Admin will use /promocreate to start.
+ */
+let activePromo = null; 
+// shape: {
+//   createdBy, createdAt, expiresAt,
+//   winnerUserId, winnerUsername, winnerFirstName
+// }
+
+function startNewPromo(adminId) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // +1 hour
+
+  activePromo = {
+    createdBy: adminId,
+    createdAt: now,
+    expiresAt,
+    winnerUserId: null,
+    winnerUsername: null,
+    winnerFirstName: null,
+  };
+}
+
+function getActivePromo() {
+  if (!activePromo) return null;
+  if (activePromo.expiresAt && activePromo.expiresAt.getTime() < Date.now()) {
+    // expired → clear
+    activePromo = null;
+    return null;
+  }
+  return activePromo;
+}
+
+// User-side promo handler (used by /promo & Promo button)
+async function handlePromoRequest(chatId, fromUser) {
+  const promo = getActivePromo();
+  const isAdminUser = isAdmin(fromUser.id);
+
+  if (!promo) {
+    await bot.sendMessage(
+      chatId,
+      '😢 ယခုအချိန်မှာ Claim လုပ်လို့ရမယ့် Promo မရှိသေးဘူးနော်။\n\nOwner က Giveaway ပေးရင် /promo နှိပ်ကြည့်လိုက်ပါ 😎',
+      {
+        ...buildMainMenu(isAdminUser),
+      }
+    );
+    return;
+  }
+
+  // already have winner
+  if (promo.winnerUserId) {
+    const winnerLabel = promo.winnerUsername
+      ? '@' + promo.winnerUsername
+      : promo.winnerFirstName || `User ${promo.winnerUserId}`;
+
+    const text =
+      '😢 ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
+      `ပထမဆုံး Claim လိုက်တဲ့ ကံကြမ္မာကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
+      'နောက်ကျရင် ကောင်းတာဆိုလို့ သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
+
+    await bot.sendMessage(chatId, text, {
+      parse_mode: 'Markdown',
+      ...buildMainMenu(isAdminUser),
+    });
+    return;
+  }
+
+  const expiresStr = formatDateTime(promo.expiresAt);
+  const text =
+    '🎁 **BIKA STORE – MLBB Free Diamonds Promo**\n\n' +
+    '၁ နာရီအတွင်း **/promo** (သို့) Promo button ကို နှိပ်ပြီး\n' +
+    '**Claim** button ကို *ပထမဆုံး* နှိပ်တဲ့သူက free MLBB Diamonds ရရှိမယ် 💎\n\n' +
+    `⏰ Promo သက်တမ်း: \`${expiresStr}\` အထိ\n\n` +
+    'အောက်က button ကိုနှိပ်ပြီး Claim လုပ်ကြည့်ပါ 😎';
+
+  await bot.sendMessage(chatId, text, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🎁 Claim free MLBB Diamonds', callback_data: 'promo:claim' }],
+      ],
+    },
+  });
+}
 
 // ====== STORE CATEGORIES (MLBB + PUBG) ======
 
@@ -362,6 +448,119 @@ function escapeCSVValue(value) {
   }
   return str;
 }
+
+// ====== LEADERBOARD & ADMIN STATS ======
+
+/**
+ * Top customers by total spent (COMPLETED orders only, last 3 months)
+ */
+async function getTopCustomers(limit = 10) {
+  const now = new Date();
+  const threeMonthsAgo = new Date(now);
+  threeMonthsAgo.setMonth(now.getMonth() - 3);
+
+  const results = await Order.aggregate([
+    {
+      $match: {
+        status: 'COMPLETED',
+        createdAt: { $gte: threeMonthsAgo },
+      },
+    },
+    {
+      $group: {
+        _id: '$userId',
+        totalAmount: { $sum: '$price' },
+        orderCount: { $sum: 1 },
+        username: { $first: '$username' },
+        firstName: { $first: '$firstName' },
+      },
+    },
+    { $sort: { totalAmount: -1 } },
+    { $limit: limit },
+  ]);
+
+  return results;
+}
+
+/**
+ * Get rank and stats for a single user (COMPLETED orders only, all time)
+ */
+async function getUserRank(userId) {
+  const uid = Number(userId);
+
+  // User's own total
+  const userAgg = await Order.aggregate([
+    { $match: { status: 'COMPLETED', userId: uid } },
+    {
+      $group: {
+        _id: '$userId',
+        totalAmount: { $sum: '$price' },
+        orderCount: { $sum: 1 },
+        username: { $first: '$username' },
+        firstName: { $first: '$firstName' },
+      },
+    },
+    { $limit: 1 },
+  ]);
+
+  if (!userAgg.length) {
+    return null; // no completed orders for this user yet
+  }
+
+  const userStat = userAgg[0];
+
+  // How many users have strictly higher totalAmount?
+  const higherAgg = await Order.aggregate([
+    { $match: { status: 'COMPLETED' } },
+    {
+      $group: {
+        _id: '$userId',
+        totalAmount: { $sum: '$price' },
+      },
+    },
+    { $match: { totalAmount: { $gt: userStat.totalAmount } } },
+    { $count: 'higherCount' },
+  ]);
+
+  const higherCount =
+    (higherAgg && higherAgg[0] && higherAgg[0].higherCount) || 0;
+
+  return {
+    rank: higherCount + 1,
+    totalAmount: userStat.totalAmount,
+    orderCount: userStat.orderCount,
+    username: userStat.username,
+    firstName: userStat.firstName,
+  };
+}
+
+/**
+ * Admin dashboard stats (completed orders only)
+ */
+async function getAdminStats() {
+  const totalUsers = knownUserIds.size;
+
+  const agg = await Order.aggregate([
+    { $match: { status: 'COMPLETED' } },
+    {
+      $group: {
+        _id: null,
+        totalOrders: { $sum: 1 },
+        totalMmk: { $sum: '$price' },
+      },
+    },
+  ]);
+
+  let totalOrders = 0;
+  let totalMmk = 0;
+
+  if (agg.length) {
+    totalOrders = agg[0].totalOrders;
+    totalMmk = agg[0].totalMmk;
+  }
+
+  return { totalUsers, totalOrders, totalMmk };
+      }
 
 // ====== UI BUILDERS ======
 
@@ -611,7 +810,7 @@ async function sendWelcome(chatId, user) {
     '',
     'Telegram Bot ကနေပဲ မြန်မြန်ဆန်ဆန် top-up ပေးနေပါတယ်။',
     '',
-    'အောက်က Menu ထဲက **🛍 Browse Items** ကိုနှိပ်ပြီး အော်ဒါတင်ရအောင် ✨',
+    'အောက်က Menu ထဲက **🛍 Game Items** ကိုနှိပ်ပြီး အော်ဒါတင်ရအောင် ✨',
   ];
 
   await bot.sendMessage(chatId, lines.join('\n'), {
@@ -626,9 +825,11 @@ async function sendPaymentInstructions(chatId, order) {
   lines.push('');
   lines.push(`Amount to pay: *${formatPrice(order.price)}*`);
   lines.push('');
-  lines.push('📌 Payment channels (example):');
-  lines.push('- KBZ Pay');
-  lines.push('- WavePay');
+  lines.push('📌 Payment Methods ():');
+  lines.push('Payment Acc Name');
+  lines.push('Shine Htet Aung');
+  lines.push('- KBZ Pay - 09264202637'); 
+  lines.push('- WavePay - 09264202637');
   lines.push('- (Admin will specify exact account)');
   lines.push('');
   lines.push(
@@ -664,7 +865,7 @@ bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
     await bot.sendMessage(
       chatId,
       '🌐 BIKA STORE Website ကနေ ဝင်လာတာကို ကြိုဆိုပါတယ်!\n\n' +
-        'အော်ဒါတင်ရန်အတွက် အောက်က Menu ထဲက **🛍 Browse Items** ကိုနှိပ်ပြီး ' +
+        'အော်ဒါတင်ရန်အတွက် အောက်က Menu ထဲက **🛍 Game Items** ကိုနှိပ်ပြီး ' +
         'MLBB Diamonds / Weekly Pass သို့မဟုတ် PUBG UC ကိုရွေးပြီး ဆက်လုပ်ပေးပါ 😊',
       { parse_mode: 'Markdown' }
     );
@@ -705,6 +906,228 @@ bot.onText(/\/setpromo(?:\s+([\s\S]+))?/, async (msg, match) => {
   await bot.sendMessage(chatId, '✅ Promotion text updated & enabled.');
 });
 
+// /promocreate – start 1-hour MLBB promo (admin only)
+bot.onText(/\/promocreate/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  if (!isAdmin(userId)) return;
+
+  startNewPromo(userId);
+  const promo = getActivePromo();
+  const expiresStr = formatDateTime(promo.expiresAt);
+
+  const text =
+    '🎁 **MLBB Free Diamonds Promo Started!**\n\n' +
+    'ယနေ့မှစပြီး ၁ နာရီအတွင်း /promo ကို ပို့သည့် user တွေထဲက\n' +
+    '**Claim** button ကို ပထမဆုံးနှိပ်သူတစ်ယောက်သာ free MLBB Diamonds ရရှိမယ် 💎\n\n' +
+    `⏰ သက်တမ်းက: \`${expiresStr}\` ထိ ဖြစ်ပါတယ်။`;
+
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+});
+
+// /promo – user-side lucky claim entry
+bot.onText(/\/promo/, async (msg) => {
+  const chatId = msg.chat.id;
+  await handlePromoRequest(chatId, msg.from);
+});
+
+// /admin – show admin dashboard (stats + admin menu)
+bot.onText(/\/admin/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  if (!isAdmin(userId)) return;
+
+  const stats = await getAdminStats();
+
+  const lines = [];
+  lines.push('🛠 **BIKA STORE – Admin Dashboard**');
+  lines.push('');
+  lines.push(`👥 Bot Users (started): *${stats.totalUsers}*`);
+  lines.push(`📦 Completed Orders: *${stats.totalOrders}*`);
+  lines.push(`💰 Total MMK: *${formatPrice(stats.totalMmk)}*`);
+
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    parse_mode: 'Markdown',
+    ...buildAdminPanelKeyboard(),
+  });
+});
+
+// /top10 – last 3 months top spenders (COMPLETED)
+bot.onText(/\/top10/, async (msg) => {
+  const chatId = msg.chat.id;
+  const isAdminUser = isAdmin(msg.from.id);
+
+  const top = await getTopCustomers(10);
+
+  if (!top.length) {
+    await bot.sendMessage(
+      chatId,
+      '🏆 Top 10 ကိုပြဖို့ နောက်ဆုံး ၃ လအတွင်း COMPLETED orders မရှိသေးပါ။\n\nOrder တွေပြီးတင်ပီးရင် Leaderboard ကို ပြပေးပါမယ်',
+      {
+        ...buildMainMenu(isAdminUser),
+      }
+    );
+    return;
+  }
+
+  const lines = [];
+  lines.push('🏆 **BIKA STORE – Top 10 Spenders (Last 3 Months)**');
+  lines.push('');
+  lines.push('နောက်ဆုံး ၃ လအတွင်း COMPLETED orders ကိုသာတွက်ထားပါတယ်။');
+  lines.push('');
+
+  top.forEach((entry, index) => {
+    const rank = index + 1;
+    let medal = '';
+    if (rank === 1) medal = '🥇';
+    else if (rank === 2) medal = '🥈';
+    else if (rank === 3) medal = '🥉';
+    else medal = '✨';
+
+    const name =
+      entry.firstName || entry.username || `User ${String(entry._id)}`;
+    const handle = entry.username ? `@${entry.username}` : '';
+
+    lines.push(
+      `${rank}. ${medal} ${name} ${handle ? `(${handle})` : ''}\n` +
+        `   • Total Spent: *${formatPrice(entry.totalAmount)}*\n` +
+        `   • Completed Orders: *${entry.orderCount}*`
+    );
+  });
+
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    parse_mode: 'Markdown',
+    ...buildMainMenu(isAdminUser),
+  });
+});
+
+// /myrank – current user's rank (all-time COMPLETED)
+bot.onText(/\/myrank/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const isAdminUser = isAdmin(userId);
+
+  const stat = await getUserRank(userId);
+
+  if (!stat) {
+    await bot.sendMessage(
+      chatId,
+      '📊 လက်ရှိ အကောင့်နဲ့ COMPLETED order မရှိသေးလို့ Rank သတ်မှတ်ထားခြင်းမရှိသေးပါ။\n\nBIKA Store မှာ order တစ်ခုပြီးတိုင်း /myrank လိုက်စမ်းကြည့်နိုင်ပါတယ်',
+      {
+        ...buildMainMenu(isAdminUser),
+      }
+    );
+    return;
+  }
+
+  const name = stat.firstName || stat.username || `User ${userId}`;
+  const handle = stat.username ? `@${stat.username}` : '';
+
+  const lines = [];
+  lines.push('📊 **BIKA STORE – My Rank (All-time Completed)**');
+  lines.push('');
+  lines.push(`👤 User: *${name}* ${handle ? `(${handle})` : ''}`);
+  lines.push(`🏅 Rank: *#${stat.rank}*`);
+  lines.push(`💰 Total MMK: *${formatPrice(stat.totalAmount)}*`);
+  lines.push(`📦 Completed Orders: *${stat.orderCount}*`);
+  lines.push('');
+  lines.push('ရေရှည်မှာ မင်းက BIKA Store whale လားမလား 😎');
+
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    parse_mode: 'Markdown',
+    ...buildMainMenu(isAdminUser),
+  });
+});
+
+// /broadcast or /broadcat – admin broadcast to all known users
+// If admin reply to a photo message + /broadcast → photo + caption broadcast
+// Else → text broadcast
+bot.onText(/\/(?:broadcast|broadcat)(?:\s+([\s\S]+))?/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  if (!isAdmin(userId)) return;
+
+  const baseText = (match && match[1] ? match[1] : '').trim();
+  const reply = msg.reply_to_message;
+
+  let sentCount = 0;
+
+  // Case 1: reply to a photo → broadcast photo + caption
+  if (reply && reply.photo && reply.photo.length) {
+    const photoSizes = reply.photo;
+    const fileId = photoSizes[photoSizes.length - 1].file_id;
+    const caption = baseText || reply.caption || '';
+
+    if (!caption) {
+      await bot.sendMessage(
+        chatId,
+        '📣 Photo broadcast ပို့ချင်ရင် photo အောက်က caption ထဲမှာ message ရေးထားပါ\nသို့မဟုတ် `/broadcast your text...` လို့ရိုက်ပို့ပါ။',
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    for (const uid of knownUserIds) {
+      try {
+        await bot.sendPhoto(uid, fileId, {
+          caption,
+          parse_mode: 'Markdown',
+          disable_notification: true,
+        });
+        sentCount += 1;
+      } catch (e) {
+        console.error('Broadcast photo failed to', uid, e.message);
+      }
+    }
+
+    await bot.sendMessage(
+      chatId,
+      `✅ Photo broadcast ပို့ပြီးပါပြီ။\nEstimated recipients: *${sentCount}* users.`,
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  // Case 2: text broadcast only
+  const text = baseText || promoConfig.text || '';
+
+  if (!text) {
+    await bot.sendMessage(
+      chatId,
+      '📣 Broadcast ပို့ဖို့ text မရှိသေးပါ။\n\n`/broadcast your message...` လို့ရိုက်ပို့ပါ။ သို့မဟုတ် Promo text သတ်မှတ်ပြီး /broadcast လိုက်နိုင်ပါတယ်။',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  const payload =
+    '📣 **BIKA STORE Announcement**\n\n' +
+    text +
+    '\n\n— Sent from BIKA Store Bot';
+
+  for (const uid of knownUserIds) {
+    try {
+      await bot.sendMessage(uid, payload, {
+        parse_mode: 'Markdown',
+        disable_notification: true,
+      });
+      sentCount += 1;
+    } catch (e) {
+      console.error('Broadcast failed to', uid, e.message);
+    }
+  }
+
+  await bot.sendMessage(
+    chatId,
+    `✅ Broadcast ပို့ပြီးပါပြီ။\nEstimated recipients: *${sentCount}* users.`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+
 // ====== MESSAGE HANDLER (ID+SV, PUBG ID, Slip Photo) ======
 
 bot.on('message', async (msg) => {
@@ -738,7 +1161,7 @@ bot.on('message', async (msg) => {
     await bot.sendMessage(
       chatId,
       '✅ ငွေလွှဲပြေစာ Screenshot ကို လက်ခံရရှိပြီးပါပြီ။ ' +
-        'Admin အား Order အသစ်အဖြစ် သတင်းပို့ပေးထားပြီး အတည်ပြုနေပါပြီ။'
+        'Admin ထံသို့ သင့်အော်ဒါတင်ပြနေပါပြီ။ခေတ္တစောင့်ဆိုင်းပေးပါ'
     );
 
     // send to admins – slip + order info + approve/reject
@@ -805,7 +1228,7 @@ bot.on('message', async (msg) => {
 
     await bot.sendMessage(
       chatId,
-      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီးပါပြီ။ Order ကို အတည်ပြုဖို့ စစ်ဆေးကြည့်ပါ။',
+      '✅ MLBB ID + Server ID ကို လက်ခံရရှိပြီးပါပြီ။ Order ကို အတည်ပြုဖို့ Id နဲ့ sever Id ကို စစ်ဆေးကြည့်ပါ။',
       { reply_markup: { remove_keyboard: true } }
     );
 
@@ -922,19 +1345,92 @@ bot.on('callback_query', async (query) => {
       return;
     }
 
-    if (data === 'm:promo') {
+    // Promo claim – first click wins
+    if (data === 'promo:claim') {
       await acknowledge();
-      const text =
-        (promoConfig.isActive
-          ? '🎉 **Promotion is active**\n\n'
-          : 'ℹ️ Promotion is currently off.\n\n') +
-        (promoConfig.text || 'No promotion text yet.');
-      await bot.editMessageText(text, {
-        chat_id: chatId,
-        message_id: msgId,
-        parse_mode: 'Markdown',
-        ...buildMainMenu(isAdminUser),
-      });
+
+      const promo = getActivePromo();
+      const isAdminUser = isAdmin(userId);
+
+      if (!promo) {
+        // expired or not active
+        try {
+          await bot.editMessageText(
+            '😢 ဒီ Promo က သက်တမ်းကုန်သွားပြီ ဖြစ်လို့ Claim လုပ်လို့ မရတော့ပါ။',
+            {
+              chat_id: chatId,
+              message_id: msgId,
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: [] },
+            }
+          );
+        } catch (_) {}
+        return;
+      }
+
+      // already have winner
+      if (promo.winnerUserId) {
+        const winnerLabel = promo.winnerUsername
+          ? '@' + promo.winnerUsername
+          : promo.winnerFirstName || `User ${promo.winnerUserId}`;
+
+        const loseText =
+          '😢 ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
+          `ပထမဆုံး Claim လိုက်တဲ့ ကံကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
+          'နောက်ထပ် Promo တွေကို စောင့်ကြည့်ထားပေးပါနော် 😎';
+
+        try {
+          await bot.editMessageText(loseText, {
+            chat_id: chatId,
+            message_id: msgId,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [] },
+          });
+        } catch (_) {}
+
+        return;
+      }
+
+      // first winner here
+      promo.winnerUserId = userId;
+      promo.winnerUsername = query.from.username || '';
+      promo.winnerFirstName = query.from.first_name || '';
+      // keep activePromo updated
+      activePromo = promo;
+
+      const winText =
+        '🎉 **ဂုဏ်ယူပါတယ်! သင်ကံထူးသွားပါပြီ**\n\n' +
+        'MLBB free diamonds claim လုပ်ဖို့\n' +
+        '**ကိုယ့် MLBB ID + Server ID ကို တစ်ကြိမ်တည်း space နဲ့ ခွဲပြီး ဒီ chat ထဲမှာ ပို့ပေးပါ။**\n\n' +
+        'Admin မှာ စာရင် Top-up လုပ်ပေးမယ် 💎';
+
+      try {
+        await bot.editMessageText(winText, {
+          chat_id: chatId,
+          message_id: msgId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [] },
+        });
+      } catch (_) {}
+
+      // Admin တွေကို winner info ပို့ပေးမယ်
+      const adminInfo =
+        '🎁 **Promo Winner Found!**\n\n' +
+        `User: @${promo.winnerUsername || 'unknown'} (${promo.winnerFirstName ||
+          'User ' + promo.winnerUserId})\n` +
+        `User ID: \`${promo.winnerUserId}\`\n\n` +
+        'MLBB ID + Server ID ကို winner က စောင့်ပို့နေပါတယ်။';
+
+      for (const adminId of ADMIN_IDS) {
+        try {
+          await bot.sendMessage(adminId, adminInfo, {
+            parse_mode: 'Markdown',
+          });
+        } catch (e) {
+          console.error('Failed to notify admin promo winner', adminId, e.message);
+        }
+      }
+
       return;
     }
 
@@ -1233,7 +1729,17 @@ bot.on('callback_query', async (query) => {
 
       if (data === 'admin:panel') {
         await acknowledge();
-        await bot.editMessageText('🛠 **Admin Panel**', {
+
+        const stats = await getAdminStats();
+
+        const lines = [];
+        lines.push('🛠 **BIKA STORE – Admin Dashboard**');
+        lines.push('');
+        lines.push(`👥 Bot Users (started): *${stats.totalUsers}*`);
+        lines.push(`📦 Completed Orders: *${stats.totalOrders}*`);
+        lines.push(`💰 Total MMK: *${formatPrice(stats.totalMmk)}*`);
+
+        await bot.editMessageText(lines.join('\n'), {
           chat_id: chatId,
           message_id: msgId,
           parse_mode: 'Markdown',
