@@ -1298,7 +1298,6 @@ bot.on('message', async (msg) => {
       try {
         await bot.sendPhoto(adminId, fileId, {
           caption,
-          parse_mode: 'Markdown',
           reply_markup: keyboard,
         });
       } catch (e) {
