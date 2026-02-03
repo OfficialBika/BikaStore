@@ -19,9 +19,6 @@
  *      /top10 (last 3 months, COMPLETED only)
  *      /myrank (all-time COMPLETED)
  *  - /admin dashboard + /broadcast
- *  - WEB ORDER API:
- *      POST /api/web-order  (website -> create order + startToken)
- *      /start web_<token>   (user open from website -> show order + payment flow)
  *
  * ENV:
  *  - TELEGRAM_BOT_TOKEN
@@ -30,13 +27,11 @@
  *  - MONGODB_URI
  *  - PUBLIC_URL      (e.g. https://mybot.onrender.com)
  *  - TZ              (IANA timezone, e.g. Asia/Yangon)
- *  - BOT_USERNAME    (for building t.me deep links, optional but recommended)
  */
 
 const TelegramBot = require('node-telegram-bot-api');
 const mongoose = require('mongoose');
 const express = require('express');
-const crypto = require('crypto');
 
 // ====== ENV ======
 const BOT_TOKEN =
@@ -55,8 +50,6 @@ const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bika_store_bot';
 
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
-const BOT_USERNAME = process.env.BOT_USERNAME || ''; // for t.me deep links
-
 // 🕒 Timezone (env: TZ)
 const TIME_ZONE = process.env.TZ || 'Asia/Yangon';
 
@@ -93,9 +86,6 @@ const orderSchema = new mongoose.Schema({
   confirmedAt: Date,
   adminNote: String,
   paymentSlipFileId: String, // telegram file_id of slip
-
-  // web order deep-link token (/start web_<token>)
-  startToken: { type: String, index: true },
 });
 
 const Order = mongoose.model('Order', orderSchema);
@@ -103,10 +93,15 @@ const Order = mongoose.model('Order', orderSchema);
 // ====== BOT INIT (Webhook mode) ======
 const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
 
-// 🧼 Auto clean – normal users only (admins skipped)
-//    -> only used manually when order COMPLETED
-const attachAutoClean = require('./utils/autoClean'); // make sure utils/autoClean.js exists
-const autoClean = attachAutoClean(bot, { skipChatIds: ADMIN_IDS });
+// 🧼 Auto clean – optional helper (if autoClean.js is present)
+let autoClean = null;
+try {
+  const attachAutoClean = require('./autoClean');
+  autoClean = attachAutoClean(bot, { skipChatIds: ADMIN_IDS });
+  console.log('🧼 autoClean helper loaded.');
+} catch (err) {
+  console.log('🧼 autoClean not enabled (autoClean.js missing).');
+}
 
 // Webhook setup (if PUBLIC_URL provided)
 if (PUBLIC_URL) {
@@ -124,25 +119,9 @@ if (PUBLIC_URL) {
   );
 }
 
-// Express app for webhook + API
+// Express app for webhook
 const app = express();
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// very simple CORS so web-app can call API
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader(
-    'Access-Control-Allow-Methods',
-    'GET,POST,OPTIONS'
-  );
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Content-Type'
-  );
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
 
 // Accept Telegram updates on ANY path (easy for BotFather / Render)
 app.post('*', (req, res) => {
@@ -153,147 +132,6 @@ app.post('*', (req, res) => {
 // Simple health check
 app.get('/', (req, res) => {
   res.send('BIKA Store Bot is running (webhook mode).');
-});
-
-// ========== WEB ORDER API ==========
-//
-// Website → POST /api/web-order
-// body (JSON) example:
-// {
-//   "telegramUserId": 123456789,
-//   "telegramUsername": "bika",
-//   "telegramFirstName": "Bika",
-//   "game": "MLBB",                 // or "PUBG"
-//   "mlbbId": "12345678",           // required for MLBB
-//   "mlbbServerId": "1234",         // optional
-//   "pubgId": "1234567890",         // required for PUBG
-//   "items": [
-//      { "name": "MLBB — 343 Diamonds", "quantity": 1, "price": 20000 },
-//      { "name": "MLBB — Weekly Pass 1 (wp1)", "quantity": 1, "price": 5900 }
-//   ],
-//   "totalPrice": 25900,
-//   "currency": "Ks"
-// }
-//
-// Response:
-// { ok: true, orderId, startToken, startLink }
-//
-// Frontend က startLink (သို့) startToken ကို သုံးပြီး
-//   https://t.me/<BOT_USERNAME>?start=web_<startToken>
-// နဲ့ Bot ကိုဖွင့်ပေးရင် လိုတဲ့ flow ဆက်လက်လုပ်ပေးမယ်။
-
-app.post('/api/web-order', async (req, res) => {
-  try {
-    const body = req.body || {};
-
-    const telegramUserId = Number(body.telegramUserId || 0);
-    const telegramUsername = body.telegramUsername || '';
-    const telegramFirstName = body.telegramFirstName || '';
-
-    const game = (body.game || '').toString().toUpperCase();
-    const mlbbId = body.mlbbId || '';
-    const mlbbServerId = body.mlbbServerId || '';
-    const pubgId = body.pubgId || '';
-
-    const items = Array.isArray(body.items) ? body.items : [];
-    const totalPrice = Number(body.totalPrice || 0);
-    const currency = body.currency || STORE_CURRENCY;
-
-    if (!telegramUserId) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'telegramUserId is required' });
-    }
-
-    if (!items.length) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'items array is required' });
-    }
-
-    if (!totalPrice || Number.isNaN(totalPrice) || totalPrice <= 0) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'totalPrice must be > 0' });
-    }
-
-    let categoryKey;
-    let gameId = '';
-    let serverId = '';
-
-    if (game === 'MLBB') {
-      categoryKey = 'mlbb';
-      gameId = mlbbId || '';
-      serverId = mlbbServerId || '';
-    } else if (game === 'PUBG') {
-      categoryKey = 'pubg';
-      gameId = pubgId || '';
-      serverId = '';
-    } else {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'game must be MLBB or PUBG' });
-    }
-
-    // Package name တော့ website က multiple items choose လုပ်နိုင်လို့
-    // "name × qty + name × qty" ပုံစံနဲ့ တစ်ကြောင်းထဲထားမယ်
-    const packageName = items
-      .map((it) => {
-        const title =
-          it.name || it.title || it.packageName || 'Item';
-        const qty = Number(it.quantity || 1);
-        return `${title} × ${qty}`;
-      })
-      .join(' + ');
-
-    const orderId = await getNextOrderId();
-    const startToken = crypto.randomBytes(16).toString('hex');
-
-    const order = await Order.create({
-      id: orderId,
-      userId: telegramUserId,
-      username: telegramUsername,
-      firstName: telegramFirstName,
-      categoryKey,
-      packageId: 'web_multi',
-      packageName,
-      price: totalPrice,
-      currency,
-      gameId,
-      serverId,
-      status: 'PENDING_PAYMENT',
-      createdAt: new Date(),
-      paidAt: null,
-      confirmedAt: null,
-      adminNote: 'Created from Web',
-      paymentSlipFileId: '',
-      startToken,
-    });
-
-    const startLink =
-      BOT_USERNAME && startToken
-        ? `https://t.me/${BOT_USERNAME}?start=web_${startToken}`
-        : null;
-
-    console.log(
-      '🌐 New web-order created:',
-      order.id,
-      'token:',
-      startToken
-    );
-
-    return res.json({
-      ok: true,
-      orderId: order.id,
-      startToken,
-      startLink,
-    });
-  } catch (err) {
-    console.error('Error in /api/web-order:', err);
-    return res
-      .status(500)
-      .json({ ok: false, message: 'Server error while creating order' });
-  }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -550,7 +388,7 @@ function formatDateTime(dt) {
   }
 
   return d.toLocaleString('en-GB', {
-    timeZone: TIME_ZONE, // 👉 env.TZ ကို သုံးမယ်
+    timeZone: TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -600,10 +438,7 @@ async function safeEditMessageText(
     const desc =
       e && e.response && e.response.body && e.response.body.description;
     if (desc !== 'Bad Request: message to edit not found') {
-      console.error(
-        'editMessageText error:',
-        desc || e.message || e
-      );
+      console.error('editMessageText error:', desc || e.message || e);
     }
   }
 }
@@ -625,10 +460,7 @@ async function safeEditMessageCaption(
     const desc =
       e && e.response && e.response.body && e.response.body.description;
     if (desc !== 'Bad Request: message to edit not found') {
-      console.error(
-        'editMessageCaption error:',
-        desc || e.message || e
-      );
+      console.error('editMessageCaption error:', desc || e.message || e);
     }
   }
 }
@@ -654,7 +486,6 @@ async function ordersToCSV() {
     'confirmedAt',
     'adminNote',
     'paymentSlipFileId',
-    'startToken',
   ];
 
   const lines = [];
@@ -681,7 +512,6 @@ async function ordersToCSV() {
       escapeCSVValue(o.confirmedAt),
       escapeCSVValue(o.adminNote),
       escapeCSVValue(o.paymentSlipFileId),
-      escapeCSVValue(o.startToken),
     ];
     lines.push(row.join(','));
   }
@@ -1136,9 +966,11 @@ async function sendOrderConfirmMessage(userId, chatId, draft) {
   });
 }
 
+////////// Part 2 ///////////
+
 // ====== BOT HANDLERS (TEXT COMMANDS) ======
 
-// /start with optional payload (/start from_website, /start web_xxxxx)
+// /start with optional payload (/start from_website)
 bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -1148,56 +980,7 @@ bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
 
   const payloadRaw = match && match[1] ? match[1].trim() : '';
   const payload = payloadRaw ? payloadRaw.split(' ')[0] : '';
-  const isAdminUser = isAdmin(userId);
 
-  // 🔗 Web deep-link: /start web_<token>
-  if (payload && payload.startsWith('web_')) {
-    const token = payload.slice(4);
-    const order = await Order.findOne({ startToken: token });
-
-    if (!order) {
-      await bot.sendMessage(
-        chatId,
-        '❌ ဒီ Web Order link က သက်တမ်းကုန်သွားပြီး ဖြစ်နိုင်ပါတယ်\nသို့မဟုတ် မမှန်ကန်တော့ပါ။\n\n🛍 New order တင်ချင်ရင် အောက်က Menu ထဲက **Game Items** ကိုနှိပ်ပါ။',
-        {
-          parse_mode: 'Markdown',
-          ...buildMainMenu(isAdminUser),
-        }
-      );
-      return;
-    }
-
-    // Web မှာသတ်မှတ်ထားတဲ့ userId နဲ့ မတူနိုင်လို့
-    // အခုက Telegram user info ပြန် update လုပ်ပေးမယ်
-    order.userId = userId;
-    order.username = msg.from.username || order.username || '';
-    order.firstName = msg.from.first_name || order.firstName || '';
-    await order.save();
-
-    const intro = [
-      '🌐 **Web Store Order Loaded**',
-      '',
-      'Web Store မှာရွေးထားတဲ့ Order ကို Bot ထဲကို ခေါ်ယူပြီး',
-      'ဒီနေရာကနေ ငွေလွှဲ / Slip ပို့ပြီး အော်ဒါပြီးအောင် ဆက်လုပ်နိုင်ပါတယ်။',
-      '',
-      `**Order ID:** #${order.id}`,
-    ].join('\n');
-
-    await bot.sendMessage(chatId, intro, {
-      parse_mode: 'Markdown',
-    });
-
-    await bot.sendMessage(
-      chatId,
-      formatOrderSummary(order, { showStatus: false }),
-      { parse_mode: 'Markdown' }
-    );
-
-    await sendPaymentInstructions(chatId, order);
-    return;
-  }
-
-  // Old simple payload (if you still use /start from_website)
   if (payload === 'from_website') {
     await bot.sendMessage(
       chatId,
@@ -1657,6 +1440,8 @@ bot.on('message', async (msg) => {
   // WAIT_CONFIRM – ignore random text
 });
 
+///////PART 3///////////
+
 // ====== CALLBACK HANDLER ======
 
 bot.on('callback_query', async (query) => {
@@ -1739,7 +1524,7 @@ bot.on('callback_query', async (query) => {
         const loseText =
           'ဒီတစ်ခါသင် နောက်ကျသွားပါပြီ...\n\n' +
           `ပထမဆုံး Claim လိုက်တဲ့ ကံကောင်းသူကတော့ *${winnerLabel}* ဖြစ်ပါတယ် 💎\n\n` +
-          'နောက်မကျစေနဲ့ နောက်ကျရင် ကောင်းတာဆိုလို့ သေတာပేဖြစ်တယ် ညိုကီဘိုကီ 😎';
+          'နောက်မကျစေနဲ့ နောက်ကျရင် ကောင်းတာဆိုလို့ သေတာပဲရှိတယ် ညိုကီဘိုကီ 😎';
 
         await safeEditMessageText(bot, chatId, msgId, loseText, {
           parse_mode: 'Markdown',
@@ -1921,7 +1706,9 @@ bot.on('callback_query', async (query) => {
 
       if (!cat) return;
 
-      const text = `**${cat.emoji} ${cat.name}**\n\n${cat.description}\n\nPackage တစ်ခုရွေးချယ်ပါ။`;
+      const text =
+        `**${cat.emoji} ${cat.name}**\n\n${cat.description}\n\n` +
+        'Package တစ်ခုရွေးချယ်ပါ။';
       await safeEditMessageText(bot, chatId, msgId, text, {
         parse_mode: 'Markdown',
         ...buildPackagesKeyboard(key, page),
@@ -2049,7 +1836,6 @@ bot.on('callback_query', async (query) => {
         confirmedAt: null,
         adminNote: '',
         paymentSlipFileId: '',
-        startToken: null,
       });
 
       resetUserSession(userId);
@@ -2405,7 +2191,7 @@ bot.on('callback_query', async (query) => {
         return;
       }
 
-      // COMPLETE / REJECT (with caption change)
+      // COMPLETE / REJECT
       if (
         data.startsWith('admin:complete:') ||
         data.startsWith('admin:reject:')
@@ -2427,22 +2213,14 @@ bot.on('callback_query', async (query) => {
         }
         await order.save();
 
-        // Update admin message caption / text (remove buttons)
         const newText = formatOrderSummary(order, {
           title: isComplete ? 'COMPLETE' : 'REJECTED',
         });
 
-        if (query.message && query.message.photo) {
-          await safeEditMessageCaption(bot, chatId, msgId, newText, {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [] },
-          });
-        } else {
-          await safeEditMessageText(bot, chatId, msgId, newText, {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [] },
-          });
-        }
+        await safeEditMessageText(bot, chatId, msgId, newText, {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [] },
+        });
 
         if (isComplete) {
           try {
@@ -2454,8 +2232,6 @@ bot.on('callback_query', async (query) => {
               { parse_mode: 'Markdown' }
             );
 
-            // ✅ Order Complete ဖြစ်သွားတဲ့အချိန်
-            //    အပေါ်က စာတွေ အကုန်ဖျက်ပြီး နောက်ဆုံး summary တစ်ခုပဲ ကျန်စေမယ်
             if (autoClean && typeof autoClean.cleanChat === 'function') {
               autoClean
                 .cleanChat(order.userId, { keepLast: 1 })
@@ -2520,6 +2296,7 @@ bot.on('callback_query', async (query) => {
 // ====== STARTUP LOG ======
 
 console.log(
-  '🚀 BIKA Store Bot is running with MongoDB (webhook + web-order API mode)...'
+  '🚀 BIKA Store Bot is running with MongoDB (webhook mode)...'
 );
 console.log('Admins:', ADMIN_IDS.join(', ') || '(none configured)');
+
