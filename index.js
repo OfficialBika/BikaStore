@@ -19,19 +19,27 @@
  *      /top10 (last 3 months, COMPLETED only)
  *      /myrank (all-time COMPLETED)
  *  - /admin dashboard + /broadcast
+ *  - ✅ WEB ORDER SUPPORT:
+ *      - Static web site calls POST /api/web-order with order info
+ *      - API creates Order with startToken and returns Telegram start link:
+ *            https://t.me/<BOT_USERNAME>?start=web_<token>
+ *      - User clicks link → bot /start with "web_<token>"
+ *      - Bot shows order preview + payment info, then slip flow & admin Approve/Reject
  *
  * ENV:
  *  - TELEGRAM_BOT_TOKEN
- *  - ADMIN_IDS       (comma separated user IDs, e.g. 123,456)
- *  - STORE_CURRENCY  (optional, default 'Ks')
+ *  - BOT_USERNAME     (e.g. BikaStoreBot)
+ *  - ADMIN_IDS        (comma separated user IDs, e.g. 123,456)
+ *  - STORE_CURRENCY   (optional, default 'Ks')
  *  - MONGODB_URI
- *  - PUBLIC_URL      (e.g. https://mybot.onrender.com)
- *  - TZ              (IANA timezone, e.g. Asia/Yangon)
+ *  - PUBLIC_URL       (e.g. https://mybot.onrender.com)
+ *  - TZ               (IANA timezone, e.g. Asia/Yangon)
  */
 
 const TelegramBot = require('node-telegram-bot-api');
 const mongoose = require('mongoose');
 const express = require('express');
+const crypto = require('crypto');
 
 // ====== ENV ======
 const BOT_TOKEN =
@@ -50,6 +58,8 @@ const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bika_store_bot';
 
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
+const BOT_USERNAME = process.env.BOT_USERNAME || ''; // for web start links
+
 // 🕒 Timezone (env: TZ)
 const TIME_ZONE = process.env.TZ || 'Asia/Yangon';
 
@@ -86,6 +96,10 @@ const orderSchema = new mongoose.Schema({
   confirmedAt: Date,
   adminNote: String,
   paymentSlipFileId: String, // telegram file_id of slip
+
+  // 🌐 Web integration
+  startToken: { type: String, index: true }, // for /start web_<token>
+  source: { type: String, default: 'BOT' }, // 'BOT' or 'WEB'
 });
 
 const Order = mongoose.model('Order', orderSchema);
@@ -114,9 +128,135 @@ if (PUBLIC_URL) {
   );
 }
 
-// Express app for webhook
+// Express app for webhook + web API
 const app = express();
 app.use(express.json());
+
+// Simple CORS so static web (bikastore-web) can call our API
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // or lock to your domain
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// Helper for web start token
+function generateStartToken() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+/**
+ * 🌐 WEB ORDER ENDPOINT
+ *
+ * POST /api/web-order
+ * Body JSON:
+ *  {
+ *    game: "MLBB" | "PUBG",
+ *    packageId: "mlbb_343",
+ *    packageName: "343 Diamonds × 2",
+ *    price: 40000,
+ *    gameId: "673383388",
+ *    serverId: "7833",             // (MLBB only)
+ *    telegramId: 123456789,
+ *    username: "UserName",
+ *    firstName: "First"
+ *  }
+ *
+ * Response:
+ *  {
+ *    ok: true,
+ *    orderId: 1,
+ *    startParam: "web_xxxxx",
+ *    startLink: "https://t.me/<BOT_USERNAME>?start=web_xxxxx"
+ *  }
+ */
+app.post('/api/web-order', async (req, res) => {
+  try {
+    let {
+      game,
+      packageId,
+      packageName,
+      price,
+      gameId,
+      serverId,
+      telegramId,
+      username,
+      firstName,
+    } = req.body || {};
+
+    const telegramIdNum = Number(telegramId);
+    if (!telegramIdNum || !game || !packageId || !gameId) {
+      return res.status(400).json({ ok: false, error: 'Missing fields' });
+    }
+
+    const gameLower = String(game).toLowerCase();
+    const categoryKey =
+      gameLower === 'mlbb' ? 'mlbb' : gameLower === 'pubg' ? 'pubg' : null;
+
+    if (!categoryKey) {
+      return res.status(400).json({ ok: false, error: 'Invalid game' });
+    }
+
+    // Try to auto-fill packageName / price from our catalog if not provided
+    if (!packageName || !price) {
+      const cat = CATEGORIES && CATEGORIES[categoryKey];
+      if (cat && Array.isArray(cat.packages)) {
+        const found = cat.packages.find((p) => p.id === packageId);
+        if (found) {
+          if (!packageName) packageName = found.name;
+          if (!price) price = found.price;
+        }
+      }
+    }
+
+    const priceNum = Number(price);
+    if (!priceNum || priceNum <= 0) {
+      return res.status(400).json({ ok: false, error: 'Invalid price' });
+    }
+
+    const newId = await getNextOrderId();
+    const startToken = generateStartToken();
+
+    const order = await Order.create({
+      id: newId,
+      userId: telegramIdNum,
+      username: username || '',
+      firstName: firstName || '',
+      categoryKey,
+      packageId,
+      packageName: packageName || packageId,
+      price: priceNum,
+      currency: STORE_CURRENCY,
+      gameId: String(gameId),
+      serverId: serverId ? String(serverId) : '',
+      status: 'PENDING_PAYMENT',
+      createdAt: new Date(),
+      startToken,
+      source: 'WEB',
+    });
+
+    const startParam = `web_${startToken}`;
+    let startLink;
+
+    if (BOT_USERNAME) {
+      startLink = `https://t.me/${BOT_USERNAME}?start=${startParam}`;
+    } else {
+      // BOT_USERNAME not set – return param only
+      startLink = startParam;
+    }
+
+    return res.json({
+      ok: true,
+      orderId: order.id,
+      startParam,
+      startLink,
+    });
+  } catch (e) {
+    console.error('web-order error:', e);
+    return res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
 
 // Accept Telegram updates on ANY path (easy for BotFather / Render)
 app.post('*', (req, res) => {
@@ -415,8 +555,13 @@ async function sendStepMessage(userId, chatId, text, options = {}) {
 }
 
 // ✅ Safe edit helpers (to avoid 400 "message to edit not found")
-
-async function safeEditMessageText(botInstance, chatId, messageId, text, extra = {}) {
+async function safeEditMessageText(
+  botInstance,
+  chatId,
+  messageId,
+  text,
+  extra = {}
+) {
   try {
     await botInstance.editMessageText(text, {
       chat_id: chatId,
@@ -424,14 +569,21 @@ async function safeEditMessageText(botInstance, chatId, messageId, text, extra =
       ...extra,
     });
   } catch (e) {
-    const desc = e && e.response && e.response.body && e.response.body.description;
+    const desc =
+      e && e.response && e.response.body && e.response.body.description;
     if (desc !== 'Bad Request: message to edit not found') {
       console.error('editMessageText error:', desc || e.message || e);
     }
   }
 }
 
-async function safeEditMessageCaption(botInstance, chatId, messageId, caption, extra = {}) {
+async function safeEditMessageCaption(
+  botInstance,
+  chatId,
+  messageId,
+  caption,
+  extra = {}
+) {
   try {
     await botInstance.editMessageCaption(caption, {
       chat_id: chatId,
@@ -439,7 +591,8 @@ async function safeEditMessageCaption(botInstance, chatId, messageId, caption, e
       ...extra,
     });
   } catch (e) {
-    const desc = e && e.response && e.response.body && e.response.body.description;
+    const desc =
+      e && e.response && e.response.body && e.response.body.description;
     if (desc !== 'Bad Request: message to edit not found') {
       console.error('editMessageCaption error:', desc || e.message || e);
     }
@@ -467,6 +620,8 @@ async function ordersToCSV() {
     'confirmedAt',
     'adminNote',
     'paymentSlipFileId',
+    'startToken',
+    'source',
   ];
 
   const lines = [];
@@ -493,6 +648,8 @@ async function ordersToCSV() {
       escapeCSVValue(o.confirmedAt),
       escapeCSVValue(o.adminNote),
       escapeCSVValue(o.paymentSlipFileId),
+      escapeCSVValue(o.startToken),
+      escapeCSVValue(o.source),
     ];
     lines.push(row.join(','));
   }
@@ -949,7 +1106,7 @@ async function sendOrderConfirmMessage(userId, chatId, draft) {
 
 // ====== BOT HANDLERS (TEXT COMMANDS) ======
 
-// /start with optional payload (/start from_website)
+// /start with optional payload (/start web_xxxx or /start from_website)
 bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -960,6 +1117,41 @@ bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const payloadRaw = match && match[1] ? match[1].trim() : '';
   const payload = payloadRaw ? payloadRaw.split(' ')[0] : '';
 
+  // 1) Web order payload – /start web_<token>
+  if (payload && payload.startsWith('web_')) {
+    const token = payload.slice(4);
+
+    const order = await Order.findOne({ startToken: token });
+    if (!order) {
+      await bot.sendMessage(
+        chatId,
+        '❌ Web ကနေ ဖန်တီးထားတဲ့ order ကို မတွေ့ရပါ။\nနောက်တစ်ကြိမ် Web Store ကနေ order အသစ်တင်ပြီး ထပ်ကြိုးစားကြည့်ပါ။'
+      );
+      await sendWelcome(chatId, msg.from);
+      return;
+    }
+
+    // Update user info to real Telegram user
+    order.userId = userId;
+    order.username = msg.from.username || order.username;
+    order.firstName = msg.from.first_name || order.firstName;
+    await order.save();
+
+    await bot.sendMessage(
+      chatId,
+      '🌐 Web Store မှာ သင်ရွေးထားတဲ့ Order ကို Bot ထဲကနေပဲ ဆက်လုပ်နိုင်ပါပြီ။\n\nအောက်မှာ Order Preview နဲ့ Payment Info ကို ဖော်ပြထားပါတယ်👇',
+      { parse_mode: 'Markdown' }
+    );
+
+    await bot.sendMessage(chatId, formatOrderSummary(order, { title: 'NEW' }), {
+      parse_mode: 'Markdown',
+    });
+
+    await sendPaymentInstructions(chatId, order);
+    return;
+  }
+
+  // 2) Simple "from_website" payload (optional)
   if (payload === 'from_website') {
     await bot.sendMessage(
       chatId,
@@ -970,6 +1162,7 @@ bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
     );
   }
 
+  // Default welcome
   await sendWelcome(chatId, msg.from);
 });
 
@@ -1811,6 +2004,7 @@ bot.on('callback_query', async (query) => {
         confirmedAt: null,
         adminNote: '',
         paymentSlipFileId: '',
+        source: 'BOT',
       });
 
       resetUserSession(userId);
@@ -2282,3 +2476,5 @@ bot.on('callback_query', async (query) => {
 
 console.log('🚀 BIKA Store Bot is running with MongoDB (webhook mode)...');
 console.log('Admins:', ADMIN_IDS.join(', ') || '(none configured)');
+
+```0
