@@ -27,6 +27,7 @@
  *  - MONGODB_URI
  *  - PUBLIC_URL      (e.g. https://mybot.onrender.com)
  *  - TZ              (IANA timezone, e.g. Asia/Yangon)
+ *  - API_BASE        (optional, backend for web-order, default: https://bikastore-api.onrender.com)
  */
 
 const TelegramBot = require('node-telegram-bot-api');
@@ -52,6 +53,10 @@ const MONGODB_URI =
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
 // 🕒 Timezone (env: TZ)
 const TIME_ZONE = process.env.TZ || 'Asia/Yangon';
+
+// 🌐 Backend API base (for Website web-order integration)
+const API_BASE =
+  process.env.API_BASE || 'https://bikastore-api.onrender.com';
 
 // ====== MONGOOSE INIT ======
 mongoose
@@ -966,11 +971,135 @@ async function sendOrderConfirmMessage(userId, chatId, draft) {
   });
 }
 
+/**
+ * WEBSITE WEB-ORDER START CODE HANDLER
+ *
+ * Website မှာ confirm လိုက်တဲ့ order ကို Backend မှာ သိမ်းပြီး
+ * startCode (e.g. web_xxxxx) ပြန်ပေးထားတယ်။
+ * User က Telegram မှာ https://t.me/BikaStoreBot?start=web_xxxxx ကိုဖွင့်လိုက်တာနဲ့
+ * ဒီ function မှ Backend ကို call လုပ်ပြီး Order Summary ကို Bot ထဲမှာ ပြပေးမယ်။
+ */
+async function handleWebStartCode(startCode, msg) {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const username = msg.from.username || '';
+  const firstName = msg.from.first_name || '';
+
+  await bot.sendMessage(
+    chatId,
+    '🔄 Website မှာ တင်ထားတဲ့ order ကို ဖတ်နေပါတယ်…'
+  );
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/orders/web-order/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startCode,
+        telegramUserId: userId,
+        username,
+        firstName,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error('web-order/claim HTTP error:', resp.status);
+      await bot.sendMessage(
+        chatId,
+        '❌ Website order ကို ဖတ်လို့ မရနိုင်သေးပါ (server error).\n' +
+          'နောက်တစ်ခါ ပြန်ကြိုးစားပေးပါနော်။'
+      );
+      return;
+    }
+
+    const data = await resp.json();
+
+    if (!data.success || !data.order) {
+      const msgText =
+        data && data.message
+          ? data.message
+          : 'Website မှ order record ကို မတွေ့ရသေးပါ။ link သက်တမ်းကုန်သွားလို့ ဖြစ်နိုင်ပါတယ်။';
+      await bot.sendMessage(chatId, '❌ ' + msgText);
+      return;
+    }
+
+    const order = data.order;
+
+    // Optional security – Backend မှာ userId ကို attach လုပ်ထားရင် token sharing ကို ကာကွယ်မယ်
+    if (order.userId && Number(order.userId) !== Number(userId)) {
+      await bot.sendMessage(
+        chatId,
+        '⚠️ ဒီ Website order က ဆက်သွယ်ထားတဲ့ Telegram account နဲ့ မကိုက်ညီသလို ထင်ပါတယ်။'
+      );
+      return;
+    }
+
+    // Backend order shape ကို Bot Order schema နဲ့ ကိုက်အောင် ပြန်ပေးထားရမယ်:
+    //
+    // {
+    //   id, userId, username, firstName,
+    //   categoryKey, packageId, packageName,
+    //   price, currency, gameId, serverId,
+    //   status, createdAt, paidAt, confirmedAt,
+    //   adminNote, paymentSlipFileId
+    // }
+
+    const summaryText = formatOrderSummary(order, { title: 'NEW' });
+
+    await bot.sendMessage(chatId, summaryText, {
+      parse_mode: 'Markdown',
+      ...buildOrderDetailKeyboard(order, false),
+    });
+
+    // Status အလိုက် UX စာလေးထပ်ပို့
+    if (order.status === 'PENDING_PAYMENT') {
+      await sendPaymentInstructions(chatId, order);
+    } else if (order.status === 'AWAITING_SLIP') {
+      const session = getUserSession(userId, true);
+      session.step = 'WAIT_SLIP';
+      session.pendingOrderId = order.id;
+
+      await bot.sendMessage(
+        chatId,
+        `💳 Order #${order.id} အတွက် ငွေလွှဲ ပြီးသား ဖြစ်နေပါတယ်။\n` +
+          'ယခု chat ထဲသို့ ငွေလွှဲပြေစာ screenshot ကို ပုံအနေနဲ့ တစ်ပုံပို့ပေးပါ။'
+      );
+    } else if (order.status === 'PENDING_CONFIRMATION') {
+      await bot.sendMessage(
+        chatId,
+        '⏳ ဒီ order ကို Admin မှ Confirm လုပ်နေဆဲ ဖြစ်ပါတယ်။ ခေတ္တစောင့်ပေးပါနော်။'
+      );
+    } else if (order.status === 'COMPLETED') {
+      await bot.sendMessage(
+        chatId,
+        '✅ ဒီ order ကို အပြီးသတ်ပြီးသား ဖြစ်နေပါတယ်။\n' +
+          'သုံးစွဲမှုကောင်းပါစေ 💎'
+      );
+    } else if (order.status === 'REJECTED') {
+      await bot.sendMessage(
+        chatId,
+        '❌ ဒီ order ကို Admin က ပယ်ဖျက်ထားပြီးသား ဖြစ်နေပါတယ်။'
+      );
+    }
+  } catch (err) {
+    console.error('Error in handleWebStartCode:', err);
+    await bot.sendMessage(
+      chatId,
+      '❌ Website order ကို ဖတ်နေစဉ် Network ပြဿနာတစ်ခု ဖြစ်သွားပါတယ်။\n' +
+        'နောက်တစ်ခါ ပြန်ကြိုးစားပေးပါနော်။'
+    );
+  }
+}
+
 ////////// Part 2 ///////////
 
 // ====== BOT HANDLERS (TEXT COMMANDS) ======
 
-// /start with optional payload (/start from_website)
+// /start with optional payload:
+//   /start
+//   /start from_website
+//   /start review
+//   /start web_xxxxx   (Website order startCode)
 bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -981,17 +1110,43 @@ bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const payloadRaw = match && match[1] ? match[1].trim() : '';
   const payload = payloadRaw ? payloadRaw.split(' ')[0] : '';
 
-  if (payload === 'from_website') {
-    await bot.sendMessage(
-      chatId,
-      '🌐 BIKA STORE Website ကနေ ဝင်လာတာကို ကြိုဆိုပါတယ်!\n\n' +
-        'အော်ဒါတင်ရန်အတွက် အောက်က Menu ထဲက **🛍 Game Items** ကိုနှိပ်ပြီး ' +
-        'MLBB Diamonds / Weekly Pass သို့မဟုတ် PUBG UC ကိုရွေးပြီး ဆက်လုပ်ပေးပါ 😊',
-      { parse_mode: 'Markdown' }
-    );
-  }
+  try {
+    // 1) Website generic entry
+    if (payload === 'from_website') {
+      await bot.sendMessage(
+        chatId,
+        '🌐 BIKA STORE Website ကနေ ဝင်လာတာကို ကြိုဆိုပါတယ်!\n\n' +
+          'အော်ဒါတင်ချင်ရင် အောက်က Menu ထဲက **🛍 Game Items** ကိုနှိပ်ပြီး ' +
+          'MLBB Diamonds / Weekly Pass သို့မဟုတ် PUBG UC ကိုရွေးပြီး ဆက်လုပ်နိုင်ပါတယ် 😊',
+        { parse_mode: 'Markdown' }
+      );
+      await sendWelcome(chatId, msg.from);
+      return;
+    }
 
-  await sendWelcome(chatId, msg.from);
+    // 2) Reviews (website start=review)
+    if (payload === 'review') {
+      await bot.sendMessage(
+        chatId,
+        '⭐ Review မလေးရေးချင်ရင် ဒီ chat ထဲမှာ သဘောကျသလို စာတိုလေး ပို့ထားပေးလို့ရပါတယ်။\n\n' +
+          'BIKA STORE ကို သဘောကျနေသွားရင် အခြား Player တွေအတွက်လည်း အသိပေးချင်ပါတယ် 😎'
+      );
+      await sendWelcome(chatId, msg.from);
+      return;
+    }
+
+    // 3) Website order startCode: web_xxxxx
+    if (payload && payload.startsWith('web_')) {
+      await handleWebStartCode(payload, msg);
+      return;
+    }
+
+    // 4) Default /start
+    await sendWelcome(chatId, msg.from);
+  } catch (e) {
+    console.error('Error in /start handler:', e);
+    await sendWelcome(chatId, msg.from);
+  }
 });
 
 // /menu shortcut
@@ -2298,4 +2453,3 @@ console.log(
   '🚀 BIKA Store Bot is running with MongoDB (webhook mode)...'
 );
 console.log('Admins:', ADMIN_IDS.join(', ') || '(none configured)');
-
