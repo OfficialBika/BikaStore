@@ -2,6 +2,7 @@
   "name": "bika-store-bot",
   "version": "1.0.0",
   "description": "Telegram bot for buying/selling game items like MLBB, PUBG, and more",
+  "axios": "^1.6.8",  
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
