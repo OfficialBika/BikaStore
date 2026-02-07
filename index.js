@@ -2,7 +2,8 @@
 "use strict";
 
 /**
- * BIKA STORE BOT (simplified, module-structured version)
+ * BIKA STORE BOT (with website web-order flow)
+ *
  * Features:
  *  - MLBB & PUBG single-package order flow
  *  - Payment slip upload
@@ -528,6 +529,10 @@ async function sendOrderConfirmMessage(userId, chatId, draft) {
 
 // =============== WEBSITE WEB-ORDER HANDLER ===============
 
+/**
+ * /start web_xxxxx ပြီးလာတဲ့ payload ကို API ဆီကို ခေါ်သွားပြီး
+ * web-orders collection ထဲက data နဲ့ Bot Order အသစ် generate လုပ်ပေးမယ်
+ */
 async function handleWebStartCode(startCode, msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -540,15 +545,14 @@ async function handleWebStartCode(startCode, msg) {
   );
 
   try {
-   const resp = await axios.post(
-  `${API_BASE}/api/orders/web-order/claim`,
-  {
-    startCode,
-    telegramUserId: userId,
-    username,
-    firstName,
-  }
-);
+    // ❗ Bot ⇆ API path ကို /api/web-orders/claim နဲ့ သတ်မှတ်ထားပါတယ်
+    const resp = await axios.post(`${API_BASE}/api/web-orders/claim`, {
+      startCode,
+      telegramUserId: userId,
+      username,
+      firstName,
+    });
+
     const data = resp.data;
 
     if (!data.success || !data.order) {
@@ -620,10 +624,10 @@ async function handleWebStartCode(startCode, msg) {
 
     await sendPaymentInstructions(chatId, order);
   } catch (err) {
-    console.error("Error in handleWebStartCode:", err);
+    console.error("Error in handleWebStartCode:", err?.response?.data || err);
     await bot.sendMessage(
       chatId,
-      "❌ Website order ကို ဖတ်နေစဉ် Network ပြဿနာတစ်ခု ဖြစ်သွားပါတယ်။\n" +
+      "❌ Website order ကို ဖတ်နေစဉ် Network / Server ပြဿနာတစ်ခု ဖြစ်သွားပါတယ်။\n" +
         "နောက်တစ်ခါ ပြန်ကြိုးစားပေးပါနော်။"
     );
   }
@@ -670,7 +674,7 @@ bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
     // 3) Website web-order startCode (eg. /start web_abc123)
     if (payload && payload.startsWith("web_")) {
       await handleWebStartCode(payload, msg);
-      return; // အဲဒီမှာ Order summary + payment info ပြသပြီးသား ဖြစ်သွားမယ်
+      return; // ဒီမှာ Order summary + payment info ပြသပြီးသား ဖြစ်သွားမယ်
     }
 
     // 4) Default /start
