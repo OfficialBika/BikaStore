@@ -540,7 +540,7 @@ async function handleWebStartCode(startCode, msg) {
   );
 
   try {
-    const resp = await axios.post(API_BASE + "/api/webOrders/claim", {
+    const resp = await axios.post(API_BASE + "/api/orders/web-order/claim", {
   startCode,
   telegramUserId: userId,
   username,
@@ -553,7 +553,7 @@ async function handleWebStartCode(startCode, msg) {
       const msgText =
         data && data.message
           ? data.message
-          : "Website မှ order record ကို မတွေ့ရသေးပါ။ link သက်တမ်းကုန်သွားလို့ ဖြစ်နိုင်ပါတယ်။";
+          : "Website မှ order record ကို မတွေ့ရသေးပါ။ link သက်တမ်းကုန်သွားလို့ ဖြစ်နိုင်ပါတယ်။​နောက်တစ်ကြိမ် ထပ်မံကြိုးစားကြည့်ပါ။";
       await bot.sendMessage(chatId, "❌ " + msgText);
       return;
     }
