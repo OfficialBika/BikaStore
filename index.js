@@ -540,13 +540,15 @@ async function handleWebStartCode(startCode, msg) {
   );
 
   try {
-    const resp = await axios.post(API_BASE + "/api/orders/web-order/claim", {
-  startCode,
-  telegramUserId: userId,
-  username,
-  firstName,
-});
-
+   const resp = await axios.post(
+  `${API_BASE}/api/orders/web-order/claim`,
+  {
+    startCode,
+    telegramUserId: userId,
+    username,
+    firstName,
+  }
+);
     const data = resp.data;
 
     if (!data.success || !data.order) {
