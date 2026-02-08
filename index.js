@@ -18,7 +18,7 @@ require("dotenv").config();
 // ================== ENV ==================
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PUBLIC_URL = process.env.PUBLIC_URL;
-const API_BASE = process.env.API_BASE; // e.g. https://bikastore-api.onrender.com
+const API_BASE = "https://bikastore-api.onrender.com".replace(/\/+$/, "");
 const MONGO_URI = process.env.MONGO_URI;
 
 const ADMIN_IDS = (process.env.ADMIN_IDS || "")
