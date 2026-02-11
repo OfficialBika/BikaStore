@@ -1,31 +1,14 @@
 {
-  "name": "bika-store-bot",
-  "version": "1.0.0",
-  "description": "Telegram bot for buying/selling game items like MLBB, PUBG, and more",
+  "name": "bikastore-bot",
   "main": "index.js",
-  "type": "commonjs",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   },
-  "keywords": [
-    "telegram-bot",
-    "game-store",
-    "mlbb",
-    "pubg",
-    "giveaway",
-    "bika"
-  ],
-  "author": "Bika",
-  "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.8",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "mongoose": "^7.5.0",
-    "node-telegram-bot-api": "^0.61.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.6.0",
+    "node-telegram-bot-api": "^0.66.0"
   }
 }
